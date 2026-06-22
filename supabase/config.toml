@@ -1,0 +1,10 @@
+# Configuración mínima del CLI de Supabase para esta app.
+# Si ya hay un config.toml previo (de `supabase init`), fusionar manualmente.
+
+project_id = "isosmartcore"
+
+[functions.gemini-proxy]
+verify_jwt = true
+
+[functions.invite-member]
+verify_jwt = true
