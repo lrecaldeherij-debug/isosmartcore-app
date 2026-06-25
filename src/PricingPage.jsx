@@ -171,7 +171,7 @@ export default function PricingPage({ onSignup, onLogin, currentPlanId }) {
           <div style={{
             fontFamily: families.body, fontSize: '13px', color: colors.inkMid,
           }}>
-            Editado y firmado en Asunción, Paraguay
+            Editado y firmado en Quito, Ecuador
           </div>
         </div>
       </footer>

@@ -118,7 +118,7 @@ export default function Login() {
           fontFamily: families.mono, fontSize: '10px',
           letterSpacing: tracking.wider, color: colors.inkSoft, textTransform: 'uppercase',
         }}>
-          FOLIO {new Date().getFullYear()}/{String(new Date().getMonth() + 1).padStart(2, '0')} · ASUNCIÓN · PARAGUAY
+          FOLIO {new Date().getFullYear()}/{String(new Date().getMonth() + 1).padStart(2, '0')} · QUITO · ECUADOR
         </div>
       </aside>
 

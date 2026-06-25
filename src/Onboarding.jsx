@@ -652,7 +652,7 @@ function StepCompany({ data, setData }) {
           </select>
         </Field>
         <Field label="Ubicación">
-          <input value={data.location} onChange={e => set({ location: e.target.value })} style={inp} placeholder="Ej: Asunción, Paraguay" />
+          <input value={data.location} onChange={e => set({ location: e.target.value })} style={inp} placeholder="Ej: Quito, Ecuador" />
         </Field>
       </Row>
       <Field label="Productos o servicios principales">
