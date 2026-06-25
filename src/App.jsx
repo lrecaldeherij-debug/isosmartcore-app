@@ -13,6 +13,7 @@ import TrialBanner from './TrialBanner'
 import AuditorView from './AuditorView'
 
 // Lazy — vistas pesadas que se cargan al navegar
+const Legal = lazy(() => import('./Legal'))
 const Dashboard = lazy(() => import('./Dashboard'))
 const Onboarding = lazy(() => import('./Onboarding'))
 const OrganizationSettings = lazy(() => import('./OrganizationSettings'))
@@ -163,9 +164,10 @@ function App() {
   const publicSurveyMatch = window.location.pathname.match(/^\/encuesta\/([A-Za-z0-9]+)\/?$/)
   const auditorMatch = window.location.pathname.match(/^\/auditor\/([A-Za-z0-9]+)\/?$/)
   const isPricingRoute = window.location.pathname === '/pricing' || window.location.pathname === '/precios'
+  const legalMatch = window.location.pathname.match(/^\/legal\/(privacidad|terminos|cookies)\/?$/)
 
   useEffect(() => {
-    if (publicSurveyMatch || auditorMatch || isPricingRoute) { setLoading(false); return }
+    if (publicSurveyMatch || auditorMatch || isPricingRoute || legalMatch) { setLoading(false); return }
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session)
       setLoading(false)
@@ -191,6 +193,14 @@ function App() {
       onSignup={() => { window.history.pushState({}, '', '/'); window.location.reload() }}
       onLogin={() => { window.history.pushState({}, '', '/'); window.location.reload() }}
     />
+  </>
+
+  // Rutas públicas /legal/* — políticas, T&C, cookies (sin login)
+  if (legalMatch) return <>
+    <Toaster position="top-right" />
+    <Suspense fallback={<div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>⏳</div>}>
+      <Legal page={legalMatch[1]} />
+    </Suspense>
   </>
 
   if (loading) return <>

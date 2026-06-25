@@ -12,9 +12,14 @@ export default function Login() {
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [mensaje, setMensaje] = useState('')
+  const [acceptTerms, setAcceptTerms] = useState(false)
 
   const handleAuth = async (e) => {
     e.preventDefault()
+    if (isRegistering && !acceptTerms) {
+      setMensaje({ kind: 'error', text: 'Debes aceptar los Términos y la Política de Privacidad para abrir cuenta.' })
+      return
+    }
     setLoading(true)
     setMensaje('')
 
@@ -23,7 +28,15 @@ export default function Login() {
       if (isRegistering) {
         result = await supabase.auth.signUp({
           email, password,
-          options: { data: { company_name: companyName.trim(), full_name: fullName.trim() } },
+          options: {
+            data: {
+              company_name: companyName.trim(),
+              full_name: fullName.trim(),
+              terms_accepted_at: new Date().toISOString(),
+              terms_version: '1.0',
+              privacy_version: '1.0',
+            },
+          },
         })
       } else {
         result = await supabase.auth.signInWithPassword({ email, password })
@@ -36,6 +49,14 @@ export default function Login() {
         setMensaje({ kind: 'success', text: 'Registro recibido. Revisa tu correo para confirmar la cuenta.' })
       } else if (data.session) {
         setMensaje({ kind: 'success', text: 'Acceso autorizado. Abriendo expediente…' })
+        if (isRegistering) {
+          await supabase.from('legal_acceptances').insert({
+            user_id: data.session.user.id,
+            terms_version: '1.0',
+            privacy_version: '1.0',
+            user_agent: navigator.userAgent.slice(0, 500),
+          }).then(() => {}).catch(err => console.warn('legal_acceptances insert falló:', err))
+        }
         setTimeout(() => window.location.reload(), 1200)
       }
     } catch (err) {
@@ -115,10 +136,23 @@ export default function Login() {
 
         {/* Footer del lado izquierdo */}
         <div style={{
-          fontFamily: families.mono, fontSize: '10px',
-          letterSpacing: tracking.wider, color: colors.inkSoft, textTransform: 'uppercase',
+          display: 'flex', flexDirection: 'column', gap: '12px',
         }}>
-          FOLIO {new Date().getFullYear()}/{String(new Date().getMonth() + 1).padStart(2, '0')} · QUITO · ECUADOR
+          <div style={{
+            fontFamily: families.mono, fontSize: '10px',
+            letterSpacing: tracking.wider, color: colors.inkSoft, textTransform: 'uppercase',
+          }}>
+            FOLIO {new Date().getFullYear()}/{String(new Date().getMonth() + 1).padStart(2, '0')} · QUITO · ECUADOR
+          </div>
+          <div style={{
+            display: 'flex', gap: '16px', flexWrap: 'wrap',
+            fontFamily: families.mono, fontSize: '10px',
+            letterSpacing: tracking.wider, textTransform: 'uppercase',
+          }}>
+            <a href="/legal/privacidad" style={{ color: colors.inkSoft, textDecoration: 'none', borderBottom: `1px solid ${colors.hairline}` }}>Privacidad</a>
+            <a href="/legal/terminos" style={{ color: colors.inkSoft, textDecoration: 'none', borderBottom: `1px solid ${colors.hairline}` }}>Términos</a>
+            <a href="/legal/cookies" style={{ color: colors.inkSoft, textDecoration: 'none', borderBottom: `1px solid ${colors.hairline}` }}>Cookies</a>
+          </div>
         </div>
       </aside>
 
@@ -174,6 +208,39 @@ export default function Login() {
               </button>
             }
           />
+
+          {isRegistering && (
+            <label style={{
+              display: 'flex', gap: '10px', alignItems: 'flex-start',
+              fontSize: '13px', color: colors.inkMid,
+              fontFamily: families.body, lineHeight: 1.5,
+              cursor: 'pointer',
+              padding: '4px 0',
+            }}>
+              <input
+                type="checkbox"
+                checked={acceptTerms}
+                onChange={e => setAcceptTerms(e.target.checked)}
+                style={{
+                  marginTop: '3px', accentColor: colors.seal,
+                  width: '16px', height: '16px', cursor: 'pointer',
+                }}
+              />
+              <span>
+                He leído y acepto los{' '}
+                <a href="/legal/terminos" target="_blank" rel="noopener" style={{
+                  color: colors.seal, textDecoration: 'none',
+                  borderBottom: `1px solid ${colors.seal}`,
+                }}>Términos y Condiciones</a>
+                {' '}y la{' '}
+                <a href="/legal/privacidad" target="_blank" rel="noopener" style={{
+                  color: colors.seal, textDecoration: 'none',
+                  borderBottom: `1px solid ${colors.seal}`,
+                }}>Política de Privacidad</a>
+                .
+              </span>
+            </label>
+          )}
 
           <button
             type="submit"
