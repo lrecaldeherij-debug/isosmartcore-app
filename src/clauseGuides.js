@@ -1,7 +1,7 @@
 // Catálogo central de guías ISO 9001:2015 por cláusula.
 // Cada módulo importa y usa: <IsoInfoCard {...CLAUSE_GUIDES['x.x']} />
 //
-// Si querés ajustar un texto o agregar un tip, lo hacés acá una sola vez y
+// Si quieres ajustar un texto o agregar un tip, lo haces aquí una sola vez y
 // se refleja en todos lados.
 
 export const CLAUSE_GUIDES = {
@@ -10,9 +10,9 @@ export const CLAUSE_GUIDES = {
     title: 'Comprensión de la organización y de su contexto',
     tips: [
       'Identifica factores internos (recursos, cultura, conocimiento) y externos (mercado, competencia, regulación).',
-      'Clasificá cada factor en positivo (Fortaleza/Oportunidad) o negativo (Debilidad/Amenaza).',
-      'Para cada factor, definí una estrategia: cómo potenciarlo o cómo mitigarlo.',
-      'Revisalo al menos una vez al año o cuando cambie el contexto del negocio.',
+      'Clasifica cada factor en positivo (Fortaleza/Oportunidad) o negativo (Debilidad/Amenaza).',
+      'Para cada factor, define una estrategia: cómo potenciarlo o cómo mitigarlo.',
+      'Revísalo al menos una vez al año o cuando cambie el contexto del negocio.',
     ],
   },
   '4.2': {
@@ -31,7 +31,7 @@ export const CLAUSE_GUIDES = {
     tips: [
       'Define qué productos/servicios cubre el SGC y qué ubicaciones físicas aplica.',
       'Considera el contexto (4.1) y los requisitos de las partes interesadas (4.2).',
-      'Si excluís alguna cláusula (típicamente 8.3 - Diseño y Desarrollo), justificá por qué.',
+      'Si excluyes alguna cláusula (típicamente 8.3 - Diseño y Desarrollo), justifica por qué.',
       'El alcance debe estar disponible como información documentada accesible.',
     ],
   },
@@ -40,9 +40,9 @@ export const CLAUSE_GUIDES = {
     title: 'Sistema de Gestión de Calidad y sus procesos',
     tips: [
       'Mapea los procesos en 3 tipos: Estratégicos (dirección), Operativos (realización) y de Soporte.',
-      'Para cada proceso definí: entradas, salidas, recursos, responsables, indicadores y riesgos.',
+      'Para cada proceso define: entradas, salidas, recursos, responsables, indicadores y riesgos.',
       'Establece cómo interactúan entre sí (un proceso de soporte alimenta uno operativo).',
-      'Asigná un dueño claro a cada proceso, con autoridad para mantenerlo.',
+      'Asigna un dueño claro a cada proceso, con autoridad para mantenerlo.',
     ],
   },
   '5.2': {
@@ -69,9 +69,9 @@ export const CLAUSE_GUIDES = {
     clause: '6.1',
     title: 'Acciones para abordar riesgos y oportunidades',
     tips: [
-      'Para cada proceso identificá los riesgos que pueden afectar el cumplimiento.',
-      'Evaluá probabilidad x impacto (matriz) y definí controles para los más críticos.',
-      'No olvides las oportunidades: cambios favorables que podés capitalizar.',
+      'Para cada proceso identifica los riesgos que pueden afectar el cumplimiento.',
+      'Evalúa probabilidad x impacto (matriz) y define controles para los más críticos.',
+      'No olvides las oportunidades: cambios favorables que puedes capitalizar.',
       'Las acciones deben ser proporcionales al impacto potencial sobre la conformidad.',
     ],
   },
@@ -79,9 +79,9 @@ export const CLAUSE_GUIDES = {
     clause: '6.2',
     title: 'Objetivos de Calidad y planificación para lograrlos',
     tips: [
-      'Aplicá metodología SMART: Específicos, Medibles, Alcanzables, Relevantes, con plazo (Time-bound).',
+      'Aplica metodología SMART: Específicos, Medibles, Alcanzables, Relevantes, con plazo (Time-bound).',
       'Cada objetivo debe alinearse con la política de calidad (5.2).',
-      'Definí: qué se va a hacer, qué recursos requiere, quién es responsable, cuándo se evalúa.',
+      'Define: qué se va a hacer, qué recursos requiere, quién es responsable, cuándo se evalúa.',
       'Revisalos en cada Revisión por la Dirección (9.3) y ajustalos si es necesario.',
     ],
   },
@@ -160,7 +160,7 @@ export const CLAUSE_GUIDES = {
     title: 'Requisitos para los productos y servicios — Pedidos del cliente',
     tips: [
       'Revisa los requisitos del cliente antes de comprometerte a entregar.',
-      'Incluí requisitos legales/reglamentarios aplicables y los no declarados pero necesarios.',
+      'Incluye requisitos legales/reglamentarios aplicables y los no declarados pero necesarios.',
       'Documenta la aceptación del pedido y cualquier cambio acordado posteriormente.',
       'Asegurate de tener capacidad para cumplir antes de aceptar.',
     ],
@@ -220,7 +220,7 @@ export const CLAUSE_GUIDES = {
     title: 'Revisión por la Dirección',
     tips: [
       'La Alta Dirección revisa el SGC a intervalos planificados (típicamente anual o semestral).',
-      'Incluí entradas: estado de acciones previas, cambios, desempeño, hallazgos de auditoría, NC.',
+      'Incluye entradas: estado de acciones previas, cambios, desempeño, hallazgos de auditoría, NC.',
       'Las salidas deben incluir decisiones sobre mejora, cambios necesarios y recursos.',
       'Documentá la revisión: agenda, asistentes, decisiones, plazos, responsables.',
     ],
@@ -230,19 +230,19 @@ export const CLAUSE_GUIDES = {
     title: 'No conformidad y acción correctiva',
     tips: [
       'Reacciona ante la NC: controla, corrige, contiene; evalúa el impacto.',
-      'Analizá la causa raíz (5 Por qués, Ishikawa) — no te quedés con el síntoma.',
-      'Implementá acciones correctivas para evitar que vuelva a ocurrir.',
-      'Verificá la eficacia de la acción: ¿realmente eliminó la causa?',
+      'Analiza la causa raíz (5 Por qués, Ishikawa) — no te quedés con el síntoma.',
+      'Implementa acciones correctivas para evitar que vuelva a ocurrir.',
+      'Verifica la eficacia de la acción: ¿realmente eliminó la causa?',
     ],
   },
   '10.3': {
     clause: '10.3',
     title: 'Mejora Continua',
     tips: [
-      'Mejorá la idoneidad, adecuación y eficacia del SGC de manera proactiva (no solo reaccionando a NCs).',
-      'Considerá entradas: análisis de datos (9.1), salidas de revisión por la dirección (9.3), NCs recurrentes.',
+      'Mejora la idoneidad, adecuación y eficacia del SGC de manera proactiva (no solo reaccionando a NCs).',
+      'Considera entradas: análisis de datos (9.1), salidas de revisión por la dirección (9.3), NCs recurrentes.',
       'Cada oportunidad debe evaluarse: costo, beneficio, prioridad — para que la mejora sea sostenible.',
-      'Verificá la eficacia después de implementar: ¿el beneficio esperado se materializó?',
+      'Verifica la eficacia después de implementar: ¿el beneficio esperado se materializó?',
     ],
   },
 }

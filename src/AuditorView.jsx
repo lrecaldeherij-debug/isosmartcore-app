@@ -318,7 +318,7 @@ function errorMessage(err) {
   // Mensaje unificado opaco — no revelamos si el token nunca existió, expiró o fue revocado
   // (evita enumeración por anon). El owner sabe el estado real desde su panel.
   if (err === 'invalid_or_inactive_token' || err === 'invalid_token' || err === 'expired' || err === 'revoked') {
-    return 'Este link no está activo. Pedile a la organización un acceso vigente o verificá que la URL esté completa.'
+    return 'Este link no está activo. Pide a la organización un acceso vigente o verifica que la URL esté completa.'
   }
   return err
 }

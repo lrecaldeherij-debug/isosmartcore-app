@@ -133,12 +133,12 @@ Devolveme SOLO JSON con esta forma exacta:
 }
 
 Reglas:
-- Si un encabezado no encaja en ningún campo, usá null como valor.
-- Si dos encabezados podrían mapear al mismo campo, elegí el más específico y dejá el otro en null.
+- Si un encabezado no encaja en ningún campo, usa null como valor.
+- Si dos encabezados podrían mapear al mismo campo, elige el más específico y dejá el otro en null.
 - Cubrí TODOS los encabezados del usuario en el objeto mapping (no omitas ninguno).
 - Para campos REQUERIDOS, esforzate por encontrar un match razonable.`
 
-    const respuesta = await consultarIA(prompt, 'Sos un asistente que mapea columnas de Excel a campos de base de datos. Respondé ÚNICAMENTE con el JSON pedido, sin texto adicional, sin markdown.')
+    const respuesta = await consultarIA(prompt, 'Eres un asistente que mapea columnas de Excel a campos de base de datos. Responde ÚNICAMENTE con el JSON pedido, sin texto adicional, sin markdown.')
     setMappingLoading(false)
 
     try {
@@ -156,7 +156,7 @@ Reglas:
       setMappingNotes(parsed.notes || '')
     } catch (e) {
       console.error('Error parseando respuesta IA:', respuesta)
-      toast.warning('La IA no devolvió un mapeo válido · Podés mapear las columnas manualmente')
+      toast.warning('La IA no devolvió un mapeo válido · Puedes mapear las columnas manualmente')
       // Inicializamos vacío para mapeo manual
       const empty = {}
       for (const h of headers) empty[h] = null
@@ -284,7 +284,7 @@ Reglas:
                     <div>
                       <strong>Opción A — Descargá la plantilla</strong>
                       <p style={{ margin: '0.25rem 0 0 0', fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
-                        Te bajás un .xlsx con las columnas correctas. Lo llenás y lo subís.
+                        Te bajás un .xlsx con las columnas correctas. Lo llenás y lo subes.
                       </p>
                     </div>
                     <button onClick={downloadTemplate} className="btn btn-ghost" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexShrink: 0 }}>
@@ -299,10 +299,10 @@ Reglas:
                   }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
                       <Sparkles size={16} style={{ color: '#7c3aed' }} />
-                      <strong>Opción B — Subí tu Excel actual</strong>
+                      <strong>Opción B — Sube tu Excel actual</strong>
                     </div>
                     <p style={{ margin: '0 0 0.75rem 0', fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
-                      Si ya tenés tu propio archivo (Excel, CSV) con columnas distintas, la IA va a mapear tus columnas a los campos del sistema. Vos confirmás antes de importar.
+                      Si ya tienes tu propio archivo (Excel, CSV) con columnas distintas, la IA va a mapear tus columnas a los campos del sistema. Tú confirmás antes de importar.
                     </p>
                     <input
                       ref={fileInputRef}
@@ -340,7 +340,7 @@ Reglas:
                       </div>
 
                       <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
-                        Revisá cada columna. Cambiá el campo destino si la IA se equivocó. Las marcadas como <em>"— Ignorar —"</em> no se importarán.
+                        Revisa cada columna. Cambia el campo destino si la IA se equivocó. Las marcadas como <em>"— Ignorar —"</em> no se importarán.
                       </p>
 
                       <div style={{ border: '1px solid #e2e8f0', borderRadius: '8px', overflow: 'hidden' }}>

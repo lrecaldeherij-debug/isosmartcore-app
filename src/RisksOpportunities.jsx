@@ -333,12 +333,12 @@ export default function RisksOpportunities() {
 
   // ───── IA: Plan de tratamiento individual ─────
   const analizarRiesgoIA = async () => {
-    if (!form.risk_description) return toast.warning('Describí el riesgo/oportunidad antes de pedir análisis')
+    if (!form.risk_description) return toast.warning('Describe el riesgo/oportunidad antes de pedir análisis')
     setLoadingIA(true); setIaContext('plan'); setIaSingleSuggestion(null)
     try {
       const procName = form.process_id ? processMap[form.process_id]?.name : form.process_area
       const isOpp = form.type === 'Oportunidad'
-      const prompt = `Sos consultor ISO 9001 experto en gestión de riesgos. Analizá ${isOpp ? 'esta OPORTUNIDAD' : 'este RIESGO'} y proponé tratamiento integral según cláusula 6.1.
+      const prompt = `Eres consultor ISO 9001 experto en gestión de riesgos. Analiza ${isOpp ? 'esta OPORTUNIDAD' : 'este RIESGO'} y propón tratamiento integral según cláusula 6.1.
 
 DESCRIPCIÓN: "${form.risk_description}"
 TIPO: ${form.type}
@@ -347,7 +347,7 @@ PROCESO: ${procName || 'no especificado'}
 ${form.potential_cause ? 'CAUSA POTENCIAL: ' + form.potential_cause : ''}
 ${form.potential_consequence ? 'CONSECUENCIA POTENCIAL: ' + form.potential_consequence : ''}
 
-Devolvé SOLO un JSON objeto, sin markdown:
+Devuelve SOLO un JSON objeto, sin markdown:
 - probability (1-10, ${isOpp ? 'probabilidad de que la oportunidad se concrete' : 'probabilidad de ocurrencia'})
 - impact (1-10, ${isOpp ? 'impacto positivo' : 'impacto negativo'})
 - potential_cause (string, qué la origina si no se completó arriba)
@@ -360,7 +360,7 @@ Devolvé SOLO un JSON objeto, sin markdown:
 - residual_impact (1-10, impacto esperado después del control)
 - estimated_cost (number en PYG, costo estimado del tratamiento)`
 
-      const raw = await consultarIA(prompt, 'Devolvé ÚNICAMENTE JSON objeto válido.')
+      const raw = await consultarIA(prompt, 'Devuelve ÚNICAMENTE JSON objeto válido.')
       console.log('[IA Plan tratamiento] raw:', raw)
       const obj = parseAiObject(raw)
       if (!obj) throw new Error('La IA no devolvió análisis parseable')
@@ -409,7 +409,7 @@ Devolvé SOLO un JSON objeto, sin markdown:
       const sector = orgProfile?.sector || ''
 
       const prompt = mode === 'risks'
-        ? `Sos consultor ISO 9001. Identificá RIESGOS para ${empresa}${sector ? ' (' + sector + ')' : ''} a partir del análisis FODA y procesos según cláusula 6.1.
+        ? `Eres consultor ISO 9001. Identifica RIESGOS para ${empresa}${sector ? ' (' + sector + ')' : ''} a partir del análisis FODA y procesos según cláusula 6.1.
 
 FACTORES NEGATIVOS (Amenazas y Debilidades):
 ${JSON.stringify(ctxFOda, null, 2)}
@@ -417,7 +417,7 @@ ${JSON.stringify(ctxFOda, null, 2)}
 PROCESOS:
 ${JSON.stringify(ctxProc, null, 2)}
 
-Devolvé SOLO un JSON array (6-10 items), sin markdown. Cada riesgo:
+Devuelve SOLO un JSON array (6-10 items), sin markdown. Cada riesgo:
 - risk_description (string, qué puede salir mal)
 - category (Estratégico|Operacional|Financiero|Cumplimiento|Reputacional|Tecnológico|Personal|Cliente|Proveedor|Mercado)
 - process_name (string, proceso del listado o "Transversal")
@@ -429,7 +429,7 @@ Devolvé SOLO un JSON array (6-10 items), sin markdown. Cada riesgo:
 - treatment_strategy (Evitar|Mitigar|Transferir|Aceptar)
 - control_measure (string, control recomendado)
 - kri_indicator (string)`
-        : `Sos consultor ISO 9001. Identificá OPORTUNIDADES para ${empresa}${sector ? ' (' + sector + ')' : ''} a partir del análisis FODA y objetivos de calidad según cláusula 6.1.
+        : `Eres consultor ISO 9001. Identifica OPORTUNIDADES para ${empresa}${sector ? ' (' + sector + ')' : ''} a partir del análisis FODA y objetivos de calidad según cláusula 6.1.
 
 FACTORES POSITIVOS (Fortalezas y Oportunidades):
 ${JSON.stringify(ctxFOda, null, 2)}
@@ -440,7 +440,7 @@ ${JSON.stringify(ctxObj, null, 2)}
 PROCESOS:
 ${JSON.stringify(ctxProc, null, 2)}
 
-Devolvé SOLO un JSON array (4-8 items), sin markdown. Cada oportunidad:
+Devuelve SOLO un JSON array (4-8 items), sin markdown. Cada oportunidad:
 - risk_description (string, descripción de la oportunidad)
 - category (Estratégico|Operacional|Financiero|Cumplimiento|Reputacional|Tecnológico|Personal|Cliente|Proveedor|Mercado)
 - process_name (string, proceso del listado o "Transversal")
@@ -453,7 +453,7 @@ Devolvé SOLO un JSON array (4-8 items), sin markdown. Cada oportunidad:
 - control_measure (string, plan de acción para concretarla)
 - kri_indicator (string, KPI para medir el aprovechamiento)`
 
-      const raw = await consultarIA(prompt, 'Devolvé ÚNICAMENTE JSON array válido.')
+      const raw = await consultarIA(prompt, 'Devuelve ÚNICAMENTE JSON array válido.')
       console.log('[IA FODA]', mode, raw)
       const arr = parseAiArray(raw)
       if (!arr.length) throw new Error('La IA no devolvió items parseables')

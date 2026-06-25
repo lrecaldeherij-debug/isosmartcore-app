@@ -292,9 +292,9 @@ export default function Personnel() {
 
   // ─────── IA: brecha de competencia ───────
   const analizarBrechaIA = async (person) => {
-    if (!person.job_id) return toast.warning('Asigná primero un perfil de cargo formal al empleado')
+    if (!person.job_id) return toast.warning('Asigna primero un perfil de cargo formal al empleado')
     const job = jobs.find(j => j.id === person.job_id)
-    if (!job?.competencies_json) return toast.warning('El perfil de cargo no tiene competencias requeridas. Editalo en Roles 5.3')
+    if (!job?.competencies_json) return toast.warning('El perfil de cargo no tiene competencias requeridas. Edítalo en Roles 5.3')
     setLoadingGap(true); setGapResult({ person, analysis: null })
     try {
       const req = job.competencies_json || {}
@@ -303,7 +303,7 @@ export default function Personnel() {
         experiencia: person.experience || 'N/D',
         habilidades: person.skills || 'N/D'
       }
-      const prompt = `Sos consultor ISO 9001. Compará las competencias REQUERIDAS por el cargo con las DECLARADAS del empleado y devolvé un análisis de brecha (ISO 7.2).
+      const prompt = `Eres consultor ISO 9001. Compara las competencias REQUERIDAS por el cargo con las DECLARADAS del empleado y devuelve un análisis de brecha (ISO 7.2).
 
 CARGO: ${job.title}
 
@@ -314,7 +314,7 @@ EMPLEADO: ${person.full_name}
 DECLARADO:
 ${JSON.stringify(actual, null, 2)}
 
-Devolvé SOLO JSON, sin markdown:
+Devuelve SOLO JSON, sin markdown:
 {
   "evaluacion_global": "Cubre" | "Brecha menor" | "Brecha mayor",
   "areas_cubiertas": ["..."],
@@ -323,7 +323,7 @@ Devolvé SOLO JSON, sin markdown:
   ],
   "resumen": "1-2 líneas"
 }`
-      const raw = await consultarIA(prompt, 'Devolvé únicamente JSON válido.')
+      const raw = await consultarIA(prompt, 'Devuelve únicamente JSON válido.')
       const data = extractFirstJson(raw)
       if (!data) throw new Error('IA no devolvió análisis')
       setGapResult({ person, analysis: data })
@@ -359,7 +359,7 @@ Devolvé SOLO JSON, sin markdown:
       }))
       const jobData = jobs.map(j => ({ title: j.title, code: j.code }))
 
-      const prompt = `Sos consultor ISO 9001 experto en RRHH. Analizá la DOTACIÓN actual y detectá brechas según ISO 7.1.2.
+      const prompt = `Eres consultor ISO 9001 experto en RRHH. Analiza la DOTACIÓN actual y detecta brechas según ISO 7.1.2.
 
 PROCESOS DEL SGC:
 ${JSON.stringify(procData, null, 2)}
@@ -370,7 +370,7 @@ ${JSON.stringify(jobData, null, 2)}
 EMPLEADOS ACTUALES:
 ${JSON.stringify(empData, null, 2)}
 
-Devolvé SOLO JSON, sin markdown:
+Devuelve SOLO JSON, sin markdown:
 {
   "evaluacion_global": "Adecuada" | "Mejorable" | "Insuficiente",
   "procesos_sin_personal": ["..."],
@@ -380,7 +380,7 @@ Devolvé SOLO JSON, sin markdown:
   ],
   "resumen": "1-2 líneas"
 }`
-      const raw = await consultarIA(prompt, 'Devolvé únicamente JSON válido.')
+      const raw = await consultarIA(prompt, 'Devuelve únicamente JSON válido.')
       const data = extractFirstJson(raw)
       if (!data) throw new Error('IA no devolvió análisis')
       setDotacionResult(data)
@@ -444,7 +444,7 @@ Devolvé SOLO JSON, sin markdown:
 
       {tableError && (
         <div style={{ marginTop: 12, padding: 12, background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, color: '#991b1b', fontSize: 13 }}>
-          <strong>Tabla no encontrada:</strong> {tableError}. Aplicá <code>iso_migration_v50_personnel_auditable.sql</code>.
+          <strong>Tabla no encontrada:</strong> {tableError}. Aplica <code>iso_migration_v50_personnel_auditable.sql</code>.
         </div>
       )}
 
@@ -552,7 +552,7 @@ Devolvé SOLO JSON, sin markdown:
           {filtered.length === 0 && (
             <div style={{ gridColumn: '1 / -1', textAlign: 'center', padding: 40, color: '#cbd5e1' }}>
               <Users size={48} style={{ opacity: 0.3, marginBottom: 8 }} />
-              <p style={{ margin: 0 }}>Sin empleados. Cargá el primero o usá Excel.</p>
+              <p style={{ margin: 0 }}>Sin empleados. Carga el primero o usa Excel.</p>
             </div>
           )}
           {filtered.map(item => {

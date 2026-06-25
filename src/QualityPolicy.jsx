@@ -102,7 +102,7 @@ export default function QualityPolicy() {
   // ─────── IA: Redactar política contextualizada ───────
   const redactarPoliticaIA = async () => {
     if (!form.what_we_do || !form.who_is_customer) {
-      return toast.warning('Completá al menos qué hace la empresa y a quién sirve')
+      return toast.warning('Completa al menos qué hace la empresa y a quién sirve')
     }
     setLoadingIA(true)
     try {
@@ -110,7 +110,7 @@ export default function QualityPolicy() {
         ? `Sector: ${companyProfile.industry || 'N/D'} | Tamaño: ${companyProfile.size || 'N/D'} | Productos: ${companyProfile.main_products || 'N/D'} | Propósito: ${companyProfile.purpose || 'N/D'}`
         : 'Sin perfil de empresa cargado.'
 
-      const prompt = `Sos consultor ISO 9001 experto en políticas de calidad. Redactá la Política de Calidad formal.
+      const prompt = `Eres consultor ISO 9001 experto en políticas de calidad. Redacta la Política de Calidad formal.
 
 CONTEXTO EMPRESA: ${ctx}
 
@@ -126,9 +126,9 @@ REQUISITOS ISO 5.2.1 (TODOS DEBEN ESTAR EN LA POLÍTICA):
 3. Compromiso de cumplir requisitos aplicables (legales y del cliente)
 4. Compromiso con la mejora continua del SGC
 
-Devolvé SOLO JSON, sin markdown:
+Devuelve SOLO JSON, sin markdown:
 { "politica_redactada": "Texto completo en 1 párrafo de 6-10 líneas, profesional, en primera persona plural" }`
-      const raw = await consultarIA(prompt, 'Devolvé únicamente JSON válido.')
+      const raw = await consultarIA(prompt, 'Devuelve únicamente JSON válido.')
       const data = extractFirstJson(raw)
       if (!data?.politica_redactada) throw new Error('IA no devolvió política')
       setForm({ ...form, final_policy_statement: data.politica_redactada })
@@ -140,11 +140,11 @@ Devolvé SOLO JSON, sin markdown:
 
   // ─────── IA: Verificar alineación con objetivos ───────
   const verificarAlineacionIA = async () => {
-    if (!form.final_policy_statement) return toast.warning('Definí primero la declaración de política')
+    if (!form.final_policy_statement) return toast.warning('Define primero la declaración de política')
     if (!objectives.length) return toast.warning('No hay objetivos de calidad cargados para verificar alineación')
     setLoadingAlign(true); setAlignResult(null); setShowAlignModal(true)
     try {
-      const prompt = `Sos auditor ISO 9001. Verificá si la siguiente Política de Calidad sirve como MARCO DE REFERENCIA para los objetivos cargados (requisito ISO 5.2.1.b).
+      const prompt = `Eres auditor ISO 9001. Verifica si la siguiente Política de Calidad sirve como MARCO DE REFERENCIA para los objetivos cargados (requisito ISO 5.2.1.b).
 
 POLÍTICA:
 "${form.final_policy_statement}"
@@ -152,7 +152,7 @@ POLÍTICA:
 OBJETIVOS DE CALIDAD:
 ${objectives.map((o, i) => `${i + 1}. ${o.objective} (meta: ${o.target_value || 'N/D'})`).join('\n')}
 
-Devolvé SOLO JSON, sin markdown:
+Devuelve SOLO JSON, sin markdown:
 {
   "alineacion_global": "Alta" | "Media" | "Baja",
   "veredicto": "explicación breve",
@@ -160,7 +160,7 @@ Devolvé SOLO JSON, sin markdown:
   "objetivos_no_alineados": [<indices no alineados>],
   "sugerencias": ["sugerencia para mejorar la política o reformular objetivos"]
 }`
-      const raw = await consultarIA(prompt, 'Devolvé únicamente JSON válido.')
+      const raw = await consultarIA(prompt, 'Devuelve únicamente JSON válido.')
       const data = extractFirstJson(raw)
       if (!data) throw new Error('IA no devolvió análisis')
       setAlignResult(data)
@@ -198,7 +198,7 @@ Devolvé SOLO JSON, sin markdown:
   }
 
   const handleAprobar = async () => {
-    if (!policy) return toast.warning('Guardá primero la política')
+    if (!policy) return toast.warning('Guarda primero la política')
     const aprobador = window.prompt('Nombre de quien aprueba (Alta Dirección):', policy.approved_by || '')
     if (!aprobador) return
     const rol = window.prompt('Cargo:', policy.approved_role || 'Director General') || 'Director General'
@@ -217,7 +217,7 @@ Devolvé SOLO JSON, sin markdown:
   // ─────── Comunicación ───────
   const registrarComunicacion = async (e) => {
     e.preventDefault()
-    if (!policy) return toast.warning('Aprobá la política primero')
+    if (!policy) return toast.warning('Aprueba la política primero')
     const updates = {
       ...commForm,
       status: 'Comunicada',
@@ -427,7 +427,7 @@ Devolvé SOLO JSON, sin markdown:
 
           <FormSection title="Alineación con objetivos (ISO 5.2.1.b)">
             <TextArea rows={3} value={form.alignment_with_objectives} onChange={v => setForm({ ...form, alignment_with_objectives: v })}
-              placeholder="Explicá cómo la política sirve de marco para los objetivos de calidad cargados." />
+              placeholder="Explica cómo la política sirve de marco para los objetivos de calidad cargados." />
           </FormSection>
 
           <FormSection title="Documento oficial">

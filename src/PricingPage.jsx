@@ -86,7 +86,7 @@ export default function PricingPage({ onSignup, onLogin, currentPlanId }) {
           fontFamily: families.body, fontSize: '18px', lineHeight: 1.55,
           color: colors.inkMid, fontWeight: weight.regular,
         }}>
-          Implementá ISO 9001:2015 sin la consultoría que no podés pagar. Una IA que aprende del ADN de tu empresa redacta tu política, tu mapa de procesos, tu matriz de riesgos. Vos firmás.
+          Implementa ISO 9001:2015 sin la consultoría que no puedes pagar. Una IA que aprende del ADN de tu empresa redacta tu política, tu mapa de procesos, tu matriz de riesgos. Tú firmas.
         </p>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '20px', marginTop: '40px', flexWrap: 'wrap' }}>
@@ -436,8 +436,8 @@ function FaqItem({ num, q, a, isLast }) {
 
 const FAQS = [
   { q: '¿Necesito tarjeta de crédito para empezar?', a: 'No. El trial de 14 días no requiere tarjeta. Empezás a usar la app de inmediato y solo agregás método de pago si decidís continuar.' },
-  { q: '¿Puedo cambiar de plan después?', a: 'Sí, en cualquier momento desde la sección de facturación. El cambio se prorratea automáticamente para que pagues exactamente por lo que usás.' },
+  { q: '¿Puedo cambiar de plan después?', a: 'Sí, en cualquier momento desde la sección de facturación. El cambio se prorratea automáticamente para que pagues exactamente por lo que usas.' },
   { q: '¿Qué pasa cuando termina el trial sin suscribir?', a: 'Tu cuenta queda en modo solo lectura. No perdés ningún dato: política, procesos, riesgos, todo queda intacto. Cuando suscribís, recuperás acceso completo.' },
-  { q: '¿La IA cuesta extra?', a: 'No. Los prompts de IA están incluidos en cada plan según la cuota mensual. Si llegás al límite podés subir de plan o esperar al siguiente ciclo.' },
-  { q: '¿Hay descuento por pago anual?', a: 'Sí, 2 meses gratis (≈17% de descuento) si pagás anualmente. Lo seleccionás con el toggle de arriba.' },
+  { q: '¿La IA cuesta extra?', a: 'No. Los prompts de IA están incluidos en cada plan según la cuota mensual. Si llegas al límite puedes subir de plan o esperar al siguiente ciclo.' },
+  { q: '¿Hay descuento por pago anual?', a: 'Sí, 2 meses gratis (≈17% de descuento) si pagas anualmente. Lo seleccionas con el toggle de arriba.' },
 ]

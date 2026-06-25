@@ -170,7 +170,7 @@ export default function OrganizationSettings() {
                     <td style={{ padding: '0.5rem' }}>
                       {m.full_name || <em style={{ color: 'var(--text-tertiary)' }}>(sin nombre)</em>}
                       {m.user_id === profile.user_id && (
-                        <span style={{ marginLeft: '0.5rem', fontSize: '0.75rem', color: 'var(--text-tertiary)' }}>(vos)</span>
+                        <span style={{ marginLeft: '0.5rem', fontSize: '0.75rem', color: 'var(--text-tertiary)' }}>(tú)</span>
                       )}
                     </td>
                     <td style={{ padding: '0.5rem' }}>

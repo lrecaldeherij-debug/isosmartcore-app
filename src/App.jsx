@@ -127,7 +127,7 @@ class ErrorBoundary extends Component {
             Algo falló al cargar este módulo.
           </h1>
           <p style={{ color: '#5A4A3F', fontSize: '14px', lineHeight: 1.55, marginBottom: '28px' }}>
-            No tocamos tus datos guardados. Recargá la página para volver al tablero.
+            No tocamos tus datos guardados. Recarga la página para volver al tablero.
             Si el problema se repite, contactanos.
           </p>
           <button
@@ -220,7 +220,7 @@ async function handleSignOut() {
     // onAuthStateChange dispara setSession(null) → App re-renderiza al Login
   } catch (err) {
     console.error('signOut error:', err)
-    toast.error('No se pudo cerrar sesión: ' + (err?.message || 'error de red') + '. Recargá la página.')
+    toast.error('No se pudo cerrar sesión: ' + (err?.message || 'error de red') + '. Recarga la página.')
   }
 }
 

@@ -33,7 +33,7 @@ export default function Login() {
       if (error) {
         setMensaje({ kind: 'error', text: error.message })
       } else if (isRegistering && !data.session) {
-        setMensaje({ kind: 'success', text: 'Registro recibido. Revisá tu correo para confirmar la cuenta.' })
+        setMensaje({ kind: 'success', text: 'Registro recibido. Revisa tu correo para confirmar la cuenta.' })
       } else if (data.session) {
         setMensaje({ kind: 'success', text: 'Acceso autorizado. Abriendo expediente…' })
         setTimeout(() => window.location.reload(), 1200)
@@ -143,7 +143,7 @@ export default function Login() {
         }}>
           {isRegistering
             ? 'Catorce días de prueba. Sin tarjeta. La firma del trial es solo de palabra.'
-            : 'Acceso con tu correo y la contraseña que registraste al alta.'}
+            : 'Acceso con tu correo y la contraseña que registraste al inicio.'}
         </p>
 
         <form onSubmit={handleAuth} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
@@ -153,7 +153,7 @@ export default function Login() {
               <Field label="Tu nombre completo" value={fullName} onChange={setFullName} placeholder="Juan Pérez" required />
             </>
           )}
-          <Field label="Correo electrónico" type="email" value={email} onChange={setEmail} placeholder="vos@empresa.com" required />
+          <Field label="Correo electrónico" type="email" value={email} onChange={setEmail} placeholder="tu@empresa.com" required />
           <Field
             label="Contraseña"
             type={showPassword ? 'text' : 'password'}
@@ -231,13 +231,13 @@ export default function Login() {
             }}
           >
             <span style={{ color: colors.inkSoft }}>
-              {isRegistering ? '¿Ya tenés expediente abierto?' : '¿Sin expediente todavía?'}
+              {isRegistering ? '¿Ya tienes expediente abierto?' : '¿Sin expediente todavía?'}
             </span>
             <span style={{
               fontWeight: weight.semibold,
               borderBottom: `1px solid ${colors.ink}`,
             }}>
-              {isRegistering ? 'Iniciar sesión' : 'Abrí uno gratis'}
+              {isRegistering ? 'Iniciar sesión' : 'Abre uno gratis'}
             </span>
           </button>
         </div>

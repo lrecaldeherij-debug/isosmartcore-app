@@ -15,7 +15,7 @@ import { colors, radius, shadow, font } from './tokens'
  *     </Modal.Footer>
  *   </Modal>
  *
- * Si no usás <Modal.Footer>, ponés botones donde quieras y se renderiza como children.
+ * Si no usas <Modal.Footer>, pones botones donde quieras y se renderiza como children.
  */
 export default function Modal({ open, onClose, title, children, maxWidth = '780px', headerExtras }) {
   if (!open) return null

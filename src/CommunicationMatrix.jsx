@@ -161,10 +161,10 @@ export default function CommunicationMatrix() {
       } : null
 
       const prompt = `
-Sugerí una matriz de comunicaciones ISO 9001 (cláusula 7.4) para esta empresa.
+Sugiere una matriz de comunicaciones ISO 9001 (cláusula 7.4) para esta empresa.
 Perfil: ${JSON.stringify(profileResumen)}
 
-Devolvé EXCLUSIVAMENTE un JSON array (sin markdown, sin texto extra) con 8 a 12 comunicaciones que cubran:
+Devuelve EXCLUSIVAMENTE un JSON array (sin markdown, sin texto extra) con 8 a 12 comunicaciones que cubran:
 - Comunicaciones INTERNAS rutinarias (operativas del día a día)
 - Comunicaciones INTERNAS de gestión (estratégicas, revisión por dirección, política de calidad)
 - Comunicaciones EXTERNAS a clientes, proveedores y reguladores
@@ -185,7 +185,7 @@ Cada item con este formato exacto:
 `
       const respuesta = await consultarIA(
         prompt,
-        'Sos un consultor experto en ISO 9001 cláusula 7.4 (comunicación interna y externa). Respondé ÚNICAMENTE con el JSON array pedido, empezando con [ y terminando con ]. Sin markdown, sin texto antes ni después, sin comentarios dentro del JSON.'
+        'Eres un consultor experto en ISO 9001 cláusula 7.4 (comunicación interna y externa). Responde ÚNICAMENTE con el JSON array pedido, empezando con [ y terminando con ]. Sin markdown, sin texto antes ni después, sin comentarios dentro del JSON.'
       )
 
       console.log('[IA Sugerir Matriz] respuesta cruda:', respuesta)
@@ -234,7 +234,7 @@ Cada item con este formato exacto:
   }
 
   const handleSaveSuggestions = async () => {
-    if (!iaSelected.size) return toast.warning('Seleccioná al menos una comunicación')
+    if (!iaSelected.size) return toast.warning('Selecciona al menos una comunicación')
     setSavingIa(true)
     try {
       const payload = iaSuggestions
@@ -629,7 +629,7 @@ Cada item con este formato exacto:
                   <Sparkles size={18} style={{ color: '#7c3aed' }} /> Propuesta de la IA
                 </h4>
                 <span style={{ fontSize: '0.8rem', color: '#64748b' }}>
-                  Revisá las {iaSuggestions.length} comunicaciones sugeridas. Destildá las que no apliquen y guardá solo lo que sirve.
+                  Revisa las {iaSuggestions.length} comunicaciones sugeridas. Desmarca las que no apliquen y guarda solo lo que sirve.
                 </span>
               </div>
               <button onClick={() => { setIaSuggestions(null); setIaSelected(new Set()) }} className="btn-ghost" style={{ padding: '0.25rem' }}>
@@ -707,7 +707,7 @@ Cada item con este formato exacto:
 
             <div style={{ padding: '0.75rem 1.25rem', borderTop: '1px solid #e2e8f0', background: '#f8fafc', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.5rem' }}>
               <span style={{ fontSize: '0.78rem', color: '#64748b' }}>
-                💡 Después podés editar cada una con el lápiz para ajustarla a tu realidad.
+                💡 Después puedes editar cada una con el lápiz para ajustarla a tu realidad.
               </span>
               <div style={{ display: 'flex', gap: '0.5rem' }}>
                 <button onClick={() => { setIaSuggestions(null); setIaSelected(new Set()) }} className="btn btn-ghost" disabled={savingIa}>

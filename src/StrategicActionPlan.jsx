@@ -252,7 +252,7 @@ export default function StrategicActionPlan() {
     if (!criticos.length) return toast.info('No hay riesgos críticos sin tratar (P×I ≥ 25)')
     setLoadingIA(true); setIaSuggestions(null); setIaContext('risks')
     try {
-      const prompt = `Sos consultor ISO 9001. Proponé acciones preventivas/mitigación para tratar estos RIESGOS críticos según ISO 6.1.2.
+      const prompt = `Eres consultor ISO 9001. Propón acciones preventivas/mitigación para tratar estos RIESGOS críticos según ISO 6.1.2.
 
 RIESGOS CRÍTICOS:
 ${JSON.stringify(criticos.map(r => ({
@@ -262,16 +262,16 @@ ${JSON.stringify(criticos.map(r => ({
   severidad: Number(r.probability_initial) * Number(r.impact_initial)
 })), null, 2)}
 
-Devolvé SOLO un JSON array, sin markdown. Cada acción:
+Devuelve SOLO un JSON array, sin markdown. Cada acción:
 - title (string, qué se hará)
 - description (string)
-- risk_id (string, id del riesgo asociado — usá los IDs EXACTOS)
+- risk_id (string, id del riesgo asociado — usa los IDs EXACTOS)
 - category (uno de: Preventiva, Mitigación)
 - priority (Alta | Media | Baja, según severidad)
 - responsible (string, rol)
 - planned_end (string YYYY-MM-DD, fecha realista en próximos 3-6 meses)
 - effectiveness_evaluation (string, cómo medir si funcionó)`
-      const raw = await consultarIA(prompt, 'Devolvé ÚNICAMENTE JSON array válido.')
+      const raw = await consultarIA(prompt, 'Devuelve ÚNICAMENTE JSON array válido.')
       console.log('[IA acciones riesgos] raw:', raw)
       const arr = parseAiArray(raw)
       if (!arr.length) throw new Error('La IA no devolvió acciones parseables')
@@ -291,7 +291,7 @@ Devolvé SOLO un JSON array, sin markdown. Cada acción:
     if (!noCumplidos.length) return toast.info('No hay objetivos sin cumplir (current_value < target_value)')
     setLoadingIA(true); setIaSuggestions(null); setIaContext('objectives')
     try {
-      const prompt = `Sos consultor ISO 9001. Proponé acciones de MEJORA para cerrar la brecha entre meta y valor actual de estos objetivos de calidad.
+      const prompt = `Eres consultor ISO 9001. Propón acciones de MEJORA para cerrar la brecha entre meta y valor actual de estos objetivos de calidad.
 
 OBJETIVOS NO CUMPLIDOS:
 ${JSON.stringify(noCumplidos.map(o => ({
@@ -302,16 +302,16 @@ ${JSON.stringify(noCumplidos.map(o => ({
   brecha: Number(o.target_value) - Number(o.current_value)
 })), null, 2)}
 
-Devolvé SOLO un JSON array, sin markdown. Cada acción:
+Devuelve SOLO un JSON array, sin markdown. Cada acción:
 - title (string)
 - description (string)
-- objective_id (string, id del objetivo — usá los IDs EXACTOS)
+- objective_id (string, id del objetivo — usa los IDs EXACTOS)
 - category (uno de: Mejora, Correctiva)
 - priority (Alta | Media | Baja)
 - responsible (string, rol)
 - planned_end (string YYYY-MM-DD)
 - effectiveness_evaluation (string, cómo medir)`
-      const raw = await consultarIA(prompt, 'Devolvé ÚNICAMENTE JSON array válido.')
+      const raw = await consultarIA(prompt, 'Devuelve ÚNICAMENTE JSON array válido.')
       console.log('[IA acciones objetivos] raw:', raw)
       const arr = parseAiArray(raw)
       if (!arr.length) throw new Error('La IA no devolvió acciones parseables')
@@ -415,7 +415,7 @@ Devolvé SOLO un JSON array, sin markdown. Cada acción:
 
       {tableError && (
         <div style={{ marginTop: 12, padding: 12, background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, color: '#991b1b', fontSize: 13 }}>
-          <strong>Tabla no encontrada:</strong> {tableError}. Aplicá <code>iso_migration_v44_strategic_actions.sql</code>.
+          <strong>Tabla no encontrada:</strong> {tableError}. Aplica <code>iso_migration_v44_strategic_actions.sql</code>.
         </div>
       )}
 
@@ -521,12 +521,12 @@ Devolvé SOLO un JSON array, sin markdown. Cada acción:
 
             <FormSection title="Evaluación de eficacia (ISO 6.1.2.b)" accent="#7c3aed">
               <div style={{ padding: 10, background: '#faf5ff', border: '1px solid #e9d5ff', borderRadius: 8, fontSize: 12, color: '#581c87', marginBottom: 10 }}>
-                💡 ISO 6.1.2 exige <strong>evaluar si la acción funcionó</strong>. Definí cómo se medirá <em>antes</em>, y completá el resultado al cerrar.
+                💡 ISO 6.1.2 exige <strong>evaluar si la acción funcionó</strong>. Define cómo se medirá <em>antes</em>, y completa el resultado al cerrar.
               </div>
               <TextArea label="¿Cómo se evaluará la eficacia?" rows={2} value={form.effectiveness_evaluation} onChange={v => setForm({ ...form, effectiveness_evaluation: v })}
                 placeholder="Ej: Reducción del 30% en NCs del proceso X medido a los 3 meses post-implementación" />
               <div style={{ display: 'grid', gridTemplateColumns: '3fr 1fr', gap: 10, marginTop: 10 }}>
-                <TextArea label="Resultado de la evaluación" rows={2} value={form.effectiveness_result} onChange={v => setForm({ ...form, effectiveness_result: v })} placeholder="Completá tras la evaluación" />
+                <TextArea label="Resultado de la evaluación" rows={2} value={form.effectiveness_result} onChange={v => setForm({ ...form, effectiveness_result: v })} placeholder="Completa tras la evaluación" />
                 <Field label="Evaluada el" type="date" value={form.effectiveness_evaluated_at} onChange={v => setForm({ ...form, effectiveness_evaluated_at: v })} />
               </div>
             </FormSection>
@@ -568,7 +568,7 @@ Devolvé SOLO un JSON array, sin markdown. Cada acción:
             <tbody>
               {filtered.length === 0 && (
                 <tr><td colSpan={7} style={{ padding: 20, textAlign: 'center', color: '#9ca3af', fontSize: 13 }}>
-                  Sin acciones. Generá las primeras con <strong>"Desde riesgos críticos"</strong> o <strong>"Desde objetivos no cumplidos"</strong>.
+                  Sin acciones. Genera las primeras con <strong>"Desde riesgos críticos"</strong> o <strong>"Desde objetivos no cumplidos"</strong>.
                 </td></tr>
               )}
               {filtered.map(item => {

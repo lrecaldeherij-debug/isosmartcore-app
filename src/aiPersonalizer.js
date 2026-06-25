@@ -15,18 +15,18 @@ export function hasUsefulProfile(profile) {
   return true
 }
 
-const SYSTEM_INSTRUCTION = `Sos un consultor experto en ISO 9001:2015 que ayuda a empresas a implementar
-su Sistema de Gestión de Calidad. Te van a pasar el perfil de una empresa y tenés que generar
+const SYSTEM_INSTRUCTION = `Eres un consultor experto en ISO 9001:2015 que ayuda a empresas a implementar
+su Sistema de Gestión de Calidad. Te van a pasar el perfil de una empresa y tienes que generar
 plantillas iniciales ADAPTADAS a esa empresa, no genéricas. Tu objetivo es que el cliente abra
 el sistema y sienta que el contenido es para ÉL, no para "cualquier empresa".
 
 Reglas:
-- Usá SIEMPRE el nombre real de la empresa, nunca "[Nombre de la Organización]".
-- Adaptá los riesgos al sector específico (lácteos → cadena de frío; software → seguridad; etc).
-- Adaptá los stakeholders a regulators reales del sector cuando los conozcas (SENASA, ANMAT, etc).
+- Usa SIEMPRE el nombre real de la empresa, nunca "[Nombre de la Organización]".
+- Adapta los riesgos al sector específico (lácteos → cadena de frío; software → seguridad; etc).
+- Adapta los stakeholders a regulators reales del sector cuando los conozcas (SENASA, ANMAT, etc).
 - El FODA debe reflejar tamaño, sector y dirección estratégica de la empresa.
 - La política de calidad debe leer natural, como si la hubiera escrito un humano que conoce la empresa.
-- Respondé SOLO con JSON válido, sin texto adicional, sin markdown.`
+- Responde SOLO con JSON válido, sin texto adicional, sin markdown.`
 
 function buildPrompt(profile) {
   return `Perfil de la empresa:
@@ -38,7 +38,7 @@ function buildPrompt(profile) {
 - Dirección estratégica: ${profile.strategic_direction || '(no provista)'}
 - Año de fundación: ${profile.founded_year || '(no provisto)'}
 
-Generá las siguientes secciones, adaptadas a ESTA empresa, en JSON estricto:
+Genera las siguientes secciones, adaptadas a ESTA empresa, en JSON estricto:
 
 {
   "context": [
@@ -47,7 +47,7 @@ Generá las siguientes secciones, adaptadas a ESTA empresa, en JSON estricto:
     //              "factor": "título corto", "description": "1-2 frases", "strategy": "qué hacer" }
   ],
   "stakeholders": [
-    // 6 partes interesadas relevantes para esta empresa. Incluí organismos reguladores ESPECÍFICOS del sector.
+    // 6 partes interesadas relevantes para esta empresa. Incluye organismos reguladores ESPECÍFICOS del sector.
     // Cada item: { "name", "expectations", "influence_level": "Alto"|"Medio"|"Bajo",
     //              "is_sgc_requirement": true|false, "follow_up_frequency": "Mensual"|"Trimestral"|"Semestral"|"Anual"|"Continua",
     //              "planning_in_sgc", "evaluation_method", "responsible", "status": "Pendiente" }
@@ -67,7 +67,7 @@ Generá las siguientes secciones, adaptadas a ESTA empresa, en JSON estricto:
   ]
 }
 
-Recordá: SOLO el JSON, sin markdown, sin explicaciones.`
+Recuerda: SOLO el JSON, sin markdown, sin explicaciones.`
 }
 
 // Limpia y parsea respuesta JSON de la IA (que a veces incluye ```json fences).

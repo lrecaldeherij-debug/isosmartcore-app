@@ -143,7 +143,7 @@ export default function ScopeDeclaration() {
       const exclusionesText = (form.iso_exclusions || [])
         .map(e => `- ${e.clause}: ${e.justification}`).join('\n') || 'Ninguna'
 
-      const prompt = `Sos consultor ISO 9001. Redactá la declaración FORMAL del Alcance del SGC según ISO 4.3.
+      const prompt = `Eres consultor ISO 9001. Redacta la declaración FORMAL del Alcance del SGC según ISO 4.3.
 
 CONTEXTO EMPRESA: ${ctx}
 
@@ -161,9 +161,9 @@ Requisitos ISO 4.3:
 - Listar exclusiones con justificación
 - Si no hay exclusiones, decir "se aplican todos los requisitos de la norma"
 
-Devolvé SOLO JSON, sin markdown:
+Devuelve SOLO JSON, sin markdown:
 { "scope_statement": "Texto en 1 párrafo profesional, 6-10 líneas" }`
-      const raw = await consultarIA(prompt, 'Devolvé únicamente JSON válido.')
+      const raw = await consultarIA(prompt, 'Devuelve únicamente JSON válido.')
       const data = extractFirstJson(raw)
       if (!data?.scope_statement) throw new Error('IA no devolvió declaración')
       setForm({ ...form, scope_statement: data.scope_statement })
@@ -181,7 +181,7 @@ Devolvé SOLO JSON, sin markdown:
       const exclusionesText = form.iso_exclusions.map((e, i) => `${i + 1}. Cláusula: ${e.clause}\n   Justificación: ${e.justification}`).join('\n')
       const ctx = companyProfile ? `Empresa: ${companyProfile.industry || 'N/D'} | Productos: ${companyProfile.main_products || 'N/D'}` : ''
 
-      const prompt = `Sos auditor ISO 9001. Evaluá si estas EXCLUSIONES son defendibles ante un auditor de certificación.
+      const prompt = `Eres auditor ISO 9001. Evalúa si estas EXCLUSIONES son defendibles ante un auditor de certificación.
 
 CONTEXTO: ${ctx}
 
@@ -194,14 +194,14 @@ REGLAS ISO 4.3:
 - 8.3 Diseño se puede excluir solo si la empresa NO diseña (usa diseños del cliente o estándar)
 - 7.1.5 Calibración rara vez se excluye salvo en servicios muy específicos
 
-Devolvé SOLO JSON, sin markdown:
+Devuelve SOLO JSON, sin markdown:
 {
   "evaluations": [
     { "clause": "...", "valid": true | false, "verdict": "explicación breve", "recommendation": "qué cambiar si no es válida" }
   ],
   "global_assessment": "resumen del cumplimiento ISO 4.3"
 }`
-      const raw = await consultarIA(prompt, 'Devolvé únicamente JSON válido.')
+      const raw = await consultarIA(prompt, 'Devuelve únicamente JSON válido.')
       const data = extractFirstJson(raw)
       if (!data) throw new Error('IA no devolvió evaluación')
       setValidationResult(data)
@@ -238,7 +238,7 @@ Devolvé SOLO JSON, sin markdown:
   }
 
   const handleAprobar = async () => {
-    if (!scope) return toast.warning('Guardá primero el alcance')
+    if (!scope) return toast.warning('Guarda primero el alcance')
     const aprobador = window.prompt('Nombre de quien aprueba:', scope.approved_by || '')
     if (!aprobador) return
     const rol = window.prompt('Cargo:', scope.approved_role || 'Director General') || 'Director General'
@@ -310,7 +310,7 @@ Devolvé SOLO JSON, sin markdown:
         tips={[
           "Define qué productos/servicios cubre el SGC y qué ubicaciones físicas aplica.",
           "Considera el contexto (4.1) y los requisitos de las partes interesadas (4.2).",
-          "Si excluís alguna cláusula (típicamente 8.3), justificá por qué — usá la IA para validar.",
+          "Si excluyes alguna cláusula (típicamente 8.3), justifica por qué — usa la IA para validar.",
           "El alcance debe estar disponible como información documentada accesible."
         ]}
       />
@@ -406,7 +406,7 @@ Devolvé SOLO JSON, sin markdown:
           <FormSection title="B. Procesos cubiertos">
             {processes.length > 0 ? (
               <>
-                <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 6 }}>Seleccioná los procesos del SGC cubiertos:</div>
+                <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 6 }}>Selecciona los procesos del SGC cubiertos:</div>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 6, maxHeight: 200, overflowY: 'auto', padding: 8, background: '#f9fafb', borderRadius: 8 }}>
                   {processes.map(p => (
                     <label key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, padding: 4, cursor: 'pointer' }}>
@@ -431,7 +431,7 @@ Devolvé SOLO JSON, sin markdown:
 
           <FormSection title="D. Exclusiones ISO" accent="#dc2626">
             <div style={{ padding: 10, background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, fontSize: 12, color: '#991b1b', marginBottom: 10 }}>
-              💡 ISO 4.3 exige justificar cada cláusula que excluís. Usá el botón <strong>"Validar exclusiones con IA"</strong> antes de aprobar.
+              💡 ISO 4.3 exige justificar cada cláusula que excluyes. Usa el botón <strong>"Validar exclusiones con IA"</strong> antes de aprobar.
             </div>
             {form.iso_exclusions.map((ex, i) => (
               <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 2fr auto', gap: 6, marginBottom: 6, alignItems: 'flex-start' }}>

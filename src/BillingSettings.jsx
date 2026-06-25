@@ -87,7 +87,7 @@ export default function BillingSettings({ onUpgrade }) {
               <strong>Trial activo · {plan.daysLeft} día{plan.daysLeft === 1 ? '' : 's'} restantes</strong>
               <div style={{ fontSize: font.sm, marginTop: '2px' }}>
                 Vence el {plan.trialEndsAt ? new Date(plan.trialEndsAt).toLocaleDateString() : '—'}.
-                Suscribite antes para no perder acceso.
+                Suscríbete antes para no perder acceso.
               </div>
             </div>
           </div>
@@ -102,7 +102,7 @@ export default function BillingSettings({ onUpgrade }) {
             <div>
               <strong>Tu trial expiró</strong>
               <div style={{ fontSize: font.sm, marginTop: '2px' }}>
-                Tu cuenta está en modo solo-lectura. Suscribite para recuperar acceso completo (no perdiste datos).
+                Tu cuenta está en modo solo-lectura. Suscríbete para recuperar acceso completo (no perdiste datos).
               </div>
             </div>
           </div>

@@ -130,7 +130,7 @@ export default function ImplementationGuide({ alCambiarVista }) {
     const useAI = hasUsefulProfile(profile)
     const confirmMsg = useAI
       ? `Vamos a personalizar las plantillas usando los datos de "${profile.name}" (${profile.industry}). Tarda 5-15 segundos. ¿Continuar?`
-      : 'Esto cargará plantillas genéricas en los módulos vacíos. Podés editarlas después. ¿Continuar?'
+      : 'Esto cargará plantillas genéricas en los módulos vacíos. Puedes editarlas después. ¿Continuar?'
     if (!await confirm(confirmMsg)) return
 
     setSeeding(true)
@@ -201,12 +201,12 @@ export default function ImplementationGuide({ alCambiarVista }) {
               <>
                 Detectamos tu ADN cargado (<strong>{profile.industry}</strong>). La IA va a generar FODA,
                 Política, Stakeholders y Riesgos adaptados a tu sector y a "{profile.name}". El resto se
-                carga con plantillas base. Solo se llenan módulos vacíos — lo que ya tenés queda intacto.
+                carga con plantillas base. Solo se llenan módulos vacíos — lo que ya tienes queda intacto.
               </>
             ) : (
               isOrgEmpty
-                ? 'Tu organización está vacía. Podés cargar plantillas ISO 9001 ya redactadas (FODA, política, riesgos, objetivos, perfiles, documentos) para tener algo concreto que editar. Tip: cargá el ADN de la Empresa primero y las plantillas se personalizan con IA.'
-                : 'Esta acción solo cargará plantillas en los módulos que estén vacíos. Los módulos con datos no se modifican. Tip: cargá el ADN de la Empresa y las plantillas se personalizan con IA.'
+                ? 'Tu organización está vacía. Puedes cargar plantillas ISO 9001 ya redactadas (FODA, política, riesgos, objetivos, perfiles, documentos) para tener algo concreto que editar. Tip: carga el ADN de la Empresa primero y las plantillas se personalizan con IA.'
+                : 'Esta acción solo cargará plantillas en los módulos que estén vacíos. Los módulos con datos no se modifican. Tip: carga el ADN de la Empresa y las plantillas se personalizan con IA.'
             )}
           </p>
           <button className="btn btn-primary" disabled={seeding} onClick={handleSeed} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>

@@ -187,7 +187,7 @@ export default function OperationalIncidents() {
   // ---- IA: sugerir análisis de impacto + acciones ----
   const handleSugerirIA = async () => {
     if (!form.description?.trim()) {
-      return toast.warning('Cargá primero la descripción del suceso para que la IA tenga contexto')
+      return toast.warning('Carga primero la descripción del suceso para que la IA tenga contexto')
     }
     setLoadingIA(true)
     setIaResult(null)
@@ -197,14 +197,14 @@ export default function OperationalIncidents() {
         empresa: profile.name, sector: profile.industry, productos: profile.main_products,
       } : null
       const prompt = `
-Sos un consultor experto en ISO 9001 cláusulas 8.5.3 (propiedad del cliente) y 8.5.6 (control de cambios).
+Eres un consultor experto en ISO 9001 cláusulas 8.5.3 (propiedad del cliente) y 8.5.6 (control de cambios).
 Empresa: ${JSON.stringify(resumen)}
 Tipo: ${form.type}
 Descripción del suceso: ${form.description}
 ${form.type === 'Propiedad Cliente' ? `Cliente: ${form.client_name || 'No especificado'}\nActivo: ${form.asset_description || 'No especificado'}` : ''}
 ${form.type === 'Control de Cambios' ? `Qué cambió: ${form.change_what || 'No especificado'}\nPor qué: ${form.change_why || 'No especificado'}` : ''}
 
-Devolvé EXCLUSIVAMENTE este JSON (sin markdown):
+Devuelve EXCLUSIVAMENTE este JSON (sin markdown):
 {
   "impact_analysis": "Análisis de impacto sobre la calidad, el producto, el cliente, el cumplimiento normativo. Texto en bullets con saltos de línea \\n.",
   "actions_taken": "Acciones recomendadas inmediatas + preventivas. Bullets con \\n.",
@@ -213,7 +213,7 @@ Devolvé EXCLUSIVAMENTE este JSON (sin markdown):
 `
       const respuesta = await consultarIA(
         prompt,
-        'Sos un consultor ISO 9001 8.5.3/8.5.6. Respondé solo con JSON. Sin markdown.'
+        'Eres un consultor ISO 9001 8.5.3/8.5.6. Responde solo con JSON. Sin markdown.'
       )
       console.log('[IA Incidente]', respuesta)
       const objStr = extractFirstJson(respuesta, '{', '}')
@@ -367,7 +367,7 @@ Devolvé EXCLUSIVAMENTE este JSON (sin markdown):
                     ? 'Ej: Se detectó daño en motor enviado por el cliente para mantenimiento.'
                     : form.type === 'Control de Cambios'
                       ? 'Ej: Cambio de proveedor de materia prima por desabastecimiento.'
-                      : 'Describí lo que sucedió...'} />
+                      : 'Describe lo que sucedió...'} />
               </div>
               <div className="grid-2-col">
                 <div className="form-group">

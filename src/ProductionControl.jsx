@@ -412,7 +412,7 @@ export default function ProductionControl() {
 
             <FormSection title="🧪 Trazabilidad de materia prima (ISO 8.5.2)">
               <div style={{ fontSize: '0.78rem', color: '#64748b', marginBottom: '0.6rem' }}>
-                Cargá los materiales con proveedor + lote para poder rastrear hacia atrás en caso de no conformidad.
+                Carga los materiales con proveedor + lote para poder rastrear hacia atrás en caso de no conformidad.
               </div>
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
                 <thead>

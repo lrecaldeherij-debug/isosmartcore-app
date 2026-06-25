@@ -374,11 +374,11 @@ export default function Documents() {
       const codigosUsados = items.map(i => i.code)
 
       const prompt = `
-Sugerí la lista mínima de DOCUMENTOS Y REGISTROS de un SGC ISO 9001 (cláusula 7.5) para esta empresa.
+Sugiere la lista mínima de DOCUMENTOS Y REGISTROS de un SGC ISO 9001 (cláusula 7.5) para esta empresa.
 Perfil: ${JSON.stringify(profileResumen)}
 Códigos ya usados: ${JSON.stringify(codigosUsados)}
 
-Devolvé SOLO un JSON array (sin markdown, sin texto) con 10 a 15 documentos típicos:
+Devuelve SOLO un JSON array (sin markdown, sin texto) con 10 a 15 documentos típicos:
 - Política de la calidad
 - Manual de calidad (si aplica)
 - Procedimientos clave (control de documentos, auditoría interna, no conformidades, acciones correctivas)
@@ -401,7 +401,7 @@ Cada item con este formato exacto:
 Reglas:
 - No repitas códigos ya usados.
 - Para "Registro", siempre is_record:true. Para los demás, false.
-- Asigná el "area" según el departamento dueño natural del documento.
+- Asigna el "area" según el departamento dueño natural del documento.
 - CÓDIGO obligatorio con este patrón: {TIPO}-{ÁREA}-{NN}
     TIPO: POL=Política, MAN=Manual, PRO=Procedimiento, INS=Instructivo, FOR=Formato, REG=Registro
     ÁREA: DIR=Dirección, CAL=Calidad, VTA=Ventas, OPS=Operaciones, COM=Compras, RRHH=RRHH, MNT=Mantenimiento, ADM=Administración, LGT=Logística, OTR=Otra
@@ -410,7 +410,7 @@ Reglas:
 `
       const respuesta = await consultarIA(
         prompt,
-        'Sos un consultor experto en ISO 9001 cláusula 7.5 (información documentada). Respondé ÚNICAMENTE con el JSON array pedido. Sin markdown, sin texto antes ni después.'
+        'Eres un consultor experto en ISO 9001 cláusula 7.5 (información documentada). Responde ÚNICAMENTE con el JSON array pedido. Sin markdown, sin texto antes ni después.'
       )
       console.log('[IA Sugerir Documentos] respuesta cruda:', respuesta)
 
@@ -452,7 +452,7 @@ Reglas:
   }
 
   const handleSaveSuggestions = async () => {
-    if (!iaSelected.size) return showMsg('Seleccioná al menos un documento.', 'err')
+    if (!iaSelected.size) return showMsg('Selecciona al menos un documento.', 'err')
     setSavingIa(true)
     try {
       const payload = iaSuggestions
@@ -708,7 +708,7 @@ Reglas:
                 style={{ background: 'white' }}
               />
               <div style={{ fontSize: '0.78rem', color: '#3730a3', marginTop: '0.4rem' }}>
-                💡 Lo recomendado en una empresa real: tener el documento en Drive/SharePoint (con permisos, historial nativo) y acá registrar el catálogo + workflow de aprobación.
+                💡 Lo recomendado en una empresa real: tener el documento en Drive/SharePoint (con permisos, historial nativo) y aquí registrar el catálogo + workflow de aprobación.
                 {form.link && (
                   <span> · Detectado: <strong>{detectLinkProvider(form.link)}</strong></span>
                 )}
@@ -764,7 +764,7 @@ Reglas:
                     </div>
                   )}
                   <div style={{ fontSize: '0.78rem', color: 'var(--text-tertiary)', marginTop: '0.4rem' }}>
-                    Útil si querés un respaldo dentro del SaaS con hash de integridad. En la mayoría de los casos el link al Drive alcanza.
+                    Útil si quieres un respaldo dentro del SaaS con hash de integridad. En la mayoría de los casos el link al Drive alcanza.
                   </div>
                 </div>
               </details>
@@ -940,7 +940,7 @@ Reglas:
                   <Wand2 size={18} style={{ color: '#7c3aed' }} /> Manual de Codificación
                 </h4>
                 <span style={{ fontSize: '0.8rem', color: '#64748b' }}>
-                  Convención usada por el sistema. Podés copiarla a tu manual oficial o ignorarla.
+                  Convención usada por el sistema. Puedes copiarla a tu manual oficial o ignorarla.
                 </span>
               </div>
               <button onClick={() => setShowCodingModal(false)} className="btn-ghost" style={{ padding: '0.25rem' }}><X size={18} /></button>
@@ -994,16 +994,16 @@ Reglas:
               <div style={{ background: '#fefce8', border: '1px solid #fde68a', padding: '0.9rem 1rem', borderRadius: '8px', fontSize: '0.85rem', color: '#713f12' }}>
                 <strong>💡 Si tu empresa ya tiene un Manual de Codificación propio:</strong>
                 <p style={{ margin: '0.4rem 0 0 0' }}>
-                  Solo ignorá el botón <em>"Sugerir"</em> y escribí el código manualmente con tu convención. El sistema acepta cualquier formato — la sugerencia es solo una ayuda para empresas que arrancan desde cero.
+                  Solo ignora el botón <em>"Sugerir"</em> y escribe el código manualmente con tu convención. El sistema acepta cualquier formato — la sugerencia es solo una ayuda para empresas que arrancan desde cero.
                 </p>
               </div>
 
               <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', padding: '0.9rem 1rem', borderRadius: '8px', fontSize: '0.85rem', color: '#14532d' }}>
                 <strong>🎯 Cómo funciona el botón "Sugerir":</strong>
                 <ol style={{ margin: '0.4rem 0 0 1.2rem', padding: 0 }}>
-                  <li>Mira el <strong>Tipo</strong> y <strong>Área</strong> que tenés elegidos en el form</li>
+                  <li>Mira el <strong>Tipo</strong> y <strong>Área</strong> que tienes elegidos en el form</li>
                   <li>Busca el último número correlativo usado con ese prefijo</li>
-                  <li>Te propone el siguiente (ej: si ya tenés <code>PRO-CAL-03</code>, te propone <code>PRO-CAL-04</code>)</li>
+                  <li>Te propone el siguiente (ej: si ya tienes <code>PRO-CAL-03</code>, te propone <code>PRO-CAL-04</code>)</li>
                 </ol>
               </div>
             </div>
@@ -1037,7 +1037,7 @@ Reglas:
                   <Sparkles size={18} style={{ color: '#7c3aed' }} /> Documentos sugeridos por IA
                 </h4>
                 <span style={{ fontSize: '0.8rem', color: '#64748b' }}>
-                  Revisá las {iaSuggestions.length} sugerencias. Destildá las que no apliquen.
+                  Revisa las {iaSuggestions.length} sugerencias. Desmarca las que no apliquen.
                 </span>
               </div>
               <button onClick={() => { setIaSuggestions(null); setIaSelected(new Set()) }} className="btn-ghost"><X size={18} /></button>
@@ -1094,7 +1094,7 @@ Reglas:
             </div>
             <div style={{ padding: '0.75rem 1.25rem', borderTop: '1px solid #e2e8f0', background: '#f8fafc', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.5rem' }}>
               <span style={{ fontSize: '0.78rem', color: '#64748b' }}>
-                💡 Se crean como Borrador. Después subís cada archivo y mandás a revisión.
+                💡 Se crean como Borrador. Después subes cada archivo y mandas a revisión.
               </span>
               <div style={{ display: 'flex', gap: '0.5rem' }}>
                 <button onClick={() => { setIaSuggestions(null); setIaSelected(new Set()) }} className="btn btn-ghost" disabled={savingIa}>Cancelar</button>

@@ -179,7 +179,7 @@ export default function ClimateSurveys() {
 
   const handleSubmit = async (e) => {
     e.preventDefault()
-    if (!form.employee_id) return toast.warning('Seleccioná un empleado')
+    if (!form.employee_id) return toast.warning('Selecciona un empleado')
 
     const total = Object.values(form.responses).reduce((a, b) => a + Number(b), 0)
     const payload = {
@@ -230,7 +230,7 @@ export default function ClimateSurveys() {
 
   const handleSendCampaign = async () => {
     if (!campaignName.trim()) return toast.warning('Poné un nombre a la campaña')
-    if (!selectedIds.size) return toast.warning('Seleccioná al menos un empleado')
+    if (!selectedIds.size) return toast.warning('Selecciona al menos un empleado')
 
     setSending(true)
     setSendResult(null)
@@ -257,7 +257,7 @@ export default function ClimateSurveys() {
 
   // ---- Análisis IA agregado ----
   const handleAnalisisIA = async () => {
-    if (!surveys.length) return toast.warning('Necesitás al menos una encuesta para analizar')
+    if (!surveys.length) return toast.warning('Necesitas al menos una encuesta para analizar')
     setLoadingIA(true)
     setIaAnalysis(null)
     try {
@@ -273,12 +273,12 @@ export default function ClimateSurveys() {
         total: s.total_score,
       }))
       const prompt = `
-Analizá los resultados agregados de estas ${resumen.length} encuestas de clima laboral (escala 1=muy malo, 5=excelente). Las categorías son:
+Analiza los resultados agregados de estas ${resumen.length} encuestas de clima laboral (escala 1=muy malo, 5=excelente). Las categorías son:
 A. Inserción al puesto, B. Relación con jefe inmediato, C. Liderazgo del jefe, D. Relación con compañeros.
 
 Datos: ${JSON.stringify(resumen)}
 
-Respondé EXCLUSIVAMENTE con un JSON con este formato:
+Responde EXCLUSIVAMENTE con un JSON con este formato:
 {
   "promedios_globales": { "A": 0.0, "B": 0.0, "C": 0.0, "D": 0.0, "general": 0.0 },
   "fortalezas": ["...", "..."],
@@ -289,7 +289,7 @@ Respondé EXCLUSIVAMENTE con un JSON con este formato:
 `
       const respuesta = await consultarIA(
         prompt,
-        'Sos un consultor experto en ISO 9001 cláusula 7.1.4 (ambiente para la operación de los procesos) y clima organizacional. Respondé ÚNICAMENTE con el JSON pedido, sin markdown ni texto extra.'
+        'Eres un consultor experto en ISO 9001 cláusula 7.1.4 (ambiente para la operación de los procesos) y clima organizacional. Responde ÚNICAMENTE con el JSON pedido, sin markdown ni texto extra.'
       )
       let cleanText = respuesta.replace(/```json/g, '').replace(/```/g, '').trim()
       if (!cleanText.startsWith('{') && cleanText.includes('{')) cleanText = cleanText.substring(cleanText.indexOf('{'))
@@ -837,7 +837,7 @@ Respondé EXCLUSIVAMENTE con un JSON con este formato:
                             <div style={{ flex: 1 }}>
                               <div style={{ fontSize: '0.9rem' }}>{p.full_name}</div>
                               <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
-                                {hasEmail ? p.email : 'Sin email — cargalo en Personal'}
+                                {hasEmail ? p.email : 'Sin email — cárgalo en Personal'}
                               </div>
                             </div>
                           </label>

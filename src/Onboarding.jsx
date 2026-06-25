@@ -105,7 +105,7 @@ export default function Onboarding({ onComplete }) {
         if (obj.data) setObjective(prev => ({ ...prev, ...obj.data }))
       } catch (err) {
         console.error('Onboarding prefill error:', err)
-        toast.error('No pudimos cargar el progreso guardado. Empezá desde el inicio.')
+        toast.error('No pudimos cargar el progreso guardado. Empieza desde el inicio.')
       }
     })()
   }, [])
@@ -331,7 +331,7 @@ export default function Onboarding({ onComplete }) {
                   if (ok) await goNext()
                 } catch (err) {
                   console.error('saveCurrentStep error:', err)
-                  toast.error('No pudimos guardar este paso. Volvé a intentar.')
+                  toast.error('No pudimos guardar este paso. Vuelve a intentar.')
                 } finally {
                   setSavingStep(false)
                 }
@@ -353,7 +353,7 @@ export default function Onboarding({ onComplete }) {
                   if (ok) await finishOnboarding(false)
                 } catch (err) {
                   console.error('saveCurrentStep (final) error:', err)
-                  toast.error('No pudimos guardar el último paso. Volvé a intentar.')
+                  toast.error('No pudimos guardar el último paso. Vuelve a intentar.')
                 } finally {
                   setSavingStep(false)
                 }
@@ -576,7 +576,7 @@ async function saveCurrentStep(currentStep, org, company, fodaFactors, policyTex
       }
     } else if (currentStep === 2) {
       // Política
-      if (!policyText.trim()) { toast.warning('Escribí la política o usá la IA para redactarla'); return false }
+      if (!policyText.trim()) { toast.warning('Escribe la política o usa la IA para redactarla'); return false }
       const { data: existing } = await supabase.from('quality_policy').select('id').order('created_at', { ascending: false }).limit(1).maybeSingle()
       if (existing) {
         await supabase.from('quality_policy').update({ policy_text: policyText, status: 'Borrador' }).eq('id', existing.id)
@@ -642,7 +642,7 @@ function StepCompany({ data, setData }) {
       <Row>
         <Field label="Industria / sector">
           <select value={data.industry} onChange={e => set({ industry: e.target.value })} style={inp}>
-            <option value="">— Elegí una —</option>
+            <option value="">— Elige una —</option>
             {INDUSTRIES.map(i => <option key={i}>{i}</option>)}
           </select>
         </Field>
@@ -684,21 +684,21 @@ function StepFoda({ factors, setFactors, company }) {
   const deleteFactor = (i) => setFactors(prev => prev.filter((_, idx) => idx !== i))
 
   const sugerirIA = async () => {
-    if (!company.name) return toast.warning('Completá los datos de empresa primero')
+    if (!company.name) return toast.warning('Completa los datos de empresa primero')
     setLoadingIA(true)
     try {
-      const prompt = `Sos consultor ISO 9001. Sugerí un análisis FODA inicial (4-6 factores totales, 1-2 por categoría) para esta empresa:
+      const prompt = `Eres consultor ISO 9001. Sugiere un análisis FODA inicial (4-6 factores totales, 1-2 por categoría) para esta empresa:
 Nombre: ${company.name}
 Industria: ${company.industry || 'no especificada'}
 Tamaño: ${company.employees_count || 'no especificado'}
 Productos/servicios: ${company.main_products || 'no especificado'}
 Ubicación: ${company.location || 'no especificada'}
 
-Devolvé SOLO un JSON array de 4-6 factores, sin markdown. Cada uno:
+Devuelve SOLO un JSON array de 4-6 factores, sin markdown. Cada uno:
 - category (Fortaleza | Debilidad | Oportunidad | Amenaza)
 - factor (string breve y específico, máx 120 chars)
 - impact_level (Alto | Medio | Bajo)`
-      const raw = await consultarIA(prompt, 'Devolvé ÚNICAMENTE JSON array válido.')
+      const raw = await consultarIA(prompt, 'Devuelve ÚNICAMENTE JSON array válido.')
       const arr = extractFirstJson(raw)
       if (!Array.isArray(arr) || !arr.length) throw new Error('La IA no devolvió factores parseables')
       const valid = arr.filter(f =>
@@ -728,7 +728,7 @@ Devolvé SOLO un JSON array de 4-6 factores, sin markdown. Cada uno:
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
       <Button variant="ai" size="lg" onClick={sugerirIA} loading={loadingIA} icon={<Sparkles size={16} />} style={{ alignSelf: 'flex-start' }}>
-        💡 Pedile a la IA que arme un FODA inicial
+        💡 Pide a la IA que arme un FODA inicial
       </Button>
 
       {factors.length === 0 ? (
@@ -737,7 +737,7 @@ Devolvé SOLO un JSON array de 4-6 factores, sin markdown. Cada uno:
           border: `1px dashed ${colors.borderStrong}`, borderRadius: radius.lg,
         }}>
           <Compass size={36} color={colors.borderStrong} style={{ margin: '0 auto 8px' }} />
-          <p style={{ color: colors.textFaint, margin: 0 }}>Sin factores cargados. Usá la IA o agregá manualmente.</p>
+          <p style={{ color: colors.textFaint, margin: 0 }}>Sin factores cargados. Usa la IA o agrega manualmente.</p>
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
@@ -765,7 +765,7 @@ Devolvé SOLO un JSON array de 4-6 factores, sin markdown. Cada uno:
         ))}
       </div>
 
-      <Hint>Con 4 factores ya tenés un FODA usable. Después podés ampliarlo en el módulo Contexto.</Hint>
+      <Hint>Con 4 factores ya tienes un FODA usable. Después puedes ampliarlo en el módulo Contexto.</Hint>
     </div>
   )
 }
@@ -788,7 +788,7 @@ function FactorRow({ factor, onChange, onDelete }) {
       <input
         value={factor.factor}
         onChange={e => onChange({ factor: e.target.value })}
-        placeholder="Describí el factor brevemente"
+        placeholder="Describe el factor brevemente"
         style={{ ...inp, border: 'none', padding: '4px 6px', flex: 1 }}
       />
       <select
@@ -814,11 +814,11 @@ function StepPolicy({ policyText, setPolicyText, company, fodaFactors }) {
   const [loadingIA, setLoadingIA] = useState(false)
 
   const redactarIA = async () => {
-    if (!company.name) return toast.warning('Completá los datos de empresa primero')
+    if (!company.name) return toast.warning('Completa los datos de empresa primero')
     setLoadingIA(true)
     try {
       const fortalezas = fodaFactors.filter(f => f.category === 'Fortaleza').map(f => f.factor)
-      const prompt = `Sos consultor ISO 9001. Redactá una Política de Calidad concisa y profesional para esta empresa, alineada con ISO 9001:2015 cláusula 5.2.
+      const prompt = `Eres consultor ISO 9001. Redacta una Política de Calidad concisa y profesional para esta empresa, alineada con ISO 9001:2015 cláusula 5.2.
 
 Empresa: ${company.name}
 Industria: ${company.industry || 'general'}
@@ -827,17 +827,17 @@ Tamaño: ${company.employees_count || 'no especificado'}
 Misión: ${company.strategic_direction || 'no especificada'}
 Fortalezas clave: ${fortalezas.length ? fortalezas.join(', ') : 'no especificadas'}
 
-Devolvé SOLO el texto de la política (sin markdown, sin "**", sin títulos), 5-10 líneas claras. Debe incluir:
+Devuelve SOLO el texto de la política (sin markdown, sin "**", sin títulos), 5-10 líneas claras. Debe incluir:
 - Compromiso con la satisfacción del cliente
 - Compromiso con el cumplimiento de requisitos (legales y del cliente)
 - Compromiso con la mejora continua del SGC
 - Marco para establecer objetivos de calidad
 - Mencionar específicamente el sector/productos de la empresa (no genérica)`
-      const raw = await consultarIA(prompt, 'Devolvé solo el texto de la política, sin markdown, sin comillas envolventes.')
+      const raw = await consultarIA(prompt, 'Devuelve solo el texto de la política, sin markdown, sin comillas envolventes.')
       const clean = (raw || '').replace(/```/g, '').trim()
       if (!clean) throw new Error('La IA no devolvió texto')
       setPolicyText(clean)
-      toast.success('Política redactada · Revisala y editala')
+      toast.success('Política redactada · Revísala y edítala')
     } catch (err) {
       toast.error('Error IA: ' + err.message)
     }
@@ -847,7 +847,7 @@ Devolvé SOLO el texto de la política (sin markdown, sin "**", sin títulos), 5
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
       <Button variant="ai" size="lg" onClick={redactarIA} loading={loadingIA} icon={<Sparkles size={16} />} style={{ alignSelf: 'flex-start' }}>
-        💡 Pedile a la IA que redacte la política
+        💡 Pide a la IA que redacte la política
       </Button>
 
       <Field label="Política de Calidad">
@@ -880,20 +880,20 @@ function StepProcesses({ processList, setProcessList, company }) {
   const deleteProcess = (i) => setProcessList(prev => prev.filter((_, idx) => idx !== i))
 
   const sugerirIA = async () => {
-    if (!company.name) return toast.warning('Completá los datos de empresa primero')
+    if (!company.name) return toast.warning('Completa los datos de empresa primero')
     setLoadingIA(true)
     try {
-      const prompt = `Sos consultor ISO 9001. Sugerí los 4-6 procesos CLAVE del mapa de procesos de esta empresa según ISO 9001 cláusula 4.4. Mezclá Estratégicos, Operativos y de Soporte.
+      const prompt = `Eres consultor ISO 9001. Sugiere los 4-6 procesos CLAVE del mapa de procesos de esta empresa según ISO 9001 cláusula 4.4. Mezcla Estratégicos, Operativos y de Soporte.
 
 Empresa: ${company.name}
 Industria: ${company.industry || 'general'}
 Productos/servicios: ${company.main_products || 'no especificado'}
 
-Devolvé SOLO un JSON array de 4-6 procesos, sin markdown. Cada uno:
+Devuelve SOLO un JSON array de 4-6 procesos, sin markdown. Cada uno:
 - name (string corto, el nombre del proceso)
 - process_type ("Estratégico" | "Operativo" | "Soporte")
 - objective (string breve, qué busca lograr ese proceso)`
-      const raw = await consultarIA(prompt, 'Devolvé ÚNICAMENTE JSON array válido.')
+      const raw = await consultarIA(prompt, 'Devuelve ÚNICAMENTE JSON array válido.')
       const arr = extractFirstJson(raw)
       if (!Array.isArray(arr) || !arr.length) throw new Error('La IA no devolvió procesos parseables')
       const valid = arr.filter(p => p.name).map(p => ({
@@ -915,7 +915,7 @@ Devolvé SOLO un JSON array de 4-6 procesos, sin markdown. Cada uno:
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
       <Button variant="ai" size="lg" onClick={sugerirIA} loading={loadingIA} icon={<Sparkles size={16} />} style={{ alignSelf: 'flex-start' }}>
-        💡 Pedile a la IA el mapa de procesos típico de tu sector
+        💡 Pide a la IA el mapa de procesos típico de tu sector
       </Button>
 
       {processList.length === 0 ? (
@@ -924,7 +924,7 @@ Devolvé SOLO un JSON array de 4-6 procesos, sin markdown. Cada uno:
           border: `1px dashed ${colors.borderStrong}`, borderRadius: radius.lg,
         }}>
           <Workflow size={36} color={colors.borderStrong} style={{ margin: '0 auto 8px' }} />
-          <p style={{ color: colors.textFaint, margin: 0 }}>Sin procesos cargados. Usá la IA o agregá manualmente.</p>
+          <p style={{ color: colors.textFaint, margin: 0 }}>Sin procesos cargados. Usa la IA o agrega manualmente.</p>
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
@@ -951,7 +951,7 @@ Devolvé SOLO un JSON array de 4-6 procesos, sin markdown. Cada uno:
         ))}
       </div>
 
-      <Hint>Empezá con 4-6 procesos. Después podés diseñar las caracterizaciones completas (entradas, salidas, riesgos, KPIs) en el módulo Procesos.</Hint>
+      <Hint>Empieza con 4-6 procesos. Después puedes diseñar las caracterizaciones completas (entradas, salidas, riesgos, KPIs) en el módulo Procesos.</Hint>
     </div>
   )
 }
@@ -1003,17 +1003,17 @@ function StepObjective({ objective, setObjective, company, policyText, processLi
   const set = (patch) => setObjective(prev => ({ ...prev, ...patch }))
 
   const sugerirIA = async () => {
-    if (!policyText && !processList.length) return toast.warning('Completá política y procesos primero')
+    if (!policyText && !processList.length) return toast.warning('Completa política y procesos primero')
     setLoadingIA(true)
     try {
-      const prompt = `Sos consultor ISO 9001. Proponé UN objetivo de calidad SMART para arrancar el SGC de esta empresa según ISO 9001 cláusula 6.2.
+      const prompt = `Eres consultor ISO 9001. Propón UN objetivo de calidad SMART para arrancar el SGC de esta empresa según ISO 9001 cláusula 6.2.
 
 Empresa: ${company.name}
 Industria: ${company.industry || 'general'}
 Política de calidad: ${policyText?.slice(0, 500) || 'no definida'}
 Procesos clave: ${processList.map(p => p.name).filter(Boolean).join(', ') || 'no definidos'}
 
-Devolvé SOLO un JSON objeto, sin markdown:
+Devuelve SOLO un JSON objeto, sin markdown:
 - name (string corto, máx 80 chars, título del objetivo)
 - objective (string SMART completo, Específico Medible Alcanzable Relevante Temporal)
 - indicator (string, el KPI claro)
@@ -1021,7 +1021,7 @@ Devolvé SOLO un JSON objeto, sin markdown:
 - target (number, meta realista a 12 meses)
 - unit ("%" | "puntos" | "NC/mes" | "#" | "$" | "horas" | "días" | "ppm")
 - frequency ("Mensual" | "Trimestral" | "Semestral" | "Anual")`
-      const raw = await consultarIA(prompt, 'Devolvé ÚNICAMENTE JSON objeto válido.')
+      const raw = await consultarIA(prompt, 'Devuelve ÚNICAMENTE JSON objeto válido.')
       const obj = extractFirstJson(raw)
       if (!obj || typeof obj !== 'object') throw new Error('La IA no devolvió objeto válido')
       setObjective(prev => ({
@@ -1034,7 +1034,7 @@ Devolvé SOLO un JSON objeto, sin markdown:
         unit: obj.unit || prev.unit,
         frequency: obj.frequency || prev.frequency,
       }))
-      toast.success('Objetivo redactado · Revisalo')
+      toast.success('Objetivo redactado · Revísalo')
     } catch (err) {
       toast.error('Error IA: ' + err.message)
     }
@@ -1044,7 +1044,7 @@ Devolvé SOLO un JSON objeto, sin markdown:
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
       <Button variant="ai" size="lg" onClick={sugerirIA} loading={loadingIA} icon={<Sparkles size={16} />} style={{ alignSelf: 'flex-start' }}>
-        💡 Pedile a la IA que arme tu primer objetivo SMART
+        💡 Pide a la IA que arme tu primer objetivo SMART
       </Button>
 
       <Field label="Nombre corto del objetivo">

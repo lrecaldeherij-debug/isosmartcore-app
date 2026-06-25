@@ -203,7 +203,7 @@ export default function OrgChart({ alCambiarVista }) {
       // Evitar ciclos: el padre no puede ser uno de los descendientes
       const desc = getDescendants(editingId)
       if (desc.has(form.parent_id)) {
-        toast.error('No podés asignar como padre a un cargo que ya depende de éste (crearía un ciclo)')
+        toast.error('No puedes asignar como padre a un cargo que ya depende de éste (crearía un ciclo)')
         return
       }
     }
@@ -271,32 +271,32 @@ export default function OrgChart({ alCambiarVista }) {
       const ctxProc = processes.slice(0, 20).map(p => ({ nombre: p.name, tipo: p.type }))
       const ctxJobs = jobs.map(j => ({ titulo: j.title, area: j.area, nivel: j.level }))
 
-      const prompt = `Sos consultor ISO 9001 experto en diseño organizacional. Diseñá una estructura jerárquica completa para ${empresa}${sector ? ' (' + sector + ')' : ''}${tamano ? ' tamaño ' + tamano : ''} adecuada al SGC según cláusula 5.3.
+      const prompt = `Eres consultor ISO 9001 experto en diseño organizacional. Diseña una estructura jerárquica completa para ${empresa}${sector ? ' (' + sector + ')' : ''}${tamano ? ' tamaño ' + tamano : ''} adecuada al SGC según cláusula 5.3.
 
 PROCESOS QUE OPERA LA EMPRESA:
 ${JSON.stringify(ctxProc, null, 2)}
 
-CARGOS YA REGISTRADOS (no los repitas, solo agregá lo que falta):
+CARGOS YA REGISTRADOS (no los repitas, solo agrega lo que falta):
 ${JSON.stringify(ctxJobs, null, 2)}
 
-Devolvé SOLO un JSON array de cargos a CREAR, sin markdown. Cada cargo:
+Devuelve SOLO un JSON array de cargos a CREAR, sin markdown. Cada cargo:
 - title (string, título del cargo)
 - code (string, código corto ej "GG-01")
-- area (string, departamento/área — usá nombres consistentes como "Dirección", "Producción", "Calidad", "Comercial", "Administración", "Logística", etc.)
+- area (string, departamento/área — usa nombres consistentes como "Dirección", "Producción", "Calidad", "Comercial", "Administración", "Logística", etc.)
 - level (Estratégico | Táctico | Operativo)
-- parent_title (string, título exacto del cargo padre — usá los del listado existente o uno que vayas a crear en este mismo JSON)
+- parent_title (string, título exacto del cargo padre — usa los del listado existente o uno que vayas a crear en este mismo JSON)
 - mission (string corto, propósito del cargo)
 - is_sgc_responsible (boolean, true si es responsable del SGC — normalmente solo uno)
 
-Diseñá una estructura coherente:
-- Empezá por la cúspide (Dirección/Gerencia General)
+Diseña una estructura coherente:
+- Empieza por la cúspide (Dirección/Gerencia General)
 - Bajá por áreas funcionales
 - Cubrí los procesos del listado
 - Marcá UN solo cargo como responsable del SGC (típico: Gerente de Calidad o Responsable SGC)
 - Mantené 3-5 niveles jerárquicos máximo
 - 8-15 cargos en total`
 
-      const raw = await consultarIA(prompt, 'Devolvé ÚNICAMENTE JSON array válido.')
+      const raw = await consultarIA(prompt, 'Devuelve ÚNICAMENTE JSON array válido.')
       console.log('[IA OrgChart] raw:', raw)
       const arr = parseAiArray(raw)
       if (!arr.length) throw new Error('La IA no devolvió cargos parseables')
@@ -436,7 +436,7 @@ Diseñá una estructura coherente:
       ) : jobs.length === 0 ? (
         <div style={emptyState}>
           <Network size={40} color="#cbd5e1" />
-          <p style={{ color: '#64748b', marginTop: '8px' }}>Sin cargos cargados todavía. Usá IA para sugerir una estructura o creá el primer cargo.</p>
+          <p style={{ color: '#64748b', marginTop: '8px' }}>Sin cargos cargados todavía. Usa IA para sugerir una estructura o creá el primer cargo.</p>
         </div>
       ) : (
         <div ref={chartRef} style={{ background: 'white', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '20px', overflowX: 'auto' }}>

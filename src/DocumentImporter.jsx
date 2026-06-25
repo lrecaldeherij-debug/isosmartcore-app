@@ -169,13 +169,13 @@ export default function DocumentImporter({ targetModule, label, onImported, rend
                     border: '1px solid #ddd6fe',
                   }}>
                     <p style={{ margin: 0, color: '#4338ca', fontSize: '0.95rem' }}>
-                      Subí tu documento existente (la política que ya tenés en Word, un PDF firmado, etc.).
+                      Sube tu documento existente (la política que ya tienes en Word, un PDF firmado, etc.).
                       La IA lo va a leer, extraer los campos clave y dejarlos pre-llenados para que confirmes.
                     </p>
                   </div>
 
                   <div style={{ background: '#f8fafc', padding: '1.25rem', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-                    <strong>Seleccioná tu archivo</strong>
+                    <strong>Selecciona tu archivo</strong>
                     <p style={{ margin: '0.25rem 0 0.75rem 0', fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
                       Aceptamos PDF, DOCX y TXT. Máximo {MAX_SIZE_MB} MB.
                     </p>
@@ -217,7 +217,7 @@ export default function DocumentImporter({ targetModule, label, onImported, rend
                     background: '#f0fdf4', padding: '1rem', borderRadius: '8px', marginBottom: '1.5rem',
                     border: '1px solid #bbf7d0', color: '#166534', fontSize: '0.9rem',
                   }}>
-                    ✅ Extracción lista. Revisá los campos y corregí si la IA se equivocó. Cuando confirmes, se guarda en el módulo.
+                    ✅ Extracción lista. Revisa los campos y corrige si la IA se equivocó. Cuando confirmes, se guarda en el módulo.
                   </div>
 
                   {/* El módulo padre define cómo renderizar el preview editable */}

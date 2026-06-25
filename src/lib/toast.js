@@ -7,7 +7,7 @@
 //   toast.success('Guardado')
 //   toast.error('No se pudo guardar')
 //   toast.info('Actualizando…')
-//   toast.warning('Verificá los datos')
+//   toast.warning('Verifica los datos')
 //   const id = toast.loading('Guardando…')
 //   toast.done(id, '✅ Guardado')   // o toast.dismiss(id) para cerrar sin mensaje
 //

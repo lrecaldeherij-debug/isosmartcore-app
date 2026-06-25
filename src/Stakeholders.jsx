@@ -219,11 +219,11 @@ export default function Stakeholders() {
 
   // ─────── IA: completar expectativas + planning ───────
   const completarConIA = async () => {
-    if (!form.name) return toast.warning('Escribí el nombre de la parte interesada primero')
+    if (!form.name) return toast.warning('Escribe el nombre de la parte interesada primero')
     setLoadingIA(true); setIaSuggestion(null)
     try {
       const ctx = companyProfile ? `Empresa: ${companyProfile.company_name || ''} | Sector: ${companyProfile.industry || ''} | Productos: ${companyProfile.main_products || ''}` : ''
-      const prompt = `Sos consultor ISO 9001. Estoy analizando esta parte interesada:
+      const prompt = `Eres consultor ISO 9001. Estoy analizando esta parte interesada:
 
 Nombre: "${form.name}"
 Categoría: ${form.category}
@@ -236,7 +236,7 @@ Tarea (todo según ISO 4.2):
 4. Comunicación: cómo comunicarnos (máx 150 chars)
 5. Power / Interest sugerido (Alto / Medio / Bajo)
 
-Devolvé SOLO JSON sin markdown:
+Devuelve SOLO JSON sin markdown:
 {
   "expectations": "...",
   "planning_in_sgc": "...",
@@ -245,7 +245,7 @@ Devolvé SOLO JSON sin markdown:
   "power_level": "Alto" | "Medio" | "Bajo",
   "interest_level": "Alto" | "Medio" | "Bajo"
 }`
-      const raw = await consultarIA(prompt, 'Devolvé únicamente JSON válido.')
+      const raw = await consultarIA(prompt, 'Devuelve únicamente JSON válido.')
       const data = extractFirstJson(raw)
       if (!data) throw new Error('IA no devolvió JSON')
       setIaSuggestion(data)
@@ -277,11 +277,11 @@ Devolvé SOLO JSON sin markdown:
         ? `Empresa: ${companyProfile.company_name || ''} | Sector: ${companyProfile.industry || ''} | Tamaño: ${companyProfile.size || ''} | Productos: ${companyProfile.main_products || ''}`
         : 'Sin perfil de empresa cargado.'
 
-      const prompt = `Sos consultor ISO 9001. Sugerí 6-10 PARTES INTERESADAS típicas y pertinentes al SGC de esta empresa.
+      const prompt = `Eres consultor ISO 9001. Sugiere 6-10 PARTES INTERESADAS típicas y pertinentes al SGC de esta empresa.
 
 CONTEXTO: ${ctx}
 
-Devolvé SOLO JSON array, sin markdown:
+Devuelve SOLO JSON array, sin markdown:
 [
   {
     "name": "Nombre del grupo de interés",
@@ -293,7 +293,7 @@ Devolvé SOLO JSON array, sin markdown:
     "follow_up_frequency": "Mensual" | "Trimestral" | "Semestral" | "Anual"
   }
 ]`
-      const raw = await consultarIA(prompt, 'Devolvé únicamente JSON array válido.')
+      const raw = await consultarIA(prompt, 'Devuelve únicamente JSON array válido.')
       console.log('[IA stakeholders sector] raw:', raw)
       const arr = parseAiArray(raw)
       if (!arr.length) throw new Error('La IA no devolvió partes parseables')

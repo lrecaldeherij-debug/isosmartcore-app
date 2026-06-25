@@ -34,3 +34,6 @@ inspection/out/
 
 # Archivos de debugging locales
 test-supabase.html
+
+# One-off internal scripts (no deploy)
+scripts/

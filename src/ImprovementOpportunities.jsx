@@ -293,7 +293,7 @@ export default function ImprovementOpportunities() {
 
   // ───── IA: sugerir mejoras desde NCs recurrentes ─────
   const sugerirDesdeNCs = async () => {
-    if (ncs.length < 3) return toast.warning('Necesitás al menos 3 NCs registradas para analizar patrones')
+    if (ncs.length < 3) return toast.warning('Necesitas al menos 3 NCs registradas para analizar patrones')
     setLoadingIA(true); setIaSuggestions(null); setIaContext('ncs')
     try {
       const ncData = ncs.slice(0, 30).map(n => ({
@@ -301,19 +301,19 @@ export default function ImprovementOpportunities() {
         root_cause: n.root_cause?.slice(0, 150),
         source: n.source
       }))
-      const prompt = `Sos consultor ISO 9001 experto en mejora continua. Analizá estas no conformidades, detectá patrones/causas raíz recurrentes, y proponé MEJORAS SISTÉMICAS (no parches reactivos) que eliminen los problemas de raíz según ISO 10.3.
+      const prompt = `Eres consultor ISO 9001 experto en mejora continua. Analiza estas no conformidades, detecta patrones/causas raíz recurrentes, y propón MEJORAS SISTÉMICAS (no parches reactivos) que eliminen los problemas de raíz según ISO 10.3.
 
 NO CONFORMIDADES:
 ${JSON.stringify(ncData, null, 2)}
 
-Devolvé SOLO un JSON array, sin markdown. Cada oportunidad de mejora:
+Devuelve SOLO un JSON array, sin markdown. Cada oportunidad de mejora:
 - title (string, qué se mejorará)
 - description (string, descripción de la mejora)
 - area (string, área impactada)
 - expected_benefit (string, beneficio esperado)
 - priority (Alta | Media | Baja)
 - estimated_cost (number en USD, estimado conservador)`
-      const raw = await consultarIA(prompt, 'Devolvé ÚNICAMENTE JSON array válido.')
+      const raw = await consultarIA(prompt, 'Devuelve ÚNICAMENTE JSON array válido.')
       console.log('[IA mejoras NCs] raw:', raw)
       const arr = parseAiArray(raw)
       if (!arr.length) throw new Error('La IA no devolvió mejoras parseables')
@@ -332,18 +332,18 @@ Devolvé SOLO un JSON array, sin markdown. Cada oportunidad de mejora:
     setLoadingIA(true); setIaSuggestions(null); setIaContext('review')
     try {
       const reviewsText = conSalidas.map(r => `Revisión ${r.review_type} (${r.review_date}):\n${r.outputs_improvement_opportunities}`).join('\n\n')
-      const prompt = `Sos consultor ISO 9001. Convertí estas oportunidades de mejora identificadas en revisiones por la dirección en items concretos para el módulo de mejora continua (ISO 10.3).
+      const prompt = `Eres consultor ISO 9001. Convierte estas oportunidades de mejora identificadas en revisiones por la dirección en items concretos para el módulo de mejora continua (ISO 10.3).
 
 SALIDAS DE REVISIONES:
 ${reviewsText}
 
-Devolvé SOLO un JSON array, sin markdown. Cada oportunidad:
+Devuelve SOLO un JSON array, sin markdown. Cada oportunidad:
 - title (string, qué se hará)
 - description (string)
 - area (string)
 - expected_benefit (string)
 - priority (Alta | Media | Baja)`
-      const raw = await consultarIA(prompt, 'Devolvé ÚNICAMENTE JSON array válido.')
+      const raw = await consultarIA(prompt, 'Devuelve ÚNICAMENTE JSON array válido.')
       const arr = parseAiArray(raw)
       if (!arr.length) throw new Error('La IA no devolvió mejoras parseables')
       const reviewId = conSalidas[0].id
@@ -444,7 +444,7 @@ Devolvé SOLO un JSON array, sin markdown. Cada oportunidad:
 
       {tableError && (
         <div style={{ marginTop: 12, padding: 12, background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, color: '#991b1b', fontSize: 13 }}>
-          <strong>Tabla no encontrada:</strong> {tableError}. Aplicá <code>iso_migration_v45_improvement_opportunities.sql</code>.
+          <strong>Tabla no encontrada:</strong> {tableError}. Aplica <code>iso_migration_v45_improvement_opportunities.sql</code>.
         </div>
       )}
 
@@ -603,7 +603,7 @@ Devolvé SOLO un JSON array, sin markdown. Cada oportunidad:
             <tbody>
               {filtered.length === 0 && (
                 <tr><td colSpan={7} style={{ padding: 20, textAlign: 'center', color: '#9ca3af', fontSize: 13 }}>
-                  Sin oportunidades. Cargá la primera con <strong>Nueva oportunidad</strong> o usá IA.
+                  Sin oportunidades. Carga la primera con <strong>Nueva oportunidad</strong> o usa IA.
                 </td></tr>
               )}
               {filtered.map(item => {

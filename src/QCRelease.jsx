@@ -246,7 +246,7 @@ export default function QCRelease() {
         {loading && <p style={{ marginTop: '1rem' }}>Cargando...</p>}
         {!loading && pendingOrders.length === 0 && (
           <p style={{ marginTop: '1rem', color: '#94a3b8', fontStyle: 'italic' }}>
-            No hay lotes esperando inspección. Cuando una orden de producción se finalice, aparecerá acá.
+            No hay lotes esperando inspección. Cuando una orden de producción se finalice, aparecerá aquí.
           </p>
         )}
 
@@ -382,12 +382,12 @@ export default function QCRelease() {
                 </div>
                 {inspectingOrder.quality_criteria && insp.checklist?.length > 0 && (
                   <p style={{ fontSize: '0.75rem', color: '#64748b', margin: '0 0 0.4rem 0' }}>
-                    💡 Pre-cargué los criterios desde la orden de producción. Podés ajustarlos.
+                    💡 Pre-cargué los criterios desde la orden de producción. Puedes ajustarlos.
                   </p>
                 )}
                 {(insp.checklist || []).length === 0 ? (
                   <p style={{ fontSize: '0.8rem', color: '#94a3b8', fontStyle: 'italic' }}>
-                    Sin criterios. Cargá al menos uno o defininlos en la orden de producción.
+                    Sin criterios. Carga al menos uno o defininlos en la orden de producción.
                   </p>
                 ) : (
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.82rem' }}>
@@ -438,7 +438,7 @@ export default function QCRelease() {
                 )}
                 {checklistFailedCount > 0 && (
                   <div style={{ marginTop: '0.4rem', padding: '0.4rem 0.6rem', background: '#fef3c7', color: '#92400e', borderRadius: '6px', fontSize: '0.78rem' }}>
-                    ⚠ Hay {checklistFailedCount} criterio(s) marcados como No Conforme. Considerá decisión <strong>Rechazado</strong> o <strong>Liberación condicional</strong>.
+                    ⚠ Hay {checklistFailedCount} criterio(s) marcados como No Conforme. Considera decisión <strong>Rechazado</strong> o <strong>Liberación condicional</strong>.
                   </div>
                 )}
               </div>
@@ -500,7 +500,7 @@ export default function QCRelease() {
                 <div style={{ padding: '0.75rem 0.9rem', background: '#fee2e2', borderRadius: '8px', border: '1px solid #fca5a5', fontSize: '0.85rem', color: '#991b1b' }}>
                   <strong>⚠ Producto Rechazado</strong>
                   <p style={{ margin: '0.3rem 0 0 0' }}>
-                    Recordá abrir una <strong>No Conformidad</strong> en el módulo 10.2 con la trazabilidad del lote para activar el plan de acción correctivo (ISO 8.7).
+                    Recuerda abrir una <strong>No Conformidad</strong> en el módulo 10.2 con la trazabilidad del lote para activar el plan de acción correctivo (ISO 8.7).
                   </p>
                 </div>
               )}

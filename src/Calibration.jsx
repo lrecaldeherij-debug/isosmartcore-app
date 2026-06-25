@@ -274,10 +274,10 @@ export default function Calibration() {
       } : null
 
       const prompt = `
-Sugerí los EQUIPOS DE MEDICIÓN típicos que deben calibrarse en esta empresa según ISO 9001 cláusula 7.1.5.
+Sugiere los EQUIPOS DE MEDICIÓN típicos que deben calibrarse en esta empresa según ISO 9001 cláusula 7.1.5.
 Perfil: ${JSON.stringify(resumen)}
 
-Devolvé EXCLUSIVAMENTE un JSON array con 6 a 12 equipos. Cada uno con este formato:
+Devuelve EXCLUSIVAMENTE un JSON array con 6 a 12 equipos. Cada uno con este formato:
 {
   "equipment_name": "Nombre del equipo (ej: Balanza de mesa 10kg)",
   "equipment_type": "Balanza" | "Termómetro" | "Manómetro" | "Caudalímetro" | "Micrómetro" | "Calibre" | "pH-metro" | "Cronómetro" | "Multímetro" | "Higrómetro" | "Conductímetro" | "Refractómetro" | "Vernier" | "Otro",
@@ -294,7 +294,7 @@ Reglas:
 `
       const respuesta = await consultarIA(
         prompt,
-        'Sos un consultor experto en ISO 9001 cláusula 7.1.5 (recursos de seguimiento y medición). Respondé ÚNICAMENTE con el JSON array pedido. Sin markdown ni texto extra.'
+        'Eres un consultor experto en ISO 9001 cláusula 7.1.5 (recursos de seguimiento y medición). Responde ÚNICAMENTE con el JSON array pedido. Sin markdown ni texto extra.'
       )
       console.log('[IA Sugerir Equipos] respuesta cruda:', respuesta)
       const arr = parseAiArray(respuesta)
@@ -332,7 +332,7 @@ Reglas:
   }
 
   const handleSaveSuggestions = async () => {
-    if (!iaSelected.size) return toast.warning('Seleccioná al menos un equipo')
+    if (!iaSelected.size) return toast.warning('Selecciona al menos un equipo')
     setSavingIa(true)
     try {
       const payload = iaSuggestions
@@ -549,7 +549,7 @@ Reglas:
                   <input type="date" className="form-input" value={form.next_calibration}
                     onChange={e => setForm({ ...form, next_calibration: e.target.value })} />
                   <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '0.25rem' }}>
-                    Se calcula desde "Última calibración" + frecuencia. Podés ajustarla manualmente.
+                    Se calcula desde "Última calibración" + frecuencia. Puedes ajustarla manualmente.
                   </div>
                 </div>
                 <div className="form-group">
@@ -931,7 +931,7 @@ Reglas:
                   <Sparkles size={18} style={{ color: '#7c3aed' }} /> Equipos sugeridos por IA
                 </h4>
                 <span style={{ fontSize: '0.8rem', color: '#64748b' }}>
-                  Revisá los {iaSuggestions.length} equipos. Destildá los que no apliquen.
+                  Revisa los {iaSuggestions.length} equipos. Desmarca los que no apliquen.
                 </span>
               </div>
               <button onClick={() => { setIaSuggestions(null); setIaSelected(new Set()) }} className="btn-ghost"><X size={18} /></button>

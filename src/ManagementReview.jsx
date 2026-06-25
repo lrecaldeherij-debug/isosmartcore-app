@@ -280,7 +280,7 @@ export default function ManagementReview({ alReportar }) {
   // ─────────── Cargar KPIs del período ────────────
   const cargarKPIsDelPeriodo = async () => {
     if (!form.period_start || !form.period_end) {
-      return toast.warning('Definí primero el período (inicio/fin) para calcular KPIs')
+      return toast.warning('Define primero el período (inicio/fin) para calcular KPIs')
     }
     setLoadingKPI(true)
     try {
@@ -351,21 +351,21 @@ export default function ManagementReview({ alReportar }) {
         ['Objetivos', form.inputs_objectives]
       ].filter(([, v]) => v).map(([k, v]) => `## ${k}\n${v}`).join('\n\n')
 
-      if (!inputsText.trim()) return toast.warning('Cargá al menos algunas entradas primero (usá "Cargar KPIs" o completá manualmente)')
+      if (!inputsText.trim()) return toast.warning('Carga al menos algunas entradas primero (usa "Cargar KPIs" o completa manualmente)')
 
-      const prompt = `Sos un consultor ISO 9001 facilitando una Revisión por la Dirección. A partir de estas ENTRADAS, proponé 5-8 DECISIONES concretas con responsable y fecha límite.
+      const prompt = `Eres un consultor ISO 9001 facilitando una Revisión por la Dirección. A partir de estas ENTRADAS, propón 5-8 DECISIONES concretas con responsable y fecha límite.
 
 ENTRADAS DE LA REVISIÓN:
 ${inputsText}
 
-Devolvé SOLO un JSON array, sin texto antes ni después. Cada decisión:
+Devuelve SOLO un JSON array, sin texto antes ni después. Cada decisión:
 - description (string, qué se va a hacer)
 - responsible (string, rol o "Por asignar")
 - due_date (string YYYY-MM-DD, fecha realista en próximos 6 meses)
 - priority (Alta | Media | Baja)
 - category (Mejora | Cambio | Recurso)`
 
-      const raw = await consultarIA(prompt, 'Devolvé únicamente JSON válido.')
+      const raw = await consultarIA(prompt, 'Devuelve únicamente JSON válido.')
       const arr = parseAiArray(raw)
       if (!arr.length) throw new Error('La IA no devolvió decisiones parseables')
       setIaSuggestions(arr)
@@ -379,7 +379,7 @@ Devolvé SOLO un JSON array, sin texto antes ni después. Cada decisión:
 
   const saveIaSelected = async () => {
     if (!iaSuggestions || !editingId) {
-      return toast.warning('Guardá primero la revisión para poder asociar las decisiones')
+      return toast.warning('Guarda primero la revisión para poder asociar las decisiones')
     }
     const rows = iaSuggestions
       .map((s, i) => ({ s, i }))
@@ -483,7 +483,7 @@ Devolvé SOLO un JSON array, sin texto antes ni después. Cada decisión:
 
       {tableError && (
         <div style={{ marginTop: 12, padding: 12, background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, color: '#991b1b', fontSize: 13 }}>
-          <strong>Tabla no encontrada:</strong> {tableError}. Aplicá <code>iso_migration_v41_management_review_auditable.sql</code>.
+          <strong>Tabla no encontrada:</strong> {tableError}. Aplica <code>iso_migration_v41_management_review_auditable.sql</code>.
         </div>
       )}
 
@@ -576,7 +576,7 @@ Devolvé SOLO un JSON array, sin texto antes ni después. Cada decisión:
               <TextArea label="b) Cambios necesarios al SGC" rows={2} value={form.outputs_changes_needed} onChange={v => setForm({ ...form, outputs_changes_needed: v })} />
               <TextArea label="c) Necesidades de recursos" rows={2} value={form.outputs_resource_needs} onChange={v => setForm({ ...form, outputs_resource_needs: v })} />
               <div style={{ marginTop: 10, padding: 10, background: '#fef3c7', border: '1px solid #fde68a', borderRadius: 6, fontSize: 12, color: '#92400e' }}>
-                💡 Cada decisión concreta cargala como <strong>acción derivada</strong> (con responsable + fecha límite) en el detalle de la revisión.
+                💡 Cada decisión concreta cárgala como <strong>acción derivada</strong> (con responsable + fecha límite) en el detalle de la revisión.
               </div>
             </Collapsible>
 
@@ -787,7 +787,7 @@ Devolvé SOLO un JSON array, sin texto antes ni después. Cada decisión:
         <ModalShell onClose={() => setIaSuggestions(null)} title="Decisiones sugeridas por IA" wide>
           {!editingId && (
             <div style={{ padding: 10, background: '#fef3c7', border: '1px solid #fde68a', borderRadius: 8, fontSize: 13, color: '#92400e', marginBottom: 10 }}>
-              ⚠️ Guardá primero la revisión para asociar las decisiones.
+              ⚠️ Guarda primero la revisión para asociar las decisiones.
             </div>
           )}
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>

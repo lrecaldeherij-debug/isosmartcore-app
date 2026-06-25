@@ -327,11 +327,11 @@ export default function Suppliers({ alReportar }) {
       const profile = profileRows?.[0] || {}
       const ctx = `Empresa: ${profile.company_name || 'N/D'} | Sector: ${profile.industry || 'N/D'} | Tamaño: ${profile.size || 'N/D'} | Productos: ${profile.main_products || 'N/D'}`
 
-      const prompt = `Sos un consultor ISO 9001. Para esta empresa, sugiere 6 categorías típicas de PROVEEDORES que debería tener registradas, con un ejemplo de proveedor y los requisitos a comunicarles según ISO 8.4.3.
+      const prompt = `Eres un consultor ISO 9001. Para esta empresa, sugiere 6 categorías típicas de PROVEEDORES que debería tener registradas, con un ejemplo de proveedor y los requisitos a comunicarles según ISO 8.4.3.
 
 Contexto: ${ctx}
 
-Devolvé SOLO un JSON array, sin texto antes ni después. Cada item con estas claves:
+Devuelve SOLO un JSON array, sin texto antes ni después. Cada item con estas claves:
 - name (string, nombre genérico ej "Proveedor de materia prima")
 - product_service (string)
 - category (uno de: ${CATEGORY_OPTIONS.join(', ')})
@@ -339,7 +339,7 @@ Devolvé SOLO un JSON array, sin texto antes ni después. Cada item con estas cl
 - requirements_communicated (string, 2-3 requisitos clave)
 - notes (string corto)`
 
-      const raw = await consultarIA(prompt, 'Devolvé únicamente JSON válido.')
+      const raw = await consultarIA(prompt, 'Devuelve únicamente JSON válido.')
       const arr = parseAiArray(raw)
       if (!arr.length) throw new Error('La IA no devolvió sugerencias parseables')
       setIaSuggestions(arr)
@@ -440,7 +440,7 @@ Devolvé SOLO un JSON array, sin texto antes ni después. Cada item con estas cl
 
       {tableError && (
         <div style={{ marginTop: 12, padding: 12, background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, color: '#991b1b', fontSize: 13 }}>
-          <strong>Tabla no encontrada:</strong> {tableError}. Aplicá la migración <code>iso_migration_v39_suppliers_auditable.sql</code>.
+          <strong>Tabla no encontrada:</strong> {tableError}. Aplica la migración <code>iso_migration_v39_suppliers_auditable.sql</code>.
         </div>
       )}
 
@@ -586,7 +586,7 @@ Devolvé SOLO un JSON array, sin texto antes ni después. Cada item con estas cl
             <tbody>
               {filtered.length === 0 && (
                 <tr><td colSpan={7} style={{ padding: 20, textAlign: 'center', color: '#9ca3af', fontSize: 13 }}>
-                  Sin proveedores. Cargá uno o usá <strong>Sugerir con IA</strong>.
+                  Sin proveedores. Carga uno o usa <strong>Sugerir con IA</strong>.
                 </td></tr>
               )}
               {filtered.map(item => {

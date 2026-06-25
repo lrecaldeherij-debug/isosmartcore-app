@@ -24,7 +24,7 @@ export default function TrialBanner({ onUpgrade }) {
     expired: {
       bg: '#fee2e2', border: '#fca5a5', color: '#991b1b',
       icon: <AlertTriangle size={18} />,
-      message: 'Tu trial expiró. Suscribite para recuperar acceso completo.',
+      message: 'Tu trial expiró. Suscríbete para recuperar acceso completo.',
       dismissable: false,
     },
     past_due: {
@@ -36,13 +36,13 @@ export default function TrialBanner({ onUpgrade }) {
     canceled: {
       bg: '#f3f4f6', border: '#cbd5e1', color: '#374151',
       icon: <Clock size={18} />,
-      message: 'Tu suscripción está cancelada. Podés reactivarla cuando quieras.',
+      message: 'Tu suscripción está cancelada. Puedes reactivarla cuando quieras.',
       dismissable: true,
     },
     urgent: {
       bg: '#fef3c7', border: '#fde68a', color: '#92400e',
       icon: <AlertTriangle size={18} />,
-      message: `Tu trial vence en ${plan.daysLeft} día${plan.daysLeft === 1 ? '' : 's'}. Suscribite ahora para no perder acceso.`,
+      message: `Tu trial vence en ${plan.daysLeft} día${plan.daysLeft === 1 ? '' : 's'}. Suscríbete ahora para no perder acceso.`,
       dismissable: false,
     },
     trial: {

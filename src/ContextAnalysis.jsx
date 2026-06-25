@@ -215,21 +215,21 @@ export default function ContextAnalysis() {
 
   // ─────── IA por factor (mantenido del original) ───────
   const pedirAyudaIA = async () => {
-    if (!form.factor) return toast.warning('Escribí un factor primero')
+    if (!form.factor) return toast.warning('Escribe un factor primero')
     setLoadingIA(true); setIaSuggestion(null)
     try {
-      const prompt = `Sos consultor ISO 9001 ayudando con análisis FODA.
+      const prompt = `Eres consultor ISO 9001 ayudando con análisis FODA.
 
 Factor: "${form.factor}"
 Tipo: ${form.type}
 Categoría: ${form.category}
 
-Devolvé SOLO JSON sin markdown:
+Devuelve SOLO JSON sin markdown:
 {
   "descripcion": "máx 300 caracteres, técnica",
   "estrategia": "máx 300 caracteres, cómo potenciar (si F/O) o mitigar (si D/A)"
 }`
-      const raw = await consultarIA(prompt, 'Devolvé únicamente JSON válido.')
+      const raw = await consultarIA(prompt, 'Devuelve únicamente JSON válido.')
       const data = extractFirstJson(raw)
       if (!data) throw new Error('IA no devolvió JSON')
       setIaSuggestion(data)
@@ -254,7 +254,7 @@ Devolvé SOLO JSON sin markdown:
         : 'Sin perfil de empresa cargado.'
       const procesos = (await supabase.from('processes').select('name, process_type').limit(20)).data || []
 
-      const prompt = `Sos consultor ISO 9001. Generá un análisis FODA inicial completo (8-12 factores) para esta organización.
+      const prompt = `Eres consultor ISO 9001. Genera un análisis FODA inicial completo (8-12 factores) para esta organización.
 
 CONTEXTO:
 ${ctx}
@@ -263,11 +263,11 @@ PROCESOS CARGADOS:
 ${procesos.map(p => `- ${p.name} (${p.process_type})`).join('\n') || '- (sin procesos cargados)'}
 
 REQUISITOS:
-- Mezclá factores Internos (Fortalezas/Debilidades) y Externos (Oportunidades/Amenazas)
+- Mezcla factores Internos (Fortalezas/Debilidades) y Externos (Oportunidades/Amenazas)
 - Mínimo 2 por cada categoría
 - Específicos al sector, no genéricos
 
-Devolvé SOLO JSON array, sin markdown:
+Devuelve SOLO JSON array, sin markdown:
 [
   {
     "type": "Interno" | "Externo",
@@ -279,7 +279,7 @@ Devolvé SOLO JSON array, sin markdown:
     "probability": "Alto" | "Medio" | "Bajo"
   }
 ]`
-      const raw = await consultarIA(prompt, 'Devolvé únicamente JSON array válido.')
+      const raw = await consultarIA(prompt, 'Devuelve únicamente JSON array válido.')
       console.log('[IA FODA completo] raw:', raw)
       const arr = parseAiArray(raw)
       if (!arr.length) throw new Error('La IA no devolvió FODA parseable')
@@ -318,7 +318,7 @@ Devolvé SOLO JSON array, sin markdown:
 
   // ─────── IA Cruzar estrategias FO/FA/DO/DA ───────
   const cruzarEstrategiasIA = async () => {
-    if (items.length < 4) return toast.warning('Necesitás al menos 4 factores cargados para cruzar estrategias')
+    if (items.length < 4) return toast.warning('Necesitas al menos 4 factores cargados para cruzar estrategias')
     setLoadingIACross(true); setIaCrossResult(null); setShowCrossModal(true)
     try {
       const fortalezas = items.filter(i => i.category === 'Fortaleza').map(i => i.factor)
@@ -326,21 +326,21 @@ Devolvé SOLO JSON array, sin markdown:
       const oportunidades = items.filter(i => i.category === 'Oportunidad').map(i => i.factor)
       const amenazas = items.filter(i => i.category === 'Amenaza').map(i => i.factor)
 
-      const prompt = `Sos consultor estratégico ISO 9001. Generá las 4 estrategias del análisis FODA cruzado.
+      const prompt = `Eres consultor estratégico ISO 9001. Genera las 4 estrategias del análisis FODA cruzado.
 
 FORTALEZAS: ${fortalezas.join('; ') || '(ninguna)'}
 DEBILIDADES: ${debilidades.join('; ') || '(ninguna)'}
 OPORTUNIDADES: ${oportunidades.join('; ') || '(ninguna)'}
 AMENAZAS: ${amenazas.join('; ') || '(ninguna)'}
 
-Devolvé SOLO JSON, sin markdown:
+Devuelve SOLO JSON, sin markdown:
 {
   "FO": "Estrategia ofensiva: usar Fortalezas para aprovechar Oportunidades",
   "FA": "Estrategia defensiva: usar Fortalezas para neutralizar Amenazas",
   "DO": "Estrategia adaptativa: superar Debilidades aprovechando Oportunidades",
   "DA": "Estrategia de supervivencia: minimizar Debilidades evitando Amenazas"
 }`
-      const raw = await consultarIA(prompt, 'Devolvé únicamente JSON válido.')
+      const raw = await consultarIA(prompt, 'Devuelve únicamente JSON válido.')
       const data = extractFirstJson(raw)
       if (!data) throw new Error('IA no devolvió estrategias')
       setIaCrossResult(data)
@@ -439,8 +439,8 @@ Devolvé SOLO JSON, sin markdown:
         title="Comprensión de la organización y de su contexto"
         tips={[
           "Identifica factores internos (recursos, cultura) y externos (mercado, regulación).",
-          "Clasificá cada factor en positivo (F/O) o negativo (D/A).",
-          "Para cada factor, definí una estrategia + nivel de impacto y probabilidad.",
+          "Clasifica cada factor en positivo (F/O) o negativo (D/A).",
+          "Para cada factor, define una estrategia + nivel de impacto y probabilidad.",
           "Esta información alimenta riesgos (6.1) y partes interesadas (4.2)."
         ]}
       />
@@ -621,7 +621,7 @@ Devolvé SOLO JSON, sin markdown:
             <tbody>
               {filtered.length === 0 && (
                 <tr><td colSpan={6} style={{ padding: 20, textAlign: 'center', color: '#9ca3af', fontSize: 13 }}>
-                  Sin factores. Generá con IA o cargá manualmente.
+                  Sin factores. Genera con IA o carga manualmente.
                 </td></tr>
               )}
               {filtered.map(item => {

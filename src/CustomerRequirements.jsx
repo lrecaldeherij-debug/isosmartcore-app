@@ -184,7 +184,7 @@ export default function CustomerRequirements() {
   // ---- IA: sugerir requisitos legales típicos según ADN + descripción ----
   const handleSugerirRequisitosLegales = async () => {
     if (!form.requirements_desc?.trim() && !form.client_name?.trim()) {
-      return toast.warning('Cargá al menos el cliente o la descripción para que la IA tenga contexto')
+      return toast.warning('Carga al menos el cliente o la descripción para que la IA tenga contexto')
     }
     setLoadingIA(true)
     setIaResult(null)
@@ -194,16 +194,16 @@ export default function CustomerRequirements() {
         empresa: profile.name, sector: profile.industry, productos: profile.main_products, pais: profile.location,
       } : null
       const prompt = `
-Sos un consultor experto en ISO 9001 cláusula 8.2 (requisitos para productos y servicios).
+Eres un consultor experto en ISO 9001 cláusula 8.2 (requisitos para productos y servicios).
 Empresa proveedora: ${JSON.stringify(resumen)}
 Cliente: ${form.client_name || 'No especificado'}
 Descripción del pedido: ${form.requirements_desc || 'No especificada'}
 
-Sugerí:
+Sugiere:
 1. Requisitos LEGALES y REGLAMENTARIOS aplicables (normativa local del sector + país, certificaciones obligatorias, regulaciones de producto/servicio).
 2. Requisitos IMPLÍCITOS típicos no declarados por el cliente pero esperables (calidad mínima, plazos típicos del rubro, garantía, soporte post-venta, etc.).
 
-Devolvé EXCLUSIVAMENTE este JSON (sin markdown, sin texto extra):
+Devuelve EXCLUSIVAMENTE este JSON (sin markdown, sin texto extra):
 {
   "legal": "Bullet points con saltos de línea: - regulación 1\\n- regulación 2\\n...",
   "implicit": "Bullet points con saltos de línea: - requisito 1\\n- requisito 2\\n..."
@@ -211,7 +211,7 @@ Devolvé EXCLUSIVAMENTE este JSON (sin markdown, sin texto extra):
 `
       const respuesta = await consultarIA(
         prompt,
-        'Sos un consultor ISO 9001 8.2. Respondé solo con el JSON pedido. Sin markdown.'
+        'Eres un consultor ISO 9001 8.2. Responde solo con el JSON pedido. Sin markdown.'
       )
       console.log('[IA Requisitos] respuesta:', respuesta)
       const objStr = extractFirstJson(respuesta, '{', '}')

@@ -119,8 +119,8 @@ export default function PublicSurvey({ token }) {
     const messages = {
       invitation_not_found: { title: 'Invitación no encontrada', msg: 'El link que abriste no existe o ya fue eliminado.' },
       already_completed:    { title: 'Ya respondiste', msg: 'Esta encuesta ya fue completada. ¡Gracias por tu participación!' },
-      expired:              { title: 'Invitación expirada', msg: 'El plazo para responder ya venció. Contactá a tu responsable si necesitás un nuevo link.' },
-      rpc_error:            { title: 'Error de conexión', msg: 'No pudimos validar el link. Volvé a intentar en unos minutos.' },
+      expired:              { title: 'Invitación expirada', msg: 'El plazo para responder ya venció. Contacta a tu responsable si necesitas un nuevo link.' },
+      rpc_error:            { title: 'Error de conexión', msg: 'No pudimos validar el link. Vuelve a intentar en unos minutos.' },
     }
     const m = messages[errorCode] || messages.invitation_not_found
     return (
@@ -138,7 +138,7 @@ export default function PublicSurvey({ token }) {
         <CheckCircle size={48} style={{ color: '#16a34a' }} />
         <h2 style={{ margin: '1rem 0 0.5rem 0' }}>¡Gracias por responder!</h2>
         <p style={{ color: '#64748b', textAlign: 'center', maxWidth: '380px' }}>
-          Tus respuestas se registraron correctamente. Ya podés cerrar esta ventana.
+          Tus respuestas se registraron correctamente. Ya puedes cerrar esta ventana.
         </p>
       </CenteredCard>
     )
@@ -219,7 +219,7 @@ export default function PublicSurvey({ token }) {
             </label>
             <textarea
               rows={3}
-              placeholder="Si querés agregar algo en tus palabras..."
+              placeholder="Si quieres agregar algo en tus palabras..."
               value={notes}
               onChange={e => setNotes(e.target.value)}
               style={{

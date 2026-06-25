@@ -26,7 +26,7 @@ export default function ModuleSeedBanner({ moduleKey, label, visible, onSeeded }
   if (!visible || !can.admin || !org) return null
 
   const handleSeed = async () => {
-    if (!await confirm(`Esto cargará una plantilla pre-redactada de ${label}. Podés editarla o eliminarla después. ¿Continuar?`)) return
+    if (!await confirm(`Esto cargará una plantilla pre-redactada de ${label}. Puedes editarla o eliminarla después. ¿Continuar?`)) return
     setLoading(true)
     setError(null)
     const { error: err } = await supabase.rpc('seed_module', {
@@ -54,7 +54,7 @@ export default function ModuleSeedBanner({ moduleKey, label, visible, onSeeded }
         <div>
           <strong>Empezar con plantilla</strong>
           <p style={{ margin: '0.25rem 0 0 0', color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
-            Este módulo está vacío. Cargá una plantilla ISO 9001 ya redactada y editala a tu realidad.
+            Este módulo está vacío. Carga una plantilla ISO 9001 ya redactada y edítala a tu realidad.
           </p>
           {error && (
             <p style={{ margin: '0.5rem 0 0 0', color: 'var(--danger-text)', fontSize: '0.85rem' }}>

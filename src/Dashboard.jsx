@@ -79,7 +79,7 @@ export default function Dashboard({ alCambiarVista }) {
       })
     } catch (err) {
       console.error('Dashboard error:', err)
-      setError(err?.message || 'No pudimos cargar los datos del tablero. Revisá tu conexión y volvé a intentar.')
+      setError(err?.message || 'No pudimos cargar los datos del tablero. Revisa tu conexión y vuelve a intentar.')
     }
     setLoading(false)
   }

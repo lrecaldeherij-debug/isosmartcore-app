@@ -44,7 +44,7 @@ export default function Team() {
 
   const changeRole = async (userId, newRole) => {
     if (userId === profile?.user_id && newRole !== 'owner') {
-      toast.error('No podés cambiarte tu propio rol de owner')
+      toast.error('No puedes cambiarte tu propio rol de owner')
       return
     }
     const { error } = await supabase
@@ -58,7 +58,7 @@ export default function Team() {
 
   const removeMember = async (member) => {
     if (member.user_id === profile?.user_id) {
-      toast.error('No podés eliminarte a vos mismo')
+      toast.error('No puedes eliminarte a ti mismo')
       return
     }
     const ok = await confirm({
@@ -104,7 +104,7 @@ export default function Team() {
         <EmptyState
           icon={<Users size={32} color={colors.textGhost} />}
           title="Sin miembros"
-          subtitle="Algo raro: deberías estar al menos vos mismo en la lista."
+          subtitle="Algo raro: deberías estar al menos tú mismo en la lista."
         />
       ) : (
         <div style={{
@@ -187,7 +187,7 @@ function MemberRow({ member, isLast, isSelf, canEdit, onChangeRole, onRemove }) 
           <strong style={{ color: colors.text, fontSize: font.lg }}>
             {member.full_name || '(sin nombre)'}
           </strong>
-          {isSelf && <Badge bg={colors.infoLight} color={colors.infoText}>Vos</Badge>}
+          {isSelf && <Badge bg={colors.infoLight} color={colors.infoText}>Tú</Badge>}
         </div>
         <div style={{ fontSize: font.sm, color: colors.textFaint, marginTop: '2px' }}>
           Desde {new Date(member.created_at).toLocaleDateString()}
@@ -279,7 +279,7 @@ function InvitePlaceholder() {
         </strong>
         <p style={{ margin: 0, color: '#581c87', fontSize: font.sm, lineHeight: 1.5 }}>
           La invitación por email viene en la fase final del lanzamiento (junto con Stripe).
-          Por ahora cada usuario crea su cuenta y vos los promovés al rol que corresponda.
+          Por ahora cada usuario crea su cuenta y tú los promueves al rol que corresponda.
         </p>
       </div>
     </div>
@@ -319,7 +319,7 @@ function AuditorTokensPanel() {
 
     const { data: prof, error: profErr } = await supabase.from('user_profiles').select('org_id').single()
     if (profErr || !prof?.org_id) {
-      toast.error('No pudimos identificar tu organización. Refrescá la página y volvé a intentar.')
+      toast.error('No pudimos identificar tu organización. Refresca la página y vuelve a intentar.')
       return
     }
 
@@ -379,8 +379,8 @@ function AuditorTokensPanel() {
         throw new Error('execCommand devolvió false')
       }
     } catch (err) {
-      // No mentir: si no se pudo, mostrá el link y pedile que lo copie a mano
-      toast.error('No se pudo copiar automáticamente. Copialo manualmente: ' + url)
+      // No mentir: si no se pudo, mostrá el link y pide que lo copie a mano
+      toast.error('No se pudo copiar automáticamente. Cópialo manualmente: ' + url)
     }
   }
 
@@ -399,7 +399,7 @@ function AuditorTokensPanel() {
       </div>
 
       <p style={{ margin: '0 0 12px 0', color: colors.textMuted, fontSize: font.sm, lineHeight: 1.5 }}>
-        Generá un link temporal de solo lectura para auditores externos, certificadoras o clientes que necesiten revisar tu SGC sin tener cuenta. El acceso muestra política, alcance, procesos, riesgos, objetivos, NCs y auditorías.
+        Genera un link temporal de solo lectura para auditores externos, certificadoras o clientes que necesiten revisar tu SGC sin tener cuenta. El acceso muestra política, alcance, procesos, riesgos, objetivos, NCs y auditorías.
       </p>
 
       {creating && (
@@ -439,7 +439,7 @@ function AuditorTokensPanel() {
         <EmptyState
           icon={<LinkIcon size={28} color={colors.textGhost} />}
           title="Sin accesos creados"
-          subtitle="Cuando una certificadora venga, generá un link temporal acá."
+          subtitle="Cuando una certificadora venga, genera un link temporal aquí."
         />
       ) : (
         <div style={{

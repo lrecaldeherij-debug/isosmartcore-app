@@ -400,18 +400,18 @@ export default function QualityObjectives({ alCambiarVista }) {
 
   // ───── IA: Mejorar SMART ─────
   const mejorarSmartIA = async () => {
-    if (!form.objective && !form.name) { toast.warning('Escribí primero una idea general del objetivo'); return }
+    if (!form.objective && !form.name) { toast.warning('Escribe primero una idea general del objetivo'); return }
     setLoadingIA(true); setIaContext('smart')
     try {
       const ctxProc = processes.slice(0, 10).map(p => p.name).join(', ')
-      const prompt = `Sos consultor ISO 9001 experto en objetivos SMART. Mejorá esta idea de objetivo:
+      const prompt = `Eres consultor ISO 9001 experto en objetivos SMART. Mejora esta idea de objetivo:
 
 IDEA: "${form.objective || form.name}"
 ${form.category ? 'CATEGORÍA: ' + form.category : ''}
 ${form.indicator ? 'INDICADOR ACTUAL: ' + form.indicator : ''}
 PROCESOS DE LA EMPRESA: ${ctxProc}
 
-Devolvé SOLO un JSON objeto sin markdown:
+Devuelve SOLO un JSON objeto sin markdown:
 - name (string corto, máx 80 chars, título del objetivo)
 - objective_smart (string, redacción SMART completa)
 - indicator (string, KPI claro)
@@ -424,7 +424,7 @@ Devolvé SOLO un JSON objeto sin markdown:
 - is_specific (boolean), is_measurable (boolean), is_achievable (boolean), is_relevant (boolean), is_time_bound (boolean)
 - comm_method (string, cómo se comunicará al personal)`
 
-      const raw = await consultarIA(prompt, 'Devolvé ÚNICAMENTE JSON objeto válido.')
+      const raw = await consultarIA(prompt, 'Devuelve ÚNICAMENTE JSON objeto válido.')
       const obj = parseAiObject(raw)
       if (!obj) throw new Error('La IA no devolvió análisis parseable')
       const procIds = (obj.relevant_processes || []).map(name => {
@@ -464,7 +464,7 @@ Devolvé SOLO un JSON objeto sin markdown:
       const empresa = orgProfile?.company_name || 'la empresa'
       const year = new Date().getFullYear()
 
-      const prompt = `Sos consultor ISO 9001 experto en planificación. Generá 5-8 objetivos SMART para ${empresa} para el año ${year}, derivados de la política de calidad y los procesos según ISO 6.2.
+      const prompt = `Eres consultor ISO 9001 experto en planificación. Genera 5-8 objetivos SMART para ${empresa} para el año ${year}, derivados de la política de calidad y los procesos según ISO 6.2.
 
 POLÍTICA DE CALIDAD VIGENTE:
 ${policy.policy_text}
@@ -475,7 +475,7 @@ ${JSON.stringify(ctxProc, null, 2)}
 OBJETIVOS YA EXISTENTES (no los repitas):
 ${JSON.stringify(existentes, null, 2)}
 
-Devolvé SOLO un JSON array, sin markdown. Cada objetivo:
+Devuelve SOLO un JSON array, sin markdown. Cada objetivo:
 - name (string corto, máx 80 chars)
 - objective_smart (string completo SMART)
 - category (Calidad|Satisfacción|Eficiencia|Costo|Tiempo|Seguridad|Otra)
@@ -491,7 +491,7 @@ Devolvé SOLO un JSON array, sin markdown. Cada objetivo:
 
 Cubrí distintas categorías. Sé realista con baseline y target.`
 
-      const raw = await consultarIA(prompt, 'Devolvé ÚNICAMENTE JSON array válido.')
+      const raw = await consultarIA(prompt, 'Devuelve ÚNICAMENTE JSON array válido.')
       const arr = parseAiArray(raw)
       if (!arr.length) throw new Error('La IA no devolvió objetivos parseables')
       setIaBulk(arr)
@@ -541,7 +541,7 @@ Cubrí distintas categorías. Sé realista con baseline y target.`
 
   // ───── IA: Análisis de cumplimiento ─────
   const analizarCumplimientoIA = async () => {
-    if (items.length === 0) return toast.warning('Cargá al menos un objetivo antes de analizar cumplimiento')
+    if (items.length === 0) return toast.warning('Carga al menos un objetivo antes de analizar cumplimiento')
     setLoadingIA(true); setIaContext('compliance'); setIaCompliance(null)
     try {
       const ctxObjs = items.filter(o => o.status === 'En curso' || o.status === 'Aprobado').slice(0, 15).map(o => ({
@@ -559,12 +559,12 @@ Cubrí distintas categorías. Sé realista con baseline y target.`
       }))
       if (!ctxObjs.length) throw new Error('No hay objetivos en curso/aprobados para analizar.')
 
-      const prompt = `Sos auditor ISO 9001. Analizá el cumplimiento esperado de estos objetivos de calidad y predecí cuáles van a cumplirse o no según ISO 9.1.
+      const prompt = `Eres auditor ISO 9001. Analiza el cumplimiento esperado de estos objetivos de calidad y predecí cuáles van a cumplirse o no según ISO 9.1.
 
 OBJETIVOS:
 ${JSON.stringify(ctxObjs, null, 2)}
 
-Devolvé SOLO un JSON objeto, sin markdown:
+Devuelve SOLO un JSON objeto, sin markdown:
 - overall_assessment (string, conclusión global)
 - on_track (array de strings con nombres de objetivos en buen camino)
 - at_risk (array de strings con nombres en riesgo)
@@ -572,7 +572,7 @@ Devolvé SOLO un JSON objeto, sin markdown:
 - recommendations (array de strings, acciones concretas por objetivo en riesgo)
 - prediction_compliance_pct (number 0-100, % de cumplimiento global predicho a fin de año)`
 
-      const raw = await consultarIA(prompt, 'Devolvé ÚNICAMENTE JSON objeto válido.')
+      const raw = await consultarIA(prompt, 'Devuelve ÚNICAMENTE JSON objeto válido.')
       const obj = parseAiObject(raw)
       if (!obj) throw new Error('La IA no devolvió análisis parseable')
       setIaCompliance(obj)

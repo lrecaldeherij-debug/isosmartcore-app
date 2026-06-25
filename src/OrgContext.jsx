@@ -39,7 +39,7 @@ export function OrgProvider({ session, children }) {
       if (profErr || !prof) {
         // El trigger debería haber creado el perfil. Si no está, es signup
         // pendiente de confirmación de email o un problema de BD.
-        setError(profErr?.message || 'No se encontró tu perfil. Confirmá tu email o contactá soporte.')
+        setError(profErr?.message || 'No se encontró tu perfil. Confirma tu email o contacta soporte.')
         setLoading(false)
         return
       }
@@ -73,7 +73,7 @@ export function OrgProvider({ session, children }) {
       if (orgErr) {
         setError(orgErr.message)
       } else if (!orgData) {
-        setError('No se encontró tu organización. Recargá la página o contactá soporte.')
+        setError('No se encontró tu organización. Recarga la página o contacta soporte.')
       } else {
         setOrg(orgData)
       }

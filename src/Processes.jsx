@@ -199,7 +199,7 @@ export default function Processes() {
 
   // ──────────── IA caracterización ────────────
   const sugerirCaracterizacionIA = async () => {
-    if (!form.name) return toast.warning('Escribí el nombre del proceso primero')
+    if (!form.name) return toast.warning('Escribe el nombre del proceso primero')
     setLoadingIA(true)
     try {
       const prompt = `
@@ -224,7 +224,7 @@ Responde estrictamente en JSON:
   "riesgos": [{"riesgo":"...","control":"...","responsable":"..."}],
   "indicadores": [{"nombre":"...","calculo":"...","meta":"...","frecuencia":"..."}]
 }`
-      const raw = await consultarIA(prompt, 'Eres ingeniero de procesos ISO 9001. Devolvé solo JSON.')
+      const raw = await consultarIA(prompt, 'Eres ingeniero de procesos ISO 9001. Devuelve solo JSON.')
       const data = extractFirstJson(raw)
       if (!data) throw new Error('La IA no devolvió JSON válido')
       setForm({
@@ -245,7 +245,7 @@ Responde estrictamente en JSON:
 
   // ──────────── IA interacciones ────────────
   const sugerirInteraccionesIA = async () => {
-    if (items.length < 3) return toast.warning('Necesitás al menos 3 procesos cargados para que la IA sugiera interacciones')
+    if (items.length < 3) return toast.warning('Necesitas al menos 3 procesos cargados para que la IA sugiera interacciones')
     setLoadingIAInter(true); setIaInteractions(null)
     try {
       const procesos = items.map(p => ({
@@ -255,21 +255,21 @@ Responde estrictamente en JSON:
         outputs: (p.outputs_json || []).map(o => o.salida).filter(Boolean),
         entries: (p.entries_json || []).map(e => e.entrada).filter(Boolean)
       }))
-      const prompt = `Sos consultor ISO 9001. Analizá estos procesos y devolvé las interacciones (qué proceso alimenta a cuál) basándote en lógica de negocio típica entre Estratégicos → Operativos ← Soporte.
+      const prompt = `Eres consultor ISO 9001. Analiza estos procesos y devuelve las interacciones (qué proceso alimenta a cuál) basándote en lógica de negocio típica entre Estratégicos → Operativos ← Soporte.
 
 PROCESOS:
 ${JSON.stringify(procesos, null, 2)}
 
 INSTRUCCIONES:
-- Devolvé ENTRE 3 y 10 interacciones realistas.
-- Usá los IDs EXACTOS que aparecen arriba en "from_id" y "to_id".
-- Respondé SOLO con un JSON array. NO uses markdown ni texto explicativo. NO uses bloques de código.
+- Devuelve ENTRE 3 y 10 interacciones realistas.
+- Usa los IDs EXACTOS que aparecen arriba en "from_id" y "to_id".
+- Responde SOLO con un JSON array. NO uses markdown ni texto explicativo. NO uses bloques de código.
 
 FORMATO EXACTO (ejemplo):
 [
   {"from_id":"<id-real-de-arriba>","to_id":"<id-real-de-arriba>","from_name":"Nombre A","to_name":"Nombre B","label":"qué se transfiere"}
 ]`
-      const raw = await consultarIA(prompt, 'Eres un experto ISO 9001. Devolvé ÚNICAMENTE un JSON array válido, sin markdown ni texto antes/después.')
+      const raw = await consultarIA(prompt, 'Eres un experto ISO 9001. Devuelve ÚNICAMENTE un JSON array válido, sin markdown ni texto antes/después.')
       console.log('[IA interacciones] raw:', raw)
       let arr = parseAiArray(raw)
 
@@ -286,7 +286,7 @@ FORMATO EXACTO (ejemplo):
         return { ...i, from_id, to_id, from_name, to_name }
       }).filter(i => i.from_id && i.to_id && i.from_id !== i.to_id)
 
-      if (!arr.length) throw new Error('La IA respondió pero las interacciones no son interpretables. Mirá la consola del navegador (F12) para ver la respuesta cruda.')
+      if (!arr.length) throw new Error('La IA respondió pero las interacciones no son interpretables. Mira la consola del navegador (F12) para ver la respuesta cruda.')
       setIaInteractions(arr)
     } catch (e) {
       toast.error('Error IA: ' + e.message)
@@ -427,7 +427,7 @@ FORMATO EXACTO (ejemplo):
 
       {tableError && (
         <div style={{ marginTop: 12, padding: 12, background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, color: '#991b1b', fontSize: 13 }}>
-          <strong>Tabla no encontrada:</strong> {tableError}. Aplicá <code>iso_migration_v42_processes_auditable.sql</code>.
+          <strong>Tabla no encontrada:</strong> {tableError}. Aplica <code>iso_migration_v42_processes_auditable.sql</code>.
         </div>
       )}
 
@@ -540,7 +540,7 @@ FORMATO EXACTO (ejemplo):
                   onChange={v => setForm({ ...form, interactions_downstream: v })} />
               </div>
               <div style={{ marginTop: 8, padding: 8, background: '#fef3c7', border: '1px solid #fde68a', borderRadius: 6, fontSize: 12, color: '#92400e' }}>
-                💡 Tip: si no estás seguro, cargá primero todos los procesos y luego usá <strong>"Sugerir interacciones IA"</strong>.
+                💡 Tip: si no estás seguro, carga primero todos los procesos y luego usa <strong>"Sugerir interacciones IA"</strong>.
               </div>
             </FormSection>
 

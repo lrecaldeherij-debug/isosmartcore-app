@@ -400,7 +400,7 @@ export default function Training({ alCambiarVista }) {
       const sector = orgProfile?.sector || ''
       const year = new Date().getFullYear() + 1
 
-      const prompt = `Sos consultor ISO 9001 experto en gestión de talento humano. Generá un PLAN ANUAL DE CAPACITACIÓN para ${empresa}${sector ? ' (sector: ' + sector + ')'  : ''} para el año ${year}, basado en la Detección de Necesidades de Capacitación (DNC) según ISO 9001 cláusula 7.2.
+      const prompt = `Eres consultor ISO 9001 experto en gestión de talento humano. Genera un PLAN ANUAL DE CAPACITACIÓN para ${empresa}${sector ? ' (sector: ' + sector + ')'  : ''} para el año ${year}, basado en la Detección de Necesidades de Capacitación (DNC) según ISO 9001 cláusula 7.2.
 
 PERSONAL CON BRECHAS DE COMPETENCIA:
 ${JSON.stringify(ctxPersonnel, null, 2)}
@@ -414,7 +414,7 @@ ${JSON.stringify(ctxProcesses, null, 2)}
 OBJETIVOS DE CALIDAD ABIERTOS:
 ${JSON.stringify(ctxObjectives, null, 2)}
 
-Devolvé SOLO un JSON array, sin markdown. Cada curso del plan:
+Devuelve SOLO un JSON array, sin markdown. Cada curso del plan:
 - course_name (string)
 - type (Interna | Externa | Inducción | On-the-job)
 - modality (Presencial | Virtual | Mixto)
@@ -428,9 +428,9 @@ Devolvé SOLO un JSON array, sin markdown. Cada curso del plan:
 - estimated_cost (number, USD aproximado)
 - justification (string, por qué este curso ahora)
 
-Generá 6-12 cursos balanceados por trimestre, priorizando brechas críticas.`
+Genera 6-12 cursos balanceados por trimestre, priorizando brechas críticas.`
 
-      const raw = await consultarIA(prompt, 'Devolvé ÚNICAMENTE JSON array válido.')
+      const raw = await consultarIA(prompt, 'Devuelve ÚNICAMENTE JSON array válido.')
       console.log('[IA Plan Anual] raw:', raw)
       const arr = parseAiArray(raw)
       if (!arr.length) throw new Error('La IA no devolvió cursos parseables')
@@ -502,7 +502,7 @@ Generá 6-12 cursos balanceados por trimestre, priorizando brechas críticas.`
       const jobsTarget = (efficacyItem.target_job_ids || []).map(id => jobMap[id]?.title).filter(Boolean)
       const procTarget = (efficacyItem.target_process_ids || []).map(id => processMap[id]?.name).filter(Boolean)
 
-      const prompt = `Sos auditor interno ISO 9001. Evaluá la EFICACIA de esta capacitación según cláusula 7.2.
+      const prompt = `Eres auditor interno ISO 9001. Evalúa la EFICACIA de esta capacitación según cláusula 7.2.
 
 CURSO:
 - Nombre: ${efficacyItem.course_name}
@@ -517,14 +517,14 @@ CURSO:
 ASISTENTES (estado actual de competencia):
 ${JSON.stringify(ctxAtendees, null, 2)}
 
-Devolvé SOLO un JSON objeto, sin markdown:
+Devuelve SOLO un JSON objeto, sin markdown:
 - efficacy_criteria (string, qué criterio aplicarías para medir eficacia — ej: "Evaluación post-curso con nota mínima 80%, observación en puesto 3 meses después, sin reincidencia de NCs por error de proceso")
 - recommended_result (Eficaz | Eficaz Parcial | No Eficaz)
 - justification (string, razonamiento del resultado en función de las brechas resueltas o no en los asistentes)
 - followup_actions (array de strings, qué acciones complementarias proponés — ej: "Refuerzo on-the-job", "Nueva evaluación a 6 meses", "Repetir curso para X persona")
 - next_evaluation_date (string YYYY-MM-DD, fecha sugerida para próxima revisión)`
 
-      const raw = await consultarIA(prompt, 'Devolvé ÚNICAMENTE JSON objeto válido.')
+      const raw = await consultarIA(prompt, 'Devuelve ÚNICAMENTE JSON objeto válido.')
       console.log('[IA Eficacia] raw:', raw)
       const obj = parseAiObject(raw)
       if (!obj) throw new Error('La IA no devolvió un análisis parseable')
@@ -866,7 +866,7 @@ function FormCard({ form, setForm, editing, jobs, processes, personnel, selected
           </div>
           {personnel.length === 0 ? (
             <p style={{ fontSize: '13px', color: '#94a3b8', fontStyle: 'italic' }}>
-              No hay empleados cargados. Cargá personal en "Talento Humano" antes de vincular asistentes.
+              No hay empleados cargados. Carga personal en "Talento Humano" antes de vincular asistentes.
             </p>
           ) : (
             <div style={{ maxHeight: '180px', overflowY: 'auto', border: '1px solid #e2e8f0', borderRadius: '6px', padding: '6px', background: 'white' }}>

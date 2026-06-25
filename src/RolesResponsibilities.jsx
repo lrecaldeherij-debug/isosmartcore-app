@@ -195,7 +195,7 @@ export default function RolesResponsibilities() {
 
   // ───── IA generar perfil completo ─────
   const generarPerfilIA = async () => {
-    if (!form.title) return toast.warning('Escribí primero el nombre del cargo')
+    if (!form.title) return toast.warning('Escribe primero el nombre del cargo')
     setLoadingIA(true)
     try {
       const prompt = `
@@ -203,7 +203,7 @@ Cargo: "${form.title}"
 Área: "${form.dependency || 'no especificada'}"
 Nivel: "${form.level}"
 
-Generá perfil profesional ISO 9001. Devolvé SOLO JSON válido, sin markdown:
+Genera perfil profesional ISO 9001. Devuelve SOLO JSON válido, sin markdown:
 
 {
   "mision": "Misión clara del cargo en 2-3 líneas",
@@ -229,7 +229,7 @@ Reglas:
 - 5 funciones mínimo
 - 3-5 autoridades concretas (qué puede decidir/aprobar)
 - Competencias específicas, no genéricas`
-      const raw = await consultarIA(prompt, 'Eres experto en RRHH e ISO 9001. Devolvé solo JSON válido.')
+      const raw = await consultarIA(prompt, 'Eres experto en RRHH e ISO 9001. Devuelve solo JSON válido.')
       const data = extractFirstJson(raw)
       if (!data) throw new Error('IA no devolvió JSON válido')
       setForm({
@@ -253,12 +253,12 @@ Reglas:
 
   // ───── IA sugerir RACI cruzando con procesos ─────
   const sugerirRACI_IA = async () => {
-    if (!form.title) return toast.warning('Definí primero el cargo')
-    if (processes.length < 2) return toast.warning('Cargá al menos 2 procesos para que la IA arme la matriz RACI')
+    if (!form.title) return toast.warning('Define primero el cargo')
+    if (processes.length < 2) return toast.warning('Carga al menos 2 procesos para que la IA arme la matriz RACI')
     setLoadingIARACI(true)
     try {
       const procData = processes.map(p => ({ id: p.id, name: p.name, type: p.process_type }))
-      const prompt = `Sos consultor ISO 9001. Para el cargo "${form.title}" (${form.level}, ${form.dependency || 'sin área'}), definí su rol RACI en cada proceso.
+      const prompt = `Eres consultor ISO 9001. Para el cargo "${form.title}" (${form.level}, ${form.dependency || 'sin área'}), define su rol RACI en cada proceso.
 
 Roles:
 R = Responsible (hace el trabajo)
@@ -270,15 +270,15 @@ PROCESOS:
 ${JSON.stringify(procData, null, 2)}
 
 INSTRUCCIONES:
-- Solo incluí los procesos donde este cargo TIENE rol (no incluyas los que no le aplican).
-- Usá los IDs EXACTOS.
-- Devolvé SOLO un JSON array, sin markdown.
+- Solo incluye los procesos donde este cargo TIENE rol (no incluyas los que no le aplican).
+- Usa los IDs EXACTOS.
+- Devuelve SOLO un JSON array, sin markdown.
 
 FORMATO:
 [
   {"process_id":"<id>","process_name":"Nombre","role":"R"}
 ]`
-      const raw = await consultarIA(prompt, 'Devolvé únicamente JSON array válido.')
+      const raw = await consultarIA(prompt, 'Devuelve únicamente JSON array válido.')
       const arr = extractFirstJson(raw)
       let result = []
       if (Array.isArray(arr)) result = arr
@@ -398,7 +398,7 @@ FORMATO:
 
       {tableError && (
         <div style={{ marginTop: 12, padding: 12, background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, color: '#991b1b', fontSize: 13 }}>
-          <strong>Tabla no encontrada:</strong> {tableError}. Aplicá <code>iso_migration_v43_job_descriptions_auditable.sql</code>.
+          <strong>Tabla no encontrada:</strong> {tableError}. Aplica <code>iso_migration_v43_job_descriptions_auditable.sql</code>.
         </div>
       )}
 
@@ -582,7 +582,7 @@ FORMATO:
                   ))}
                 </div>
                 {form.raci_json.length === 0 && (
-                  <div style={{ fontSize: 12, color: '#0e7490', padding: 6 }}>Sin asignaciones. Agregá manualmente o usá <strong>Sugerir RACI IA</strong>.</div>
+                  <div style={{ fontSize: 12, color: '#0e7490', padding: 6 }}>Sin asignaciones. Agrega manualmente o usa <strong>Sugerir RACI IA</strong>.</div>
                 )}
                 {form.raci_json.map((r, i) => (
                   <div key={i} style={{ display: 'flex', gap: 6, marginBottom: 6, alignItems: 'center' }}>

@@ -391,25 +391,25 @@ export default function NonConformities({ datosPrellenados, alCambiarVista }) {
 
   // ───── IA: Causa raíz + 5 Porqués ─────
   const analizarCausaRaizIA = async () => {
-    if (!form.description) return toast.warning('Describí el problema antes de pedir análisis')
+    if (!form.description) return toast.warning('Describe el problema antes de pedir análisis')
     setLoadingIA(true); setIaContext('rca')
     try {
       const procName = form.process_id ? processMap[form.process_id]?.name : ''
-      const prompt = `Sos auditor líder ISO 9001 experto en análisis de causa raíz. Aplicá la técnica de los 5 Porqués al siguiente hallazgo y proponé corrección + acción correctiva.
+      const prompt = `Eres auditor líder ISO 9001 experto en análisis de causa raíz. Aplica la técnica de los 5 Porqués al siguiente hallazgo y propón corrección + acción correctiva.
 
 HALLAZGO: "${form.description}"
 ORIGEN: ${form.source}
 PROCESO IMPLICADO: ${procName || 'no especificado'}
 TIPO: ${form.type} (${form.severity})
 
-Devolvé SOLO un JSON objeto, sin markdown:
+Devuelve SOLO un JSON objeto, sin markdown:
 - five_whys (array de exactamente 5 objetos {why: "¿Por qué...?", answer: "respuesta"} encadenados — cada answer alimenta el siguiente why)
 - root_cause (string, causa raíz final consolidada)
 - correction (string, corrección INMEDIATA — qué hacer YA para contener el problema, no la solución de fondo)
 - action_plan (string, acción CORRECTIVA — qué hacer para que NUNCA MÁS ocurra eliminando la causa raíz)
 - responsible_role (string, qué rol/cargo debería liderar la acción)`
 
-      const raw = await consultarIA(prompt, 'Devolvé ÚNICAMENTE JSON objeto válido.')
+      const raw = await consultarIA(prompt, 'Devuelve ÚNICAMENTE JSON objeto válido.')
       console.log('[IA RCA] raw:', raw)
       const obj = parseAiObject(raw)
       if (!obj) throw new Error('La IA no devolvió un análisis parseable')
@@ -430,7 +430,7 @@ Devolvé SOLO un JSON objeto, sin markdown:
 
   // ───── IA: Análisis Pareto global ─────
   const analizarParetoIA = async () => {
-    if (items.length < 5) return toast.warning('Necesitás al menos 5 NCs registradas para detectar patrones')
+    if (items.length < 5) return toast.warning('Necesitas al menos 5 NCs registradas para detectar patrones')
     setLoadingIA(true); setIaPareto(null); setIaContext('pareto')
     try {
       const ctx = items.slice(0, 50).map(n => ({
@@ -442,12 +442,12 @@ Devolvé SOLO un JSON objeto, sin markdown:
         proceso: n.process_id ? processMap[n.process_id]?.name : null,
         recurrente: !!n.is_recurrent,
       }))
-      const prompt = `Sos consultor ISO 9001. Analizá estas no conformidades, hacé análisis de PARETO (regla 80/20) e identificá las 3-5 CAUSAS RECURRENTES que generan el mayor volumen de problemas según ISO 10.2.
+      const prompt = `Eres consultor ISO 9001. Analiza estas no conformidades, haz análisis de PARETO (regla 80/20) e identifica las 3-5 CAUSAS RECURRENTES que generan el mayor volumen de problemas según ISO 10.2.
 
 NC REGISTRADAS:
 ${JSON.stringify(ctx, null, 2)}
 
-Devolvé SOLO un JSON array (3 a 5 items), sin markdown. Cada patrón:
+Devuelve SOLO un JSON array (3 a 5 items), sin markdown. Cada patrón:
 - pattern (string, nombre corto del patrón / causa recurrente)
 - count_estimated (number, NCs aproximadas que caen en este patrón)
 - processes_affected (array de strings, procesos involucrados)
@@ -456,7 +456,7 @@ Devolvé SOLO un JSON array (3 a 5 items), sin markdown. Cada patrón:
 - priority (Alta | Media | Baja)
 - expected_benefit (string, qué se logra eliminando esta causa)`
 
-      const raw = await consultarIA(prompt, 'Devolvé ÚNICAMENTE JSON array válido.')
+      const raw = await consultarIA(prompt, 'Devuelve ÚNICAMENTE JSON array válido.')
       console.log('[IA Pareto] raw:', raw)
       const arr = parseAiArray(raw)
       if (!arr.length) throw new Error('La IA no devolvió patrones parseables')
@@ -556,7 +556,7 @@ Devolvé SOLO un JSON array (3 a 5 items), sin markdown. Cada patrón:
         fecha: n.created_at,
         causa_raiz: (n.root_cause || '').slice(0, 100),
       }))
-      const prompt = `Sos auditor interno ISO 9001. Evaluá la EFICACIA de la acción correctiva tomada en esta NC según cláusula 10.2.1 f).
+      const prompt = `Eres auditor interno ISO 9001. Evalúa la EFICACIA de la acción correctiva tomada en esta NC según cláusula 10.2.1 f).
 
 NC EN VERIFICACIÓN:
 - Descripción: ${verifyItem.description}
@@ -569,13 +569,13 @@ NC EN VERIFICACIÓN:
 OTRAS NC DEL MISMO PROCESO (para detectar reincidencia):
 ${JSON.stringify(otrasNCs, null, 2)}
 
-Devolvé SOLO un JSON objeto, sin markdown:
+Devuelve SOLO un JSON objeto, sin markdown:
 - recommended_result (Eficaz | Eficaz Parcial | No Eficaz)
 - justification (string, razonamiento basado en reincidencia / ausencia de NCs similares)
 - followup_actions (array de strings, qué seguir monitoreando)
 - next_check_date (string YYYY-MM-DD, fecha sugerida próxima verificación)`
 
-      const raw = await consultarIA(prompt, 'Devolvé ÚNICAMENTE JSON objeto válido.')
+      const raw = await consultarIA(prompt, 'Devuelve ÚNICAMENTE JSON objeto válido.')
       const obj = parseAiObject(raw)
       if (!obj) throw new Error('La IA no devolvió análisis parseable')
       setIaVerifyResult(obj)
@@ -1134,7 +1134,7 @@ function VerifyModal({ item, setItem, onClose, onSave, onIA, loadingIA, iaResult
             <textarea rows={3} value={item.effectiveness_notes || ''} onChange={e => set({ effectiveness_notes: e.target.value })} style={inputStyle} />
           </Field>
           <div style={{ fontSize: '12px', color: '#64748b', marginTop: '6px' }}>
-            💡 Si elegís <strong>Eficaz</strong> y la NC no está cerrada, se cierra automáticamente. Si elegís <strong>No Eficaz</strong> sobre una cerrada, se reabre.
+            💡 Si eliges <strong>Eficaz</strong> y la NC no está cerrada, se cierra automáticamente. Si eliges <strong>No Eficaz</strong> sobre una cerrada, se reabre.
           </div>
         </div>
         <div style={{ display: 'flex', gap: '8px', padding: '12px 16px', borderTop: '1px solid #e2e8f0', background: '#f8fafc', justifyContent: 'flex-end' }}>

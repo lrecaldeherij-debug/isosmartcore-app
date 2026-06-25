@@ -270,9 +270,9 @@ export default function InternalAudits({ alReportar }) {
       const ctx = `Empresa: ${profile.company_name || 'N/D'} | Sector: ${profile.industry || 'N/D'} | Productos: ${profile.main_products || 'N/D'}`
       const procesosList = processes.length
         ? processes.map(p => `- ${p.name}`).join('\n')
-        : '- (no hay procesos cargados, usá procesos genéricos de ISO 9001)'
+        : '- (no hay procesos cargados, usa procesos genéricos de ISO 9001)'
 
-      const prompt = `Sos auditor líder ISO 9001. Diseñá un PROGRAMA ANUAL de auditorías internas para el año ${yearFilter}.
+      const prompt = `Eres auditor líder ISO 9001. Diseña un PROGRAMA ANUAL de auditorías internas para el año ${yearFilter}.
 
 Contexto: ${ctx}
 
@@ -281,14 +281,14 @@ ${procesosList}
 
 Reglas: 1 auditoría por proceso, distribuidas en distintos meses, cobertura total del SGC. Procesos críticos (Producción, Compras, Calidad) priorizados en Q1/Q2.
 
-Devolvé SOLO un JSON array, sin texto antes ni después. Cada item:
+Devuelve SOLO un JSON array, sin texto antes ni después. Cada item:
 - audit_process (string)
-- planned_date (string YYYY-MM-${yearFilter} pero usá fecha completa con día 15 del mes elegido)
+- planned_date (string YYYY-MM-${yearFilter} pero usa fecha completa con día 15 del mes elegido)
 - audit_scope (string corto)
 - audit_criteria (string, ej "ISO 9001:2015 cláusula 8.4")
 - lead_auditor (string, "Por asignar" si no hay info)`
 
-      const raw = await consultarIA(prompt, 'Devolvé únicamente JSON válido.')
+      const raw = await consultarIA(prompt, 'Devuelve únicamente JSON válido.')
       const arr = parseAiArray(raw)
       if (!arr.length) throw new Error('La IA no devolvió sugerencias parseables')
       setIaSuggestions(arr)
@@ -326,9 +326,9 @@ Devolvé SOLO un JSON array, sin texto antes ni después. Cada item:
   const consultarAuditor = async () => {
     if (!chatInput.trim()) return
     setLoadingChat(true); setChatResponse(null); setHallazgoDetectado(null)
-    const systemPrompt = `Sos un auditor líder experto en normas ISO (9001, 14001, 45001).
-Analizá la descripción del usuario, detectá desviaciones normativas y estructurá hallazgos.
-Al final respondé un JSON con: { "detected": true, "finding_type": "No Conformidad|Observación", "clause_iso": "x.x", "description": "...", "recommendation": "..." }`
+    const systemPrompt = `Eres un auditor líder experto en normas ISO (9001, 14001, 45001).
+Analiza la descripción del usuario, detecta desviaciones normativas y estructurá hallazgos.
+Al final responde un JSON con: { "detected": true, "finding_type": "No Conformidad|Observación", "clause_iso": "x.x", "description": "...", "recommendation": "..." }`
     try {
       const raw = await consultarIA(chatInput, systemPrompt)
       let textoVisible = raw
@@ -445,7 +445,7 @@ Al final respondé un JSON con: { "detected": true, "finding_type": "No Conformi
 
       {tableError && (
         <div style={{ marginTop: 12, padding: 12, background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, color: '#991b1b', fontSize: 13 }}>
-          <strong>Tabla no encontrada:</strong> {tableError}. Aplicá la migración <code>iso_migration_v40_internal_audits_auditable.sql</code>.
+          <strong>Tabla no encontrada:</strong> {tableError}. Aplica la migración <code>iso_migration_v40_internal_audits_auditable.sql</code>.
         </div>
       )}
 
@@ -623,7 +623,7 @@ Al final respondé un JSON con: { "detected": true, "finding_type": "No Conformi
               <tbody>
                 {filtered.length === 0 && (
                   <tr><td colSpan={6} style={{ padding: 20, textAlign: 'center', color: '#9ca3af', fontSize: 13 }}>
-                    Sin auditorías. Usá <strong>Sugerir programa</strong> para arrancar el año.
+                    Sin auditorías. Usa <strong>Sugerir programa</strong> para arrancar el año.
                   </td></tr>
                 )}
                 {filtered.map(item => {

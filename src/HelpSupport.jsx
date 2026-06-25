@@ -14,18 +14,18 @@ const GREETING = `Hola. Soy tu asistente IA de IsoSmartCore. Puedo ayudarte con:
 • Conceptos de ISO 9001:2015 (cláusulas, requisitos, ejemplos)
 • Dudas sobre tu proceso de certificación
 
-⚠ Mis respuestas son orientativas. Para temas críticos de cumplimiento, validá con tu auditor certificado.
+⚠ Mis respuestas son orientativas. Para temas críticos de cumplimiento, valida con tu auditor certificado.
 
 ¿En qué te ayudo?`
 
-const SYSTEM_BASE = `Sos el asistente IA de IsoSmartCore, un SaaS para gestión de calidad ISO 9001:2015. Tu rol es ayudar al usuario con: (1) cómo usar el software (módulos: ADN de Empresa, Contexto FODA, Stakeholders, Alcance, Procesos, Política de Calidad, Roles, Organigrama, Riesgos, Objetivos, Plan Estratégico, Personal, Formación, Clima Laboral, Comunicaciones, Calibración, Documentación, Pedidos, Producción, Liberación, Incidentes, Proveedores, Auditorías Internas, Revisión por la Dirección, No Conformidades, Mejora Continua); (2) conceptos de ISO 9001:2015 cláusulas 4 a 10; (3) dudas sobre el proceso de certificación.
+const SYSTEM_BASE = `Eres el asistente IA de IsoSmartCore, un SaaS para gestión de calidad ISO 9001:2015. Tu rol es ayudar al usuario con: (1) cómo usar el software (módulos: ADN de Empresa, Contexto FODA, Stakeholders, Alcance, Procesos, Política de Calidad, Roles, Organigrama, Riesgos, Objetivos, Plan Estratégico, Personal, Formación, Clima Laboral, Comunicaciones, Calibración, Documentación, Pedidos, Producción, Liberación, Incidentes, Proveedores, Auditorías Internas, Revisión por la Dirección, No Conformidades, Mejora Continua); (2) conceptos de ISO 9001:2015 cláusulas 4 a 10; (3) dudas sobre el proceso de certificación.
 
 REGLAS:
 - Respuestas cortas y concretas (máximo 4-5 oraciones salvo que pidan detalle).
-- Si NO estás seguro, decilo: "No estoy seguro, consultá con tu auditor certificado."
+- Si NO estás seguro, dilo: "No estoy seguro, consulta con tu auditor certificado."
 - NUNCA inventes números de cláusulas ni requisitos específicos si no estás 100% seguro.
-- Si la pregunta no es de ISO 9001 ni del software, decí amable: "Solo puedo ayudarte con ISO 9001 y el uso del software."
-- Español rioplatense neutral.`
+- Si la pregunta no es de ISO 9001 ni del software, dilo amablemente: "Solo puedo ayudarte con ISO 9001 y el uso del software."
+- Español neutro de Latinoamérica (usar tuteo "tú/tienes/puedes", no voseo).`
 
 export default function HelpSupport({ embedded = false, onClose }) {
   const { org } = useOrg()
@@ -59,7 +59,7 @@ export default function HelpSupport({ embedded = false, onClose }) {
     setLoading(true)
 
     const ctxLine = orgContext
-      ? `Contexto de la empresa del usuario: "${orgContext.company_name || 'sin nombre'}"${orgContext.sector ? ', sector: ' + orgContext.sector : ''}${orgContext.size ? ', tamaño: ' + orgContext.size : ''}. Usá este contexto si la pregunta lo amerita.`
+      ? `Contexto de la empresa del usuario: "${orgContext.company_name || 'sin nombre'}"${orgContext.sector ? ', sector: ' + orgContext.sector : ''}${orgContext.size ? ', tamaño: ' + orgContext.size : ''}. Usa este contexto si la pregunta lo amerita.`
       : 'Sin contexto de empresa cargado todavía.'
     const sys = `${SYSTEM_BASE}\n\n${ctxLine}`
 
@@ -80,7 +80,7 @@ export default function HelpSupport({ embedded = false, onClose }) {
     } catch (err) {
       setMessages(m => [...m, {
         role: 'assistant',
-        text: '⚠ No pude conectar con el asistente. Probá de nuevo o usá "Soporte humano".',
+        text: '⚠ No pude conectar con el asistente. Prueba de nuevo o usa "Soporte humano".',
         isError: true,
       }])
     } finally {
@@ -169,7 +169,7 @@ export default function HelpSupport({ embedded = false, onClose }) {
               fontFamily: families.mono, letterSpacing: tracking.wider,
               textTransform: 'uppercase', fontWeight: weight.semibold,
             }}>
-              ⚠ Respuestas orientativas — validá temas críticos con tu auditor
+              ⚠ Respuestas orientativas — valida temas críticos con tu auditor
             </div>
           </div>
         </>
@@ -203,7 +203,7 @@ export default function HelpSupport({ embedded = false, onClose }) {
             ¿En qué te ayudo?
           </h1>
           <p style={{ color: colors.inkMid, fontSize: '14px', marginTop: '8px', marginBottom: 0 }}>
-            Preguntale a la IA sobre el software o sobre la norma ISO 9001:2015. Si necesitás respuesta humana, mandanos un correo.
+            Pregunta a la IA sobre el software o sobre la norma ISO 9001:2015. Si necesitas respuesta humana, escríbenos un correo.
           </p>
         </div>
         <div style={{
@@ -333,7 +333,7 @@ function HumanSupportForm({ orgName }) {
           Listo, te abrimos el correo.
         </h3>
         <p style={{ color: colors.inkMid, fontSize: '14px', margin: 0 }}>
-          Si el cliente de correo no se abrió, escribinos directo a <strong>{SUPPORT_EMAIL}</strong>.
+          Si el cliente de correo no se abrió, escríbenos directo a <strong>{SUPPORT_EMAIL}</strong>.
         </p>
         <button onClick={() => { setSent(false); setSubject(''); setMessage('') }} style={{
           marginTop: '20px', background: 'none', border: `1px solid ${colors.hairlineStrong}`,
@@ -352,7 +352,7 @@ function HumanSupportForm({ orgName }) {
       gap: '14px', flex: 1, overflowY: 'auto',
     }}>
       <p style={{ color: colors.inkMid, fontSize: '13px', margin: 0, lineHeight: 1.5 }}>
-        Contanos qué necesitás. Te respondemos por correo en menos de 24 horas hábiles.
+        Cuéntanos qué necesitas. Te respondemos por correo en menos de 24 horas hábiles.
       </p>
       <div>
         <label style={fieldLabel}>ASUNTO</label>
@@ -362,7 +362,7 @@ function HumanSupportForm({ orgName }) {
         <label style={fieldLabel}>MENSAJE</label>
         <textarea value={message} onChange={e => setMessage(e.target.value)} required rows={6} style={{
           ...fieldInput, resize: 'vertical', minHeight: '120px', flex: 1, fontFamily: 'inherit',
-        }} placeholder="Describí tu consulta con el detalle que puedas…" />
+        }} placeholder="Describe tu consulta con el detalle que puedas…" />
       </div>
       <button type="submit" style={{
         background: colors.seal, color: colors.paper, border: 'none',
@@ -402,7 +402,7 @@ const COURSES = [
     duration: '24 horas',
     price: 'US$120-200',
     certification: 'Universitario',
-    note: 'Reconocido localmente. Buena opción si querés certificación con sello universidad.',
+    note: 'Reconocido localmente. Buena opción si quieres certificación con sello universidad.',
     url: 'https://www.cec-epn.edu.ec/cursos/curso/auditor-interno-de-sgi',
   },
   {
@@ -414,7 +414,7 @@ const COURSES = [
     duration: '40 horas',
     price: 'US$1,500-2,500',
     certification: 'IRCA · Internacional',
-    note: 'El estándar de oro. Necesario si querés ser auditor EXTERNO o trabajar en certificadoras.',
+    note: 'El estándar de oro. Necesario si quieres ser auditor EXTERNO o trabajar en certificadoras.',
     url: 'https://capacitaciones.bureauveritas.com.pe/online/certificacion-internacional-de-auditor-lider-iso-90012015-pr328',
   },
   {
@@ -450,7 +450,7 @@ const COURSES = [
     duration: '6-12 horas',
     price: 'US$15-80',
     certification: 'Certificado Udemy (no IRCA)',
-    note: 'Entry-level. Calidad varía mucho — revisá reviews y syllabus antes de comprar.',
+    note: 'Entry-level. Calidad varía mucho — revisa reviews y syllabus antes de comprar.',
     url: 'https://www.udemy.com/topic/iso-9001/',
   },
 ]
@@ -522,7 +522,7 @@ function FormationTab({ orgId }) {
         border: `1px solid ${colors.hairline}`, borderRadius: '4px',
         fontSize: '11px', color: colors.inkMid, lineHeight: 1.5, marginBottom: '24px',
       }}>
-        <strong>Importante:</strong> IsoSmartCore no es proveedor ni certifica estos cursos. Validá que el curso esté reconocido por tu organismo de certificación antes de invertir.
+        <strong>Importante:</strong> IsoSmartCore no es proveedor ni certifica estos cursos. Valida que el curso esté reconocido por tu organismo de certificación antes de invertir.
       </div>
 
       {/* Academia waitlist CTA */}
@@ -546,7 +546,7 @@ function FormationTab({ orgId }) {
           Curso propio de Auditor Interno + habilidades blandas.
         </h3>
         <p style={{ color: colors.inkMid, fontSize: '13px', margin: '0 0 14px 0', lineHeight: 1.5 }}>
-          Estamos preparando un curso con módulos que no encontrás en otro lado: comunicación asertiva, manejo de hallazgos, liderazgo del cambio, negociación con auditores. Sumate a la lista de espera y sos de los primeros en acceder.
+          Estamos preparando un curso con módulos que no encuentras en otro lado: comunicación asertiva, manejo de hallazgos, liderazgo del cambio, negociación con auditores. Únete a la lista de espera y eres de los primeros en acceder.
         </p>
 
         {loading ? (
@@ -680,7 +680,7 @@ function WaitlistForm({ orgId, onDone, onCancel }) {
     try {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) {
-        alert('No pudimos identificar tu sesión. Refrescá la página.')
+        alert('No pudimos identificar tu sesión. Refresca la página.')
         setSaving(false)
         return
       }
@@ -708,7 +708,7 @@ function WaitlistForm({ orgId, onDone, onCancel }) {
       onDone(data)
     } catch (err) {
       console.error('Waitlist insert error:', err)
-      alert('Error al guardar. Probá de nuevo.')
+      alert('Error al guardar. Prueba de nuevo.')
       setSaving(false)
     }
   }
