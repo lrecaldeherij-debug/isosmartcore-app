@@ -26,6 +26,39 @@ export function usePlan() {
 
     const planId = org.plan_id || 'starter'
     const plan = PLANS[planId] || PLANS.starter
+    const isInternal = !!org.is_internal_account
+
+    // Cuentas internas: todo ilimitado, siempre active, sin trial, sin checks.
+    // No tocamos los componentes uno por uno — usePlan es la fuente de verdad.
+    if (isInternal) {
+      return {
+        planId,
+        plan,
+        planName: plan.name,
+        status: 'active',
+        isTrialing: false,
+        isExpired: false,
+        isActive: true,
+        isPastDue: false,
+        isCanceled: false,
+        isInternal: true,
+        internalNote: org.internal_account_note || null,
+        daysLeft: null,
+        trialEndsAt: null,
+        maxUsers: null,
+        maxProcesses: null,
+        maxOrgs: null,
+        aiPromptsUsed: org.ai_prompts_used_month || 0,
+        aiPromptsMax: null,
+        aiPromptsLeft: null,
+        aiPromptsPct: 0,
+        hasAiCapacity: true,
+        nextPlan: null,
+        canCreate: () => true,
+        needsAttention: false,
+      }
+    }
+
     const status = org.effective_status || org.subscription_status || 'trialing'
 
     const isTrialing = status === 'trialing'
@@ -53,6 +86,8 @@ export function usePlan() {
       isActive,
       isPastDue,
       isCanceled,
+      isInternal: false,
+      internalNote: null,
 
       // Trial
       daysLeft,
@@ -99,6 +134,8 @@ const EMPTY_PLAN = {
   isActive: true,
   isPastDue: false,
   isCanceled: false,
+  isInternal: false,
+  internalNote: null,
   daysLeft: null,
   trialEndsAt: null,
   maxUsers: 1, maxProcesses: 3, maxOrgs: 1,

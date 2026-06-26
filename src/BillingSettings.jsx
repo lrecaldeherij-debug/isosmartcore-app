@@ -38,39 +38,71 @@ export default function BillingSettings({ onUpgrade }) {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px', flexWrap: 'wrap', marginBottom: '16px' }}>
           <div>
             <div style={{ fontSize: font.sm, color: colors.textFaint, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px' }}>
-              Plan actual
+              {plan.isInternal ? 'Cuenta interna' : 'Plan actual'}
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <h2 style={{ margin: 0, fontSize: font['4xl'], color: colors.text }}>{plan.planName}</h2>
-              <Badge bg={status.color + '22'} color={status.color}>{status.label}</Badge>
-              {plan.planId === 'pro' && <Badge variant="ai">⭐ POPULAR</Badge>}
+              <h2 style={{ margin: 0, fontSize: font['4xl'], color: colors.text }}>
+                {plan.isInternal ? 'Acceso ilimitado' : plan.planName}
+              </h2>
+              {plan.isInternal ? (
+                <Badge bg={colors.primary + '22'} color={colors.primary}>SIN LÍMITES</Badge>
+              ) : (
+                <>
+                  <Badge bg={status.color + '22'} color={status.color}>{status.label}</Badge>
+                  {plan.planId === 'pro' && <Badge variant="ai">⭐ POPULAR</Badge>}
+                </>
+              )}
             </div>
             <div style={{ marginTop: '6px', color: colors.textFaint, fontSize: font.lg }}>
-              {formatPrice(plan.plan.price_monthly)}/mes
+              {plan.isInternal
+                ? (plan.internalNote || 'Cuenta interna · sin facturación')
+                : `${formatPrice(plan.plan.price_monthly)}/mes`}
             </div>
           </div>
 
-          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-            {plan.nextPlan && (
-              <Button
-                variant="primary"
-                size="lg"
-                icon={<ArrowUp size={16} />}
-                onClick={onUpgrade}
-              >
-                Subir a {plan.nextPlan.name}
-              </Button>
-            )}
-            {plan.isActive && !plan.isTrialing && (
-              <Button
-                variant="ghost"
-                onClick={() => toast.info('La cancelación se habilita en Fase B con Stripe Customer Portal')}
-              >
-                Cancelar suscripción
-              </Button>
-            )}
-          </div>
+          {!plan.isInternal && (
+            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+              {plan.nextPlan && (
+                <Button
+                  variant="primary"
+                  size="lg"
+                  icon={<ArrowUp size={16} />}
+                  onClick={onUpgrade}
+                >
+                  Subir a {plan.nextPlan.name}
+                </Button>
+              )}
+              {plan.isActive && !plan.isTrialing && (
+                <Button
+                  variant="ghost"
+                  onClick={() => toast.info('La cancelación se habilita en Fase B con Stripe Customer Portal')}
+                >
+                  Cancelar suscripción
+                </Button>
+              )}
+            </div>
+          )}
         </div>
+
+        {/* Estado especial para cuenta interna */}
+        {plan.isInternal && (
+          <div style={{
+            background: colors.primary + '11',
+            border: `1px solid ${colors.primary}33`,
+            borderRadius: radius.lg,
+            padding: '12px 14px',
+            display: 'flex', alignItems: 'center', gap: '10px',
+            color: colors.primary,
+          }}>
+            <Shield size={18} />
+            <div>
+              <strong>Cuenta interna</strong>
+              <div style={{ fontSize: font.sm, marginTop: '2px', color: colors.textMuted }}>
+                Sin trial, sin límites de plan, sin facturación. Acceso completo a todos los módulos y funciones IA de forma ilimitada.
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Trial countdown */}
         {plan.isTrialing && (

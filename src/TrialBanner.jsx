@@ -16,6 +16,8 @@ export default function TrialBanner({ onUpgrade }) {
   const [dismissed, setDismissed] = useState(false)
 
   if (dismissed) return null
+  // Cuentas internas (founder, demos): nunca muestran banner de billing.
+  if (plan.isInternal) return null
   // Mostrar SIEMPRE si está expirado o past_due. Trialing con >3 días puede dismissarse.
   if (plan.status === 'active') return null
   if (!plan.isTrialing && !plan.isExpired && !plan.isPastDue && !plan.isCanceled) return null
