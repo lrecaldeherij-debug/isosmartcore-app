@@ -217,7 +217,7 @@ function App() {
   if (loading) return <>
     <Toaster position="top-right" />
     <ConfirmRoot />
-    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', color: 'var(--text-secondary)' }}>⏳ Cargando sistema...</div>
+    <BootScreen />
   </>
 
   // Home pública: si NO hay sesión, mostrar Landing. Si hay sesión, mandar al app.
@@ -506,6 +506,98 @@ function NavGroup({ title, sectionKey, icon: GroupIcon, children }) {
       >
         <div style={{ paddingLeft: '0.5rem', borderLeft: '1px solid var(--sidebar-border)', marginTop: '0.25rem', display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
           {children}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// Boot screen editorial que reemplaza el "Cargando sistema..." genérico.
+// Se muestra mientras esperamos supabase.auth.getSession() — que puede
+// tardar 30-60s con Supabase Free Tier en cold start. El diseño editorial
+// (sello ISO pulsando + folio + mensaje que cambia) comunica progreso
+// aunque no tengamos porcentaje real.
+function BootScreen() {
+  return (
+    <div style={{
+      minHeight: '100vh',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      background: '#F5F1E8', color: '#2E1F1A',
+      fontFamily: "'Fraunces', Georgia, serif",
+      padding: '24px',
+    }}>
+      <style>{`
+        @keyframes iso-boot-pulse {
+          0%, 100% { transform: scale(1); opacity: 1; }
+          50% { transform: scale(1.08); opacity: 0.85; }
+        }
+        @keyframes iso-boot-bar {
+          0% { transform: translateX(-100%); }
+          100% { transform: translateX(100%); }
+        }
+        @keyframes iso-boot-fade {
+          0%, 33% { opacity: 0; transform: translateY(4px); }
+          40%, 60% { opacity: 1; transform: translateY(0); }
+          67%, 100% { opacity: 0; transform: translateY(-4px); }
+        }
+        .iso-boot-msg { animation: iso-boot-fade 4.5s infinite; }
+      `}</style>
+
+      <div style={{ textAlign: 'center', maxWidth: 400 }}>
+        {/* Sello ISO pulsando */}
+        <div style={{
+          width: 72, height: 72, borderRadius: '50%',
+          border: '2px solid #8B2438', background: '#F5F1E8',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontFamily: "'IBM Plex Mono', 'Courier New', monospace",
+          fontSize: 15, fontWeight: 700, color: '#8B2438',
+          letterSpacing: '2px', margin: '0 auto 32px',
+          animation: 'iso-boot-pulse 2s ease-in-out infinite',
+        }}>ISO</div>
+
+        {/* Nombre */}
+        <div style={{
+          fontFamily: "'Fraunces', Georgia, serif",
+          fontSize: 24, fontWeight: 600, color: '#2E1F1A', lineHeight: 1,
+          marginBottom: 6,
+        }}>IsoSmartCore</div>
+
+        <div style={{
+          fontFamily: "'IBM Plex Mono', 'Courier New', monospace",
+          fontSize: 10, color: '#8A7A6B',
+          letterSpacing: '1.5px', textTransform: 'uppercase',
+          marginBottom: 32,
+        }}>EXP·ISC·{new Date().getFullYear()}</div>
+
+        {/* Barra de progreso indeterminada */}
+        <div style={{
+          position: 'relative',
+          width: 240, height: 2, background: '#D8CFB8',
+          margin: '0 auto 20px', overflow: 'hidden',
+        }}>
+          <div style={{
+            position: 'absolute', top: 0, left: 0, bottom: 0, width: '40%',
+            background: '#8B2438',
+            animation: 'iso-boot-bar 1.5s linear infinite',
+          }} />
+        </div>
+
+        {/* Mensajes rotativos */}
+        <div style={{
+          position: 'relative', height: 20, minHeight: 20,
+          fontFamily: "'IBM Plex Mono', 'Courier New', monospace",
+          fontSize: 11, letterSpacing: '1px',
+          color: '#8A7A6B', textTransform: 'uppercase',
+        }}>
+          <div className="iso-boot-msg" style={{ position: 'absolute', inset: 0, animationDelay: '0s' }}>
+            Abriendo el expediente
+          </div>
+          <div className="iso-boot-msg" style={{ position: 'absolute', inset: 0, animationDelay: '1.5s' }}>
+            Verificando credenciales
+          </div>
+          <div className="iso-boot-msg" style={{ position: 'absolute', inset: 0, animationDelay: '3s' }}>
+            Cargando organización
+          </div>
         </div>
       </div>
     </div>
