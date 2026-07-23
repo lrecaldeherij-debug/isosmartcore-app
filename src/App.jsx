@@ -13,6 +13,7 @@ import TrialBanner from './TrialBanner'
 import AuditorView from './AuditorView'
 
 // Lazy — vistas pesadas que se cargan al navegar
+const Landing = lazy(() => import('./Landing'))
 const Legal = lazy(() => import('./Legal'))
 const Dashboard = lazy(() => import('./Dashboard'))
 const Onboarding = lazy(() => import('./Onboarding'))
@@ -161,13 +162,19 @@ class ErrorBoundary extends Component {
 function App() {
   const [session, setSession] = useState(null)
   const [loading, setLoading] = useState(true)
-  const publicSurveyMatch = window.location.pathname.match(/^\/encuesta\/([A-Za-z0-9]+)\/?$/)
-  const auditorMatch = window.location.pathname.match(/^\/auditor\/([A-Za-z0-9]+)\/?$/)
-  const isPricingRoute = window.location.pathname === '/pricing' || window.location.pathname === '/precios'
-  const legalMatch = window.location.pathname.match(/^\/legal\/(privacidad|terminos|cookies)\/?$/)
+  const pathname = window.location.pathname
+  const publicSurveyMatch = pathname.match(/^\/encuesta\/([A-Za-z0-9]+)\/?$/)
+  const auditorMatch = pathname.match(/^\/auditor\/([A-Za-z0-9]+)\/?$/)
+  const isPricingRoute = pathname === '/pricing' || pathname === '/precios'
+  const legalMatch = pathname.match(/^\/legal\/(privacidad|terminos|cookies)\/?$/)
+  // Landing es la home pública. /app y /login son alias que llevan al Login/Dashboard.
+  const isHomeRoute = pathname === '/' || pathname === ''
+  const isAppRoute = pathname === '/app' || pathname === '/login' || pathname.startsWith('/app/')
 
   useEffect(() => {
     if (publicSurveyMatch || auditorMatch || isPricingRoute || legalMatch) { setLoading(false); return }
+    // La home no necesita esperar sesión para renderizar la landing, pero SÍ
+    // chequeamos por si el usuario ya está logueado y podemos redirigir a /app.
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session)
       setLoading(false)
@@ -178,6 +185,10 @@ function App() {
     })
     return () => subscription.unsubscribe()
   }, [])
+
+  const goHome = () => { window.history.pushState({}, '', '/'); window.location.reload() }
+  const goApp = () => { window.history.pushState({}, '', '/app'); window.location.reload() }
+  const goPricing = () => { window.history.pushState({}, '', '/pricing'); window.location.reload() }
 
   // Ruta pública /encuesta/:token — no requiere login
   if (publicSurveyMatch) return <PublicSurvey token={publicSurveyMatch[1]} />
@@ -190,8 +201,8 @@ function App() {
     <Toaster position="top-right" />
     <ConfirmRoot />
     <PricingPage
-      onSignup={() => { window.history.pushState({}, '', '/'); window.location.reload() }}
-      onLogin={() => { window.history.pushState({}, '', '/'); window.location.reload() }}
+      onSignup={goApp}
+      onLogin={goApp}
     />
   </>
 
@@ -208,6 +219,23 @@ function App() {
     <ConfirmRoot />
     <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', color: 'var(--text-secondary)' }}>⏳ Cargando sistema...</div>
   </>
+
+  // Home pública: si NO hay sesión, mostrar Landing. Si hay sesión, mandar al app.
+  if (isHomeRoute) {
+    if (session) {
+      // Usuario ya logueado que entra a "/" → mandar directo a /app
+      window.history.replaceState({}, '', '/app')
+    } else {
+      return <>
+        <Toaster position="top-right" />
+        <Suspense fallback={<div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>⏳</div>}>
+          <Landing onSignup={goApp} onLogin={goApp} onSeePricing={goPricing} />
+        </Suspense>
+      </>
+    }
+  }
+
+  // /app o /login sin sesión → Login. Con sesión → cae al AppShell abajo.
   if (!session) return <>
     <Toaster position="top-right" />
     <ConfirmRoot />

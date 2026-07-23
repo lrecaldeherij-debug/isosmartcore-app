@@ -85,9 +85,12 @@ export default function Login() {
       }}
       className="login-aside"
       >
-        {/* Header con sello */}
+        {/* Header con sello — clickeable para volver a la landing */}
         <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+          <a href="/" style={{
+            display: 'inline-flex', alignItems: 'center', gap: '14px',
+            textDecoration: 'none',
+          }}>
             <SealMark />
             <div>
               <div style={{
@@ -104,7 +107,7 @@ export default function Login() {
                 EXP·ISC·2026
               </div>
             </div>
-          </div>
+          </a>
         </div>
 
         {/* Hero editorial */}
