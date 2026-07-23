@@ -268,7 +268,7 @@ export default function Onboarding({ onComplete }) {
               letterSpacing: tracking.wider, color: colors.seal,
               textTransform: 'uppercase', fontWeight: weight.bold, marginBottom: '12px',
             }}>
-              § {String(currentStep + 1).padStart(2, '0')} · PASO {currentStep + 1} DE {STEPS.length}
+              # {String(currentStep + 1).padStart(2, '0')} · PASO {currentStep + 1} DE {STEPS.length}
             </div>
             <h1 style={{
               margin: 0, fontFamily: families.display,

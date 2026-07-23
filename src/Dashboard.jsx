@@ -560,7 +560,7 @@ function PhaseTitle({ number, title, subtitle, color }) {
         fontFamily: families.mono, fontSize: '14px',
         fontWeight: weight.bold, color: colors.seal,
       }}>
-        § {String(number).padStart(2, '0')}
+        # {String(number).padStart(2, '0')}
       </span>
       <div>
         <div style={{

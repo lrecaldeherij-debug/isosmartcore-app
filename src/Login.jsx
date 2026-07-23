@@ -352,7 +352,7 @@ function SectionEyebrow({ num, label }) {
         fontFamily: families.mono, fontSize: '13px',
         fontWeight: weight.bold, color: colors.seal,
       }}>
-        § {num}
+        # {num}
       </span>
       <span style={{
         fontFamily: families.mono, fontSize: '11px',

@@ -313,7 +313,7 @@ function Solution() {
                 <span style={{
                   fontFamily: families.mono, fontSize: '13px',
                   fontWeight: weight.bold, color: colors.seal,
-                }}>§ {p.num}</span>
+                }}># {p.num}</span>
                 <span style={{ color: colors.seal }}>{p.icon}</span>
               </div>
               <h3 style={{
@@ -641,7 +641,7 @@ function Faq() {
                       fontFamily: families.mono, fontSize: '12px',
                       color: colors.seal, fontWeight: weight.bold,
                       flexShrink: 0,
-                    }}>§ {String(i + 1).padStart(2, '0')}</span>
+                    }}># {String(i + 1).padStart(2, '0')}</span>
                     <span style={{
                       fontFamily: families.display, fontSize: '19px',
                       fontWeight: weight.semibold, color: colors.ink,
@@ -824,7 +824,7 @@ function SectionEyebrow({ num, label }) {
       <span style={{
         fontFamily: families.mono, fontSize: '13px',
         fontWeight: weight.bold, color: colors.seal,
-      }}>§ {num}</span>
+      }}># {num}</span>
       <span style={{
         fontFamily: families.mono, fontSize: '11px',
         letterSpacing: tracking.wider, color: colors.inkSoft, textTransform: 'uppercase',

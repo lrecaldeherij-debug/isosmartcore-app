@@ -101,7 +101,7 @@ function shell(innerHtml) {
 
 function eyebrow(num, label) {
   return `<div style="border-bottom:1px solid ${BRAND.hairline};padding-bottom:8px;margin-bottom:20px;">
-    <span style="font-family:'Courier New',monospace;font-size:13px;font-weight:bold;color:${BRAND.seal};">§ ${num}</span>
+    <span style="font-family:'Courier New',monospace;font-size:13px;font-weight:bold;color:${BRAND.seal};"># ${num}</span>
     <span style="font-family:'Courier New',monospace;font-size:11px;color:${BRAND.inkSoft};letter-spacing:1.5px;text-transform:uppercase;margin-left:14px;">${label}</span>
   </div>`
 }

@@ -397,7 +397,7 @@ export default function Legal({ page = 'privacidad' }) {
           <span style={{
             fontFamily: families.mono, fontSize: 13, fontWeight: weight.bold,
             color: colors.seal,
-          }}>§ 00</span>
+          }}># 00</span>
           <span style={{
             fontFamily: families.mono, fontSize: 11,
             letterSpacing: tracking.wider, color: colors.inkSoft,
@@ -434,7 +434,7 @@ export default function Legal({ page = 'privacidad' }) {
               <span style={{
                 fontFamily: families.mono, fontSize: 13,
                 fontWeight: weight.bold, color: colors.seal,
-              }}>§ {s.num}</span>
+              }}># {s.num}</span>
               <h2 style={{
                 margin: 0, fontFamily: families.display,
                 fontSize: 22, fontWeight: weight.semibold,
