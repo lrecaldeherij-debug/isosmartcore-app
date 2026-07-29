@@ -306,7 +306,7 @@ export default function Login() {
           {isRegistering && (
             <>
               <Field label="Razón social / nombre de la empresa" value={companyName} onChange={setCompanyName} placeholder="Nombre de tu empresa" required />
-              <Field label="Tu nombre completo" value={fullName} onChange={setFullName} placeholder="Juan Pérez" required />
+              <Field label="Tu nombre completo" value={fullName} onChange={setFullName} placeholder="Tu nombre y apellido" required />
             </>
           )}
           <Field label="Correo electrónico" type="email" value={email} onChange={setEmail} placeholder="tu@empresa.com" required />
