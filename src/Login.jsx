@@ -305,7 +305,7 @@ export default function Login() {
         <form onSubmit={handleAuth} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
           {isRegistering && (
             <>
-              <Field label="Razón social / nombre de la empresa" value={companyName} onChange={setCompanyName} placeholder="Herzoil Cia Ltda" required />
+              <Field label="Razón social / nombre de la empresa" value={companyName} onChange={setCompanyName} placeholder="Nombre de tu empresa" required />
               <Field label="Tu nombre completo" value={fullName} onChange={setFullName} placeholder="Juan Pérez" required />
             </>
           )}
