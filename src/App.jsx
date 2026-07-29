@@ -15,6 +15,7 @@ import AuditorView from './AuditorView'
 // Lazy — vistas pesadas que se cargan al navegar
 const Landing = lazy(() => import('./Landing'))
 const Legal = lazy(() => import('./Legal'))
+const ResetPassword = lazy(() => import('./ResetPassword'))
 const Dashboard = lazy(() => import('./Dashboard'))
 const Onboarding = lazy(() => import('./Onboarding'))
 const OrganizationSettings = lazy(() => import('./OrganizationSettings'))
@@ -167,12 +168,13 @@ function App() {
   const auditorMatch = pathname.match(/^\/auditor\/([A-Za-z0-9]+)\/?$/)
   const isPricingRoute = pathname === '/pricing' || pathname === '/precios'
   const legalMatch = pathname.match(/^\/legal\/(privacidad|terminos|cookies)\/?$/)
+  const isResetPasswordRoute = pathname === '/reset-password' || pathname === '/recuperar'
   // Landing es la home pública. /app y /login son alias que llevan al Login/Dashboard.
   const isHomeRoute = pathname === '/' || pathname === ''
   const isAppRoute = pathname === '/app' || pathname === '/login' || pathname.startsWith('/app/')
 
   useEffect(() => {
-    if (publicSurveyMatch || auditorMatch || isPricingRoute || legalMatch) { setLoading(false); return }
+    if (publicSurveyMatch || auditorMatch || isPricingRoute || legalMatch || isResetPasswordRoute) { setLoading(false); return }
     // La home no necesita esperar sesión para renderizar la landing, pero SÍ
     // chequeamos por si el usuario ya está logueado y podemos redirigir a /app.
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -211,6 +213,14 @@ function App() {
     <Toaster position="top-right" />
     <Suspense fallback={<div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>⏳</div>}>
       <Legal page={legalMatch[1]} />
+    </Suspense>
+  </>
+
+  // Ruta pública /reset-password — landing del email de recuperación
+  if (isResetPasswordRoute) return <>
+    <Toaster position="top-right" />
+    <Suspense fallback={<div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>⏳</div>}>
+      <ResetPassword />
     </Suspense>
   </>
 

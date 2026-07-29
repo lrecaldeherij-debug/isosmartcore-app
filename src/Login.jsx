@@ -3,6 +3,64 @@ import { supabase } from './supabaseClient'
 import { Eye, EyeOff, ArrowRight } from 'lucide-react'
 import { colors, families, tracking, weight, font } from './components/ui/tokens'
 
+// Mapea errores crudos de Supabase a mensajes humanos en español + acción
+// sugerida. Devuelve { text, action } donde action puede ser 'switch-to-login',
+// 'reset-password', 'retry', 'resend-confirmation' o null.
+function humanizeAuthError(rawMessage, mode) {
+  const m = (rawMessage || '').toLowerCase()
+
+  // Fallo de red — cold start Supabase, sin internet, CORS
+  if (m.includes('failed to fetch') || m.includes('networkerror') || m.includes('network request failed')) {
+    return {
+      text: 'El servidor tardó en responder. Puede ser un despertar temporal (cold start). Intenta de nuevo en 15 segundos.',
+      action: 'retry',
+    }
+  }
+
+  // Email ya registrado en signup
+  if (mode === 'signup' && (m.includes('already registered') || m.includes('already exists') || m.includes('user already'))) {
+    return {
+      text: 'Este correo ya tiene un expediente abierto.',
+      action: 'switch-to-login',
+    }
+  }
+
+  // Credenciales inválidas en login
+  if (mode === 'login' && (m.includes('invalid login') || m.includes('invalid credentials'))) {
+    return {
+      text: 'Correo o contraseña incorrectos. Si no recuerdas tu contraseña, puedes restablecerla.',
+      action: 'reset-password',
+    }
+  }
+
+  // Email no confirmado
+  if (m.includes('email not confirmed')) {
+    return {
+      text: 'Tu cuenta existe pero no confirmaste el correo. Revisa tu bandeja (y spam) el link de confirmación.',
+      action: 'resend-confirmation',
+    }
+  }
+
+  // Rate limit
+  if (m.includes('rate limit') || m.includes('too many requests')) {
+    return {
+      text: 'Demasiados intentos seguidos. Esperá un minuto y reintenta.',
+      action: null,
+    }
+  }
+
+  // Contraseña débil
+  if (m.includes('password') && (m.includes('short') || m.includes('weak'))) {
+    return {
+      text: 'La contraseña es demasiado corta. Usa al menos 8 caracteres.',
+      action: null,
+    }
+  }
+
+  // Fallback: devuelve mensaje original con acción null
+  return { text: rawMessage, action: null }
+}
+
 export default function Login() {
   const [isRegistering, setIsRegistering] = useState(false)
   const [email, setEmail] = useState('')
@@ -13,11 +71,12 @@ export default function Login() {
   const [loading, setLoading] = useState(false)
   const [mensaje, setMensaje] = useState('')
   const [acceptTerms, setAcceptTerms] = useState(false)
+  const [resetSent, setResetSent] = useState(false)
 
   const handleAuth = async (e) => {
     e.preventDefault()
     if (isRegistering && !acceptTerms) {
-      setMensaje({ kind: 'error', text: 'Debes aceptar los Términos y la Política de Privacidad para abrir cuenta.' })
+      setMensaje({ kind: 'error', text: 'Debes aceptar los Términos y la Política de Privacidad para abrir cuenta.', action: null })
       return
     }
     setLoading(true)
@@ -29,6 +88,7 @@ export default function Login() {
         result = await supabase.auth.signUp({
           email, password,
           options: {
+            emailRedirectTo: `${window.location.origin}/app`,
             data: {
               company_name: companyName.trim(),
               full_name: fullName.trim(),
@@ -44,11 +104,12 @@ export default function Login() {
 
       const { data, error } = result
       if (error) {
-        setMensaje({ kind: 'error', text: error.message })
+        const humanized = humanizeAuthError(error.message, isRegistering ? 'signup' : 'login')
+        setMensaje({ kind: 'error', text: humanized.text, action: humanized.action })
       } else if (isRegistering && !data.session) {
-        setMensaje({ kind: 'success', text: 'Registro recibido. Revisa tu correo para confirmar la cuenta.' })
+        setMensaje({ kind: 'success', text: 'Registro recibido. Revisa tu correo para confirmar la cuenta.', action: null })
       } else if (data.session) {
-        setMensaje({ kind: 'success', text: 'Acceso autorizado. Abriendo expediente…' })
+        setMensaje({ kind: 'success', text: 'Acceso autorizado. Abriendo expediente…', action: null })
         if (isRegistering) {
           await supabase.from('legal_acceptances').insert({
             user_id: data.session.user.id,
@@ -60,10 +121,68 @@ export default function Login() {
         setTimeout(() => window.location.reload(), 1200)
       }
     } catch (err) {
-      setMensaje({ kind: 'error', text: 'Error de conexión: ' + err.message })
+      const humanized = humanizeAuthError(err.message, isRegistering ? 'signup' : 'login')
+      setMensaje({ kind: 'error', text: humanized.text, action: humanized.action })
     } finally {
       setLoading(false)
     }
+  }
+
+  const handlePasswordReset = async () => {
+    if (!email.trim()) {
+      setMensaje({ kind: 'error', text: 'Ingresa tu correo primero para enviarte el link de restablecimiento.', action: null })
+      return
+    }
+    setLoading(true)
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+        redirectTo: `${window.location.origin}/reset-password`,
+      })
+      if (error) throw error
+      setResetSent(true)
+      setMensaje({
+        kind: 'success',
+        text: `Te enviamos un link a ${email.trim()} para restablecer tu contraseña. Revisá tu bandeja (y spam).`,
+        action: null,
+      })
+    } catch (err) {
+      const humanized = humanizeAuthError(err.message, 'login')
+      setMensaje({ kind: 'error', text: humanized.text, action: humanized.action })
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleResendConfirmation = async () => {
+    if (!email.trim()) {
+      setMensaje({ kind: 'error', text: 'Ingresa tu correo primero para reenviar la confirmación.', action: null })
+      return
+    }
+    setLoading(true)
+    try {
+      const { error } = await supabase.auth.resend({
+        type: 'signup',
+        email: email.trim(),
+        options: { emailRedirectTo: `${window.location.origin}/app` },
+      })
+      if (error) throw error
+      setMensaje({
+        kind: 'success',
+        text: `Reenviamos el correo de confirmación a ${email.trim()}. Revisá tu bandeja.`,
+        action: null,
+      })
+    } catch (err) {
+      const humanized = humanizeAuthError(err.message, 'signup')
+      setMensaje({ kind: 'error', text: humanized.text, action: humanized.action })
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const switchToLogin = () => {
+    setIsRegistering(false)
+    setMensaje('')
+    setResetSent(false)
   }
 
   const isError = mensaje?.kind === 'error'
@@ -274,17 +393,68 @@ export default function Login() {
               fontFamily: families.body, fontSize: '13px', lineHeight: 1.5,
               borderRadius: '2px',
             }}>
-              <span style={{
-                fontFamily: families.mono, fontSize: '10px',
-                letterSpacing: tracking.wider, textTransform: 'uppercase',
-                marginRight: '8px', fontWeight: weight.bold,
-              }}>
-                {isError ? 'RECHAZADO' : 'CONFIRMADO'}
-              </span>
-              {mensaje.text}
+              <div>
+                <span style={{
+                  fontFamily: families.mono, fontSize: '10px',
+                  letterSpacing: tracking.wider, textTransform: 'uppercase',
+                  marginRight: '8px', fontWeight: weight.bold,
+                }}>
+                  {isError ? 'RECHAZADO' : 'CONFIRMADO'}
+                </span>
+                {mensaje.text}
+              </div>
+
+              {/* Acciones sugeridas según el tipo de error */}
+              {mensaje.action && (
+                <div style={{
+                  marginTop: '10px', paddingTop: '10px',
+                  borderTop: `1px dashed ${isError ? colors.alert : colors.approve}66`,
+                  display: 'flex', gap: '8px', flexWrap: 'wrap',
+                }}>
+                  {mensaje.action === 'switch-to-login' && (
+                    <ActionButton onClick={switchToLogin}>
+                      Iniciar sesión con este correo →
+                    </ActionButton>
+                  )}
+                  {mensaje.action === 'reset-password' && !resetSent && (
+                    <ActionButton onClick={handlePasswordReset} disabled={loading}>
+                      Restablecer mi contraseña
+                    </ActionButton>
+                  )}
+                  {mensaje.action === 'resend-confirmation' && (
+                    <ActionButton onClick={handleResendConfirmation} disabled={loading}>
+                      Reenviar correo de confirmación
+                    </ActionButton>
+                  )}
+                  {mensaje.action === 'retry' && (
+                    <ActionButton onClick={handleAuth} disabled={loading}>
+                      Reintentar
+                    </ActionButton>
+                  )}
+                </div>
+              )}
             </div>
           )}
         </form>
+
+        {/* Link "¿Olvidaste tu contraseña?" (solo modo login) */}
+        {!isRegistering && !resetSent && (
+          <div style={{ marginTop: '16px', textAlign: 'right' }}>
+            <button
+              type="button"
+              onClick={handlePasswordReset}
+              disabled={loading}
+              style={{
+                background: 'none', border: 'none', cursor: loading ? 'wait' : 'pointer',
+                color: colors.inkSoft, fontFamily: families.body, fontSize: '13px',
+                padding: 0,
+                borderBottom: `1px solid ${colors.hairline}`,
+              }}
+            >
+              ¿Olvidaste tu contraseña?
+            </button>
+          </div>
+        )}
 
         {/* Switch login ↔ signup */}
         <div style={{
@@ -293,7 +463,7 @@ export default function Login() {
         }}>
           <button
             type="button"
-            onClick={() => { setIsRegistering(!isRegistering); setMensaje('') }}
+            onClick={() => { setIsRegistering(!isRegistering); setMensaje(''); setResetSent(false) }}
             style={{
               background: 'none', border: 'none', cursor: 'pointer',
               color: colors.ink, fontFamily: families.body, fontSize: '14px',
@@ -327,6 +497,27 @@ export default function Login() {
 // ═══════════════════════════════════════════════════════════════════════════
 // Subcomponentes
 // ═══════════════════════════════════════════════════════════════════════════
+
+function ActionButton({ children, onClick, disabled }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      style={{
+        background: colors.ink, color: colors.paper,
+        border: 'none', padding: '8px 14px',
+        fontFamily: families.body, fontSize: '12px', fontWeight: weight.semibold,
+        letterSpacing: tracking.wide,
+        cursor: disabled ? 'wait' : 'pointer',
+        opacity: disabled ? 0.6 : 1,
+        borderRadius: '2px',
+      }}
+    >
+      {children}
+    </button>
+  )
+}
 
 function SealMark({ size = 32 }) {
   return (
