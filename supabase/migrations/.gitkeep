@@ -1,0 +1,6 @@
+# Este archivo mantiene la carpeta en git aunque esté vacía.
+# Las migraciones nuevas van aquí con el formato: YYYYMMDDHHMMSS_descripcion.sql
+# Ejemplo: 20260806143000_add_processes_last_reviewed_at.sql
+#
+# Generar con: supabase migration new descripcion
+# Aplicar en producción: push a main → GitHub Actions corre `supabase db push`

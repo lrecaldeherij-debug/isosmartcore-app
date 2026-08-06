@@ -1,0 +1,48 @@
+name: Deploy Supabase Migrations
+
+# Se dispara automáticamente cuando hay push a main con cambios en
+# supabase/migrations/ — así la DB de producción siempre está sincronizada
+# con el código que Vercel acaba de deployar.
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'supabase/migrations/**'
+      - '.github/workflows/db-migrate.yml'
+  # Permite dispararlo manualmente desde la pestaña Actions de GitHub
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Link project
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          supabase link --project-ref ${{ secrets.SUPABASE_PROJECT_REF }} \
+            --password "${{ secrets.SUPABASE_DB_PASSWORD }}"
+
+      - name: Push migrations to production
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: |
+          supabase db push --include-all
+
+      - name: Summary
+        run: |
+          echo "### Migraciones aplicadas en producción" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Proyecto: \`${{ secrets.SUPABASE_PROJECT_REF }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Migraciones en carpeta:" >> $GITHUB_STEP_SUMMARY
+          ls supabase/migrations/*.sql 2>/dev/null | sed 's|^|- |' >> $GITHUB_STEP_SUMMARY || echo "(ninguna nueva)" >> $GITHUB_STEP_SUMMARY
