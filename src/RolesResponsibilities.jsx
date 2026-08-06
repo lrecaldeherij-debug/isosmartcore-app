@@ -279,12 +279,29 @@ FORMATO:
   {"process_id":"<id>","process_name":"Nombre","role":"R"}
 ]`
       const raw = await consultarIA(prompt, 'Devuelve únicamente JSON array válido.')
-      const arr = extractFirstJson(raw)
-      let result = []
-      if (Array.isArray(arr)) result = arr
-      else if (arr && Array.isArray(arr.raci)) result = arr.raci
-      else if (arr && Array.isArray(arr.items)) result = arr.items
-      else throw new Error('IA no devolvió array RACI')
+      const parsed = extractFirstJson(raw)
+
+      // La IA puede devolver el array directo o envuelto en un objeto con
+      // distintas keys. Buscamos el primer array que aparezca.
+      let result = null
+      if (Array.isArray(parsed)) {
+        result = parsed
+      } else if (parsed && typeof parsed === 'object') {
+        // Buscar propiedades conocidas primero
+        for (const key of ['raci', 'items', 'processes', 'assignments', 'data', 'results', 'roles']) {
+          if (Array.isArray(parsed[key])) { result = parsed[key]; break }
+        }
+        // Fallback: cualquier propiedad que sea un array
+        if (!result) {
+          const firstArray = Object.values(parsed).find(v => Array.isArray(v))
+          if (firstArray) result = firstArray
+        }
+      }
+
+      if (!result) {
+        console.warn('[RACI] La IA no devolvió un array reconocible. Respuesta cruda:', raw?.slice(0, 500))
+        throw new Error('La IA devolvió un formato inesperado. Intenta de nuevo — a veces basta con reintentar.')
+      }
 
       // Sanear: solo válidos, mapear nombre si IDs no coinciden
       const idSet = new Set(processes.map(p => p.id))
@@ -301,8 +318,9 @@ FORMATO:
         }
       }).filter(r => r.process_id)
 
-      if (!cleaned.length) throw new Error('No se pudo mapear ninguna entrada RACI')
+      if (!cleaned.length) throw new Error('La IA sugirió procesos que no coinciden con los tuyos. Recarga la página y reintenta.')
       setForm({ ...form, raci_json: cleaned })
+      toast.success(`IA propuso ${cleaned.length} asignaciones RACI. Revisa y ajusta.`)
     } catch (e) {
       toast.error('Error IA RACI: ' + e.message)
     }
@@ -412,7 +430,7 @@ FORMATO:
       {!stats.sgcResponsable && jobs.length > 0 && (
         <div style={{ marginTop: 12, padding: 12, background: '#fef3c7', border: '1px solid #fde68a', borderRadius: 8, fontSize: 13, color: '#92400e', display: 'flex', alignItems: 'center', gap: 8 }}>
           <AlertTriangle size={18} />
-          <span><strong>Sin Responsable del SGC asignado</strong> — ISO 5.3 lo requiere. Editá un perfil y marcalo.</span>
+          <span><strong>Sin Responsable del SGC asignado</strong> — ISO 5.3 lo requiere. Edita un perfil y márcalo.</span>
         </div>
       )}
 
