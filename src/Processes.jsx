@@ -485,7 +485,7 @@ FORMATO EXACTO (ejemplo):
           <form onSubmit={handleSubmit}>
             <FormSection title="Identificación">
               <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr auto 1fr 1fr', gap: 12, alignItems: 'end' }}>
-                <Field label="Nombre *" value={form.name} required onChange={v => setForm({ ...form, name: v })} />
+                <Field label="Nombre *" value={form.name} required onChange={v => setForm({ ...form, name: v })} placeholder="Ej: Gestión de compras, Producción, Ventas..." />
                 <Field label="Código" value={form.code} onChange={v => setForm({ ...form, code: v })} />
                 <button type="button" onClick={sugerirCodigo}
                   style={{ padding: 8, background: '#e0e7ff', color: '#3730a3', border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: 12, height: 36 }}>
@@ -496,7 +496,7 @@ FORMATO EXACTO (ejemplo):
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginTop: 10 }}>
                 <Field label="Owner del proceso" value={form.process_owner} onChange={v => setForm({ ...form, process_owner: v })} placeholder="Nombre y cargo del responsable" />
-                <Field label="Rol responsable" value={form.responsible_role} onChange={v => setForm({ ...form, responsible_role: v })} />
+                <Field label="Rol responsable" value={form.responsible_role} onChange={v => setForm({ ...form, responsible_role: v })} placeholder="Ej: Gerente de Compras, Jefe de Producción..." />
               </div>
             </FormSection>
 
