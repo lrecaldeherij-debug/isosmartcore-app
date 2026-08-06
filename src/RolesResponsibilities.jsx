@@ -297,6 +297,20 @@ FORMATO:
           if (firstArray) result = firstArray
         }
       }
+      // Último fallback: Gemini a veces devuelve `{...}, {...}, {...}` (objetos
+      // concatenados sin corchetes) — no es JSON válido, pero es recuperable
+      // envolviendo en [...].
+      if (!result) {
+        try {
+          const cleaned = String(raw).replace(/```(?:json)?/gi, '').replace(/```/g, '').trim()
+          const firstBrace = cleaned.indexOf('{')
+          const lastBrace = cleaned.lastIndexOf('}')
+          if (firstBrace !== -1 && lastBrace > firstBrace) {
+            const wrapped = JSON.parse('[' + cleaned.slice(firstBrace, lastBrace + 1).replace(/,\s*$/, '') + ']')
+            if (Array.isArray(wrapped)) result = wrapped
+          }
+        } catch { /* seguimos al throw */ }
+      }
 
       if (!result) {
         console.warn('[RACI] La IA no devolvió un array reconocible. Respuesta cruda:', raw?.slice(0, 500))

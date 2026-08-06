@@ -71,5 +71,19 @@ export function parseAiArray(raw) {
   if (p && Array.isArray(p.patterns)) return p.patterns
   if (p && Array.isArray(p.results)) return p.results
   if (p && Array.isArray(p.data)) return p.data
+  // Fallback: la IA a veces devuelve `{...}, {...}, {...}` (objetos
+  // concatenados sin corchetes) — no es JSON válido, pero se recupera
+  // envolviendo en [...].
+  if (raw) {
+    try {
+      const cleaned = String(raw).replace(/```(?:json)?/gi, '').replace(/```/g, '').trim()
+      const firstBrace = cleaned.indexOf('{')
+      const lastBrace = cleaned.lastIndexOf('}')
+      if (firstBrace !== -1 && lastBrace > firstBrace) {
+        const wrapped = JSON.parse('[' + cleaned.slice(firstBrace, lastBrace + 1).replace(/,\s*$/, '') + ']')
+        if (Array.isArray(wrapped)) return wrapped
+      }
+    } catch { /* devolvemos [] abajo */ }
+  }
   return []
 }
