@@ -317,7 +317,7 @@ FORMATO EXACTO (ejemplo):
   const handleSubmit = async (e) => {
     e.preventDefault()
     const payload = { ...form }
-    ;['last_reviewed_at', 'next_review_date', 'process_owner_user_id'].forEach(k => { if (!payload[k]) payload[k] = null })
+    ;['last_reviewed_at', 'last_reviewed_date', 'next_review_date', 'process_owner_user_id', 'company_id'].forEach(k => { if (!payload[k]) payload[k] = null })
 
     if (editingId) {
       const prev = items.find(i => i.id === editingId)
