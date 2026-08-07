@@ -346,7 +346,10 @@ FORMATO:
     e.preventDefault()
     const payload = { ...form }
     payload.authorities_json = payload.authorities_json.filter(a => a && a.trim())
-    if (!payload.current_holder_since) payload.current_holder_since = null
+    // Postgres rechaza '' en columnas UUID/DATE/INT/NUMERIC. Convertimos
+    // cualquier string vacío del payload a null — para TEXT es equivalente
+    // semántico, y para tipos estrictos evita el 22P02.
+    Object.keys(payload).forEach(k => { if (payload[k] === '') payload[k] = null })
 
     if (editingId) {
       const prev = jobs.find(j => j.id === editingId)
