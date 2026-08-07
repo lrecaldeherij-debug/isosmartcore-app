@@ -342,6 +342,16 @@ FORMATO:
   }
 
   // ───── CRUD ─────
+  const humanizeDbError = (err) => {
+    const msg = err?.message || ''
+    if (err?.code === '23505' && msg.includes('idx_job_desc_one_sgc_per_org')) {
+      const current = jobs.find(j => j.is_sgc_responsible)
+      return `Ya hay un Responsable del SGC asignado${current ? ` (${current.title})` : ''}. ISO 5.3 permite solo uno por organización — desmarcá el anterior primero o editá ese perfil.`
+    }
+    if (err?.code === '23505') return 'Ya existe un registro con esos datos únicos.'
+    return msg || 'No se pudo guardar el perfil.'
+  }
+
   const handleSubmit = async (e) => {
     e.preventDefault()
     const payload = { ...form }
@@ -361,11 +371,11 @@ FORMATO:
       })
       payload.change_log = [...(prev?.change_log || []), { at: new Date().toISOString(), changes }]
       const { error } = await supabase.from('job_descriptions').update(payload).eq('id', editingId)
-      if (error) return toast.error(error.message)
+      if (error) return toast.error(humanizeDbError(error))
     } else {
       payload.change_log = [{ at: new Date().toISOString(), changes: [{ field: 'created', from: null, to: payload.title }] }]
       const { error } = await supabase.from('job_descriptions').insert([payload])
-      if (error) return toast.error(error.message)
+      if (error) return toast.error(humanizeDbError(error))
     }
     setShowForm(false); resetForm(); fetchAll()
   }
