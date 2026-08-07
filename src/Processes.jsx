@@ -12,6 +12,7 @@ import { CLAUSE_GUIDES } from './clauseGuides'
 import ModuleSeedBanner from './ModuleSeedBanner'
 import { toast } from './lib/toast'
 import { confirm } from './lib/confirm'
+import { humanizeDbError } from './lib/humanizeDbError'
 
 // ──────────────── Constantes ────────────────
 const TYPE_OPTIONS = ['Estratégico', 'Operativo', 'Soporte']
@@ -332,11 +333,11 @@ FORMATO EXACTO (ejemplo):
       })
       payload.change_log = [...(prev?.change_log || []), { at: new Date().toISOString(), changes }]
       const { error } = await supabase.from('processes').update(payload).eq('id', editingId)
-      if (error) return toast.error(error.message)
+      if (error) return toast.error(humanizeDbError(error, { table: 'processes' }))
     } else {
       payload.change_log = [{ at: new Date().toISOString(), changes: [{ field: 'created', from: null, to: payload.name }] }]
       const { error } = await supabase.from('processes').insert([payload])
-      if (error) return toast.error(error.message)
+      if (error) return toast.error(humanizeDbError(error, { table: 'processes' }))
     }
     setShowForm(false); resetForm(); fetchAll()
   }
@@ -361,7 +362,7 @@ FORMATO EXACTO (ejemplo):
   const handleDelete = async (id) => {
     if (!await confirm('¿Eliminar esta ficha?', { tone: 'danger', confirmText: 'Eliminar' })) return
     const { error } = await supabase.from('processes').delete().eq('id', id)
-    if (error) toast.error(error.message)
+    if (error) toast.error(humanizeDbError(error, { table: 'processes' }))
     else { toast.success('Proceso eliminado'); setDetailItem(null); fetchAll() }
   }
 
