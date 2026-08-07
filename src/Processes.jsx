@@ -317,7 +317,10 @@ FORMATO EXACTO (ejemplo):
   const handleSubmit = async (e) => {
     e.preventDefault()
     const payload = { ...form }
-    ;['last_reviewed_at', 'last_reviewed_date', 'next_review_date', 'process_owner_user_id', 'company_id'].forEach(k => { if (!payload[k]) payload[k] = null })
+    // Postgres rechaza '' en columnas UUID/DATE/INT/NUMERIC. Convertimos
+    // cualquier string vacío del payload a null — para TEXT es equivalente
+    // semántico, y para tipos estrictos evita el 22P02.
+    Object.keys(payload).forEach(k => { if (payload[k] === '') payload[k] = null })
 
     if (editingId) {
       const prev = items.find(i => i.id === editingId)
