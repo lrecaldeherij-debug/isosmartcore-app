@@ -369,6 +369,15 @@ function getStatusBadge(org) {
 // ─── Modal detalle ─────────────────────────────────────────────────────────
 
 function OrgDetailModal({ org, onClose, onRefresh }) {
+  const [activePanel, setActivePanel] = useState(null) // 'plan' | 'trial' | 'combo' | 'delete' | null
+  const [plans, setPlans] = useState([])
+
+  useEffect(() => {
+    supabase.rpc('list_available_plans').then(({ data }) => setPlans(data || []))
+  }, [])
+
+  const closeAndRefresh = () => { onRefresh(); onClose() }
+
   return (
     <div
       onClick={onClose}
@@ -381,7 +390,7 @@ function OrgDetailModal({ org, onClose, onRefresh }) {
       <div
         onClick={e => e.stopPropagation()}
         style={{
-          background: colors.paper, maxWidth: 720, width: '100%',
+          background: colors.paper, maxWidth: 760, width: '100%',
           maxHeight: '90vh', overflowY: 'auto',
           border: `1px solid ${colors.hairlineStrong}`,
         }}
@@ -447,18 +456,274 @@ function OrgDetailModal({ org, onClose, onRefresh }) {
             </div>
           )}
 
-          {/* Placeholder acciones — Bloque 3 */}
-          <div style={{
-            padding: 16, background: colors.paperWarm, border: `1px dashed ${colors.hairline}`,
-            fontSize: 13, color: colors.inkMid, textAlign: 'center',
-          }}>
-            <div style={{ fontFamily: families.mono, fontSize: 10, letterSpacing: tracking.wider, textTransform: 'uppercase', marginBottom: 4 }}>
-              PRÓXIMAMENTE
-            </div>
-            Acciones (extender trial, marcar/quitar combo, cambiar plan, impersonar) llegan en el próximo bloque.
-          </div>
+          {/* Acciones */}
+          {!activePanel && (
+            <>
+              <div style={{
+                fontFamily: families.mono, fontSize: 10, letterSpacing: tracking.wider,
+                textTransform: 'uppercase', color: colors.inkSoft, fontWeight: weight.semibold,
+                marginBottom: 12, paddingTop: 8, borderTop: `1px solid ${colors.hairline}`,
+              }}>ACCIONES</div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 20 }}>
+                <ActionBtn onClick={() => setActivePanel('plan')}   label="Cambiar plan" />
+                <ActionBtn onClick={() => setActivePanel('trial')}  label="Extender trial" />
+                <ActionBtn onClick={() => setActivePanel('combo')}  label={org.is_combo_client ? 'Editar combo' : 'Marcar como combo'} />
+                <ActionBtn onClick={() => setActivePanel('delete')} label="Eliminar organización" danger />
+              </div>
+            </>
+          )}
+
+          {activePanel === 'plan'   && <ChangePlanPanel org={org} plans={plans} onDone={closeAndRefresh} onCancel={() => setActivePanel(null)} />}
+          {activePanel === 'trial'  && <ExtendTrialPanel org={org} onDone={closeAndRefresh} onCancel={() => setActivePanel(null)} />}
+          {activePanel === 'combo'  && <ComboPanel       org={org} onDone={closeAndRefresh} onCancel={() => setActivePanel(null)} />}
+          {activePanel === 'delete' && <DeletePanel      org={org} onDone={closeAndRefresh} onCancel={() => setActivePanel(null)} />}
         </div>
       </div>
+    </div>
+  )
+}
+
+function ActionBtn({ onClick, label, danger }) {
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        padding: '10px 14px', fontSize: 13, fontWeight: weight.medium, cursor: 'pointer',
+        border: `1px solid ${danger ? colors.alert : colors.hairline}`,
+        background: danger ? colors.alertLight : colors.paperCool,
+        color: danger ? colors.alertText : colors.ink,
+        fontFamily: families.body, textAlign: 'left',
+      }}
+    >{label}</button>
+  )
+}
+
+function PanelWrap({ title, tone = 'ink', children }) {
+  const toneColor = tone === 'danger' ? colors.alert : colors.seal
+  return (
+    <div style={{ paddingTop: 8, borderTop: `1px solid ${colors.hairline}` }}>
+      <div style={{
+        fontFamily: families.mono, fontSize: 10, letterSpacing: tracking.wider,
+        textTransform: 'uppercase', color: toneColor, fontWeight: weight.semibold, marginBottom: 12,
+      }}>{title}</div>
+      {children}
+    </div>
+  )
+}
+
+function ChangePlanPanel({ org, plans, onDone, onCancel }) {
+  const [planId, setPlanId] = useState(org.plan_id || 'starter')
+  const [reason, setReason] = useState('')
+  const [saving, setSaving] = useState(false)
+
+  const submit = async () => {
+    if (planId === org.plan_id) { toast.error('Elegí un plan distinto al actual'); return }
+    setSaving(true)
+    const { error } = await supabase.rpc('admin_change_plan', {
+      p_org_id: org.id, p_new_plan_id: planId, p_reason: reason || null,
+    })
+    setSaving(false)
+    if (error) return toast.error(humanizeDbError(error))
+    toast.success(`Plan cambiado a ${planId}`)
+    onDone()
+  }
+
+  return (
+    <PanelWrap title="Cambiar plan">
+      <div style={{ marginBottom: 12 }}>
+        <label style={{ display: 'block', fontSize: 12, color: colors.inkMid, marginBottom: 6 }}>
+          Nuevo plan (actual: <strong>{org.plan_id}</strong>)
+        </label>
+        <select
+          value={planId} onChange={e => setPlanId(e.target.value)}
+          style={{ width: '100%', padding: 10, fontSize: 14, fontFamily: families.body, border: `1px solid ${colors.hairline}` }}
+        >
+          {plans.map(p => (
+            <option key={p.id} value={p.id}>
+              {p.name} — ${p.price_monthly_usd}/mes · {p.max_users ?? '∞'} users · {p.max_processes ?? '∞'} procesos
+            </option>
+          ))}
+        </select>
+      </div>
+      <div style={{ marginBottom: 12 }}>
+        <label style={{ display: 'block', fontSize: 12, color: colors.inkMid, marginBottom: 6 }}>Motivo (opcional, queda en auditoría)</label>
+        <input value={reason} onChange={e => setReason(e.target.value)} placeholder="Ej: Cliente hizo upgrade manual" style={{ width: '100%', padding: 10, fontSize: 14, border: `1px solid ${colors.hairline}` }} />
+      </div>
+      <PanelActions onCancel={onCancel} onConfirm={submit} confirmLabel={saving ? 'Guardando…' : 'Cambiar plan'} saving={saving} />
+    </PanelWrap>
+  )
+}
+
+function ExtendTrialPanel({ org, onDone, onCancel }) {
+  const [days, setDays] = useState(14)
+  const [reason, setReason] = useState('')
+  const [saving, setSaving] = useState(false)
+
+  const submit = async () => {
+    if (!days || days < 1) { toast.error('Días debe ser mayor a 0'); return }
+    setSaving(true)
+    const { error } = await supabase.rpc('admin_extend_trial', {
+      p_org_id: org.id, p_days: parseInt(days), p_reason: reason || null,
+    })
+    setSaving(false)
+    if (error) return toast.error(humanizeDbError(error))
+    toast.success(`Trial extendido ${days} días`)
+    onDone()
+  }
+
+  return (
+    <PanelWrap title="Extender trial">
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 3fr', gap: 12, marginBottom: 12 }}>
+        <div>
+          <label style={{ display: 'block', fontSize: 12, color: colors.inkMid, marginBottom: 6 }}>Días a agregar</label>
+          <input type="number" value={days} onChange={e => setDays(e.target.value)} min={1} max={365} style={{ width: '100%', padding: 10, fontSize: 14, border: `1px solid ${colors.hairline}` }} />
+        </div>
+        <div>
+          <label style={{ display: 'block', fontSize: 12, color: colors.inkMid, marginBottom: 6 }}>Motivo (queda en auditoría)</label>
+          <input value={reason} onChange={e => setReason(e.target.value)} placeholder="Ej: Esperando confirmación de pago" style={{ width: '100%', padding: 10, fontSize: 14, border: `1px solid ${colors.hairline}` }} />
+        </div>
+      </div>
+      <PanelActions onCancel={onCancel} onConfirm={submit} confirmLabel={saving ? 'Guardando…' : `Extender ${days} días`} saving={saving} />
+    </PanelWrap>
+  )
+}
+
+function ComboPanel({ org, onDone, onCancel }) {
+  const [isCombo, setIsCombo] = useState(!!org.is_combo_client)
+  const [startDate, setStartDate] = useState(org.combo_start_date || new Date().toISOString().slice(0, 10))
+  const [endDate, setEndDate]     = useState(org.combo_end_date   || new Date(Date.now() + 180 * 86400000).toISOString().slice(0, 10))
+  const [notes, setNotes]         = useState(org.combo_notes || '')
+  const [saving, setSaving] = useState(false)
+
+  const submit = async () => {
+    setSaving(true)
+    const { error } = await supabase.rpc('admin_set_combo', {
+      p_org_id: org.id,
+      p_is_combo: isCombo,
+      p_start_date: isCombo ? startDate : null,
+      p_end_date:   isCombo ? endDate   : null,
+      p_notes:      notes || null,
+    })
+    setSaving(false)
+    if (error) return toast.error(humanizeDbError(error))
+    toast.success(isCombo ? 'Cliente marcado como combo' : 'Combo removido')
+    onDone()
+  }
+
+  return (
+    <PanelWrap title="Combo (asesoría + sistema)">
+      <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14, fontSize: 14 }}>
+        <input type="checkbox" checked={isCombo} onChange={e => setIsCombo(e.target.checked)} />
+        <span>Es cliente combo (6 meses de sistema incluidos con la asesoría)</span>
+      </label>
+
+      {isCombo && (
+        <>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
+            <div>
+              <label style={{ display: 'block', fontSize: 12, color: colors.inkMid, marginBottom: 6 }}>Fecha de inicio del combo</label>
+              <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} style={{ width: '100%', padding: 10, fontSize: 14, border: `1px solid ${colors.hairline}` }} />
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: 12, color: colors.inkMid, marginBottom: 6 }}>Fecha fin (empieza a pagar el sistema)</label>
+              <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} style={{ width: '100%', padding: 10, fontSize: 14, border: `1px solid ${colors.hairline}` }} />
+            </div>
+          </div>
+        </>
+      )}
+
+      <div style={{ marginBottom: 12 }}>
+        <label style={{ display: 'block', fontSize: 12, color: colors.inkMid, marginBottom: 6 }}>Notas privadas (contactos, condiciones)</label>
+        <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={3} placeholder="Ej: Combo firmado con Juan Pérez. Incluye 12h de asesoría..." style={{ width: '100%', padding: 10, fontSize: 14, border: `1px solid ${colors.hairline}`, fontFamily: families.body, resize: 'vertical' }} />
+      </div>
+
+      <PanelActions onCancel={onCancel} onConfirm={submit} confirmLabel={saving ? 'Guardando…' : 'Guardar cambios'} saving={saving} />
+    </PanelWrap>
+  )
+}
+
+function DeletePanel({ org, onDone, onCancel }) {
+  const [confirmName, setConfirmName] = useState('')
+  const [reason, setReason] = useState('')
+  const [saving, setSaving] = useState(false)
+
+  const canDelete = confirmName === org.name
+
+  const submit = async () => {
+    if (!canDelete) return
+    setSaving(true)
+    const { error } = await supabase.rpc('admin_delete_organization', {
+      p_org_id: org.id, p_confirm_name: confirmName, p_reason: reason || null,
+    })
+    setSaving(false)
+    if (error) return toast.error(humanizeDbError(error))
+    toast.success(`Organización "${org.name}" eliminada`)
+    onDone()
+  }
+
+  return (
+    <PanelWrap title="ELIMINAR ORGANIZACIÓN" tone="danger">
+      <div style={{
+        padding: 12, background: colors.alertLight, border: `1px solid ${colors.alert}`,
+        color: colors.alertText, fontSize: 13, marginBottom: 14, lineHeight: 1.5,
+      }}>
+        <strong>Acción irreversible.</strong> Se eliminará <strong>{org.name}</strong> junto con todos sus datos:
+        {org.users_count > 0 && <> <strong>{org.users_count} usuario{org.users_count !== 1 ? 's' : ''}</strong>,</>} procesos, riesgos, políticas,
+        documentos, auditorías. Los usuarios de <em>auth</em> no se eliminan (siguen pudiendo hacer login pero sin org).
+      </div>
+
+      <div style={{ marginBottom: 12 }}>
+        <label style={{ display: 'block', fontSize: 12, color: colors.inkMid, marginBottom: 6 }}>
+          Escribí el nombre exacto para confirmar: <strong style={{ fontFamily: families.mono, color: colors.alert }}>{org.name}</strong>
+        </label>
+        <input
+          value={confirmName} onChange={e => setConfirmName(e.target.value)}
+          placeholder={org.name}
+          style={{ width: '100%', padding: 10, fontSize: 14, border: `2px solid ${canDelete ? colors.approve : colors.alert}`, fontFamily: families.mono }}
+        />
+      </div>
+
+      <div style={{ marginBottom: 12 }}>
+        <label style={{ display: 'block', fontSize: 12, color: colors.inkMid, marginBottom: 6 }}>Motivo (queda en auditoría)</label>
+        <input value={reason} onChange={e => setReason(e.target.value)} placeholder="Ej: Cuenta de prueba de desarrollo" style={{ width: '100%', padding: 10, fontSize: 14, border: `1px solid ${colors.hairline}` }} />
+      </div>
+
+      <PanelActions
+        onCancel={onCancel}
+        onConfirm={submit}
+        confirmLabel={saving ? 'Eliminando…' : 'ELIMINAR permanentemente'}
+        saving={saving}
+        disabled={!canDelete}
+        danger
+      />
+    </PanelWrap>
+  )
+}
+
+function PanelActions({ onCancel, onConfirm, confirmLabel, saving, disabled, danger }) {
+  return (
+    <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+      <button
+        onClick={onCancel}
+        disabled={saving}
+        style={{
+          padding: '10px 16px', fontSize: 13, background: 'transparent',
+          border: `1px solid ${colors.hairline}`, color: colors.inkMid,
+          cursor: saving ? 'wait' : 'pointer', fontFamily: families.body,
+        }}
+      >Cancelar</button>
+      <button
+        onClick={onConfirm}
+        disabled={saving || disabled}
+        style={{
+          padding: '10px 16px', fontSize: 13, fontWeight: weight.semibold,
+          background: (saving || disabled) ? colors.inkGhost : (danger ? colors.alert : colors.seal),
+          color: colors.paper, border: 'none',
+          cursor: (saving || disabled) ? 'not-allowed' : 'pointer',
+          fontFamily: families.body,
+        }}
+      >{confirmLabel}</button>
     </div>
   )
 }
