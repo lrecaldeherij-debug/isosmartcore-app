@@ -54,6 +54,7 @@ const Team = lazy(() => import('./Team'))
 const HelpSupport = lazy(() => import('./HelpSupport'))
 const AdminDashboard = lazy(() => import('./AdminDashboard'))
 import HelpButton from './components/ui/HelpButton'
+import ImpersonateBanner from './components/ImpersonateBanner'
 import { 
   Home, 
   Target, 
@@ -336,6 +337,7 @@ function AppShell() {
 
   return (
     <>
+      <ImpersonateBanner />
       <TrialBanner onUpgrade={() => navegarA('billing')} />
     <div className="app-container">
       {/* BOTÓN MENÚ MOBILE */}

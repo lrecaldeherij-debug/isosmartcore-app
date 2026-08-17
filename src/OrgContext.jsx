@@ -4,6 +4,7 @@
 
 import { createContext, useContext, useEffect, useState } from 'react'
 import { supabase } from './supabaseClient'
+import { getImpersonatedOrgId } from './lib/impersonate'
 
 const OrgContext = createContext(null)
 
@@ -45,6 +46,13 @@ export function OrgProvider({ session, children }) {
       }
       setProfile(prof)
 
+      // Detectar modo impersonar: si super_admin visita /app?impersonate=<orgId>,
+      // cargar ESA org en lugar de la del user. Guardas: solo super_admin puede,
+      // ignoramos el param en cualquier otro caso.
+      const impersonateOrgId = getImpersonatedOrgId()
+      const canImpersonate = impersonateOrgId && prof.is_super_admin
+      const targetOrgId = canImpersonate ? impersonateOrgId : prof.org_id
+
       // Intenta primero la vista org_with_plan (v56). Si no existe (migración
       // sin correr), cae a la tabla organizations directa — la app sigue,
       // solo sin info de plan.
@@ -53,14 +61,14 @@ export function OrgProvider({ session, children }) {
       const viewRes = await supabase
         .from('org_with_plan')
         .select('*')
-        .eq('id', prof.org_id)
+        .eq('id', targetOrgId)
         .maybeSingle()
 
       if (viewRes.error || !viewRes.data) {
         const fallback = await supabase
           .from('organizations')
           .select('*')
-          .eq('id', prof.org_id)
+          .eq('id', targetOrgId)
           .maybeSingle()
         orgData = fallback.data
         orgErr = fallback.error
@@ -85,14 +93,22 @@ export function OrgProvider({ session, children }) {
   }, [session?.user?.id, refreshTick])
 
   const role = profile?.role || null
+  const impersonateOrgId = getImpersonatedOrgId()
+  const impersonating = !!impersonateOrgId && profile?.is_super_admin && org?.id === impersonateOrgId
   const can = {
-    write: role === 'owner' || role === 'quality_manager',
-    audit: role === 'owner' || role === 'quality_manager' || role === 'auditor',
-    admin: role === 'owner',
+    // En modo impersonar todo se bloquea a nivel UI (además de que RLS
+    // ya bloquea las mutaciones cross-org a nivel DB).
+    write: !impersonating && (role === 'owner' || role === 'quality_manager'),
+    audit: !impersonating && (role === 'owner' || role === 'quality_manager' || role === 'auditor'),
+    admin: !impersonating && role === 'owner',
   }
 
   return (
-    <OrgContext.Provider value={{ profile, org, role, can, loading, error, refresh: () => setRefreshTick(t => t + 1) }}>
+    <OrgContext.Provider value={{
+      profile, org, role, can, loading, error,
+      impersonating,
+      refresh: () => setRefreshTick(t => t + 1),
+    }}>
       {children}
     </OrgContext.Provider>
   )

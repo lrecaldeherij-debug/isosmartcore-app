@@ -21,6 +21,7 @@ import { useSuperAdmin } from './lib/useSuperAdmin'
 import { colors, families, tracking, weight, space } from './components/ui/tokens'
 import { toast } from './lib/toast'
 import { humanizeDbError } from './lib/humanizeDbError'
+import { startImpersonation } from './lib/impersonate'
 import {
   Shield, Search, Building2, Users, Calendar, DollarSign, AlertCircle,
   Eye, ArrowUpRight, Zap, TrendingUp, Clock, X, RefreshCw, ArrowLeft,
@@ -481,6 +482,7 @@ function OrgDetailModal({ org, onClose, onRefresh }) {
               }}>ACCIONES</div>
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 20 }}>
+                <ActionBtn onClick={() => setActivePanel('impersonate')} label="Ver como cliente (lectura)" primary />
                 <ActionBtn onClick={() => setActivePanel('plan')}   label="Cambiar plan" />
                 <ActionBtn onClick={() => setActivePanel('trial')}  label="Extender trial" />
                 <ActionBtn onClick={() => setActivePanel('combo')}  label={org.is_combo_client ? 'Editar combo' : 'Marcar como combo'} />
@@ -489,6 +491,7 @@ function OrgDetailModal({ org, onClose, onRefresh }) {
             </>
           )}
 
+          {activePanel === 'impersonate' && <ImpersonatePanel org={org} onCancel={() => setActivePanel(null)} />}
           {activePanel === 'plan'   && <ChangePlanPanel org={org} plans={plans} onDone={closeAndRefresh} onCancel={() => setActivePanel(null)} />}
           {activePanel === 'trial'  && <ExtendTrialPanel org={org} onDone={closeAndRefresh} onCancel={() => setActivePanel(null)} />}
           {activePanel === 'combo'  && <ComboPanel       org={org} onDone={closeAndRefresh} onCancel={() => setActivePanel(null)} />}
@@ -499,15 +502,18 @@ function OrgDetailModal({ org, onClose, onRefresh }) {
   )
 }
 
-function ActionBtn({ onClick, label, danger }) {
+function ActionBtn({ onClick, label, danger, primary }) {
+  const bg = danger ? colors.alertLight : primary ? colors.sealLight : colors.paperCool
+  const fg = danger ? colors.alertText : primary ? colors.sealText : colors.ink
+  const border = danger ? colors.alert : primary ? colors.seal : colors.hairline
   return (
     <button
       onClick={onClick}
       style={{
         padding: '10px 14px', fontSize: 13, fontWeight: weight.medium, cursor: 'pointer',
-        border: `1px solid ${danger ? colors.alert : colors.hairline}`,
-        background: danger ? colors.alertLight : colors.paperCool,
-        color: danger ? colors.alertText : colors.ink,
+        border: `1px solid ${border}`,
+        background: bg,
+        color: fg,
         fontFamily: families.body, textAlign: 'left',
       }}
     >{label}</button>
@@ -711,6 +717,56 @@ function DeletePanel({ org, onDone, onCancel }) {
         saving={saving}
         disabled={!canDelete}
         danger
+      />
+    </PanelWrap>
+  )
+}
+
+function ImpersonatePanel({ org, onCancel }) {
+  const [reason, setReason] = useState('')
+  const [going, setGoing] = useState(false)
+
+  const submit = async () => {
+    if (!reason.trim()) { toast.error('El motivo es obligatorio (queda en auditoría)'); return }
+    setGoing(true)
+    try {
+      await startImpersonation(org.id, org.name, reason)
+      // startImpersonation hace el redirect duro a /app?impersonate=<orgId>
+    } catch (err) {
+      setGoing(false)
+      toast.error(humanizeDbError(err))
+    }
+  }
+
+  return (
+    <PanelWrap title="Ver la app como este cliente (modo lectura)">
+      <div style={{
+        padding: 12, background: colors.sealLight, border: `1px solid ${colors.seal}`,
+        color: colors.sealText, fontSize: 13, marginBottom: 14, lineHeight: 1.5,
+      }}>
+        <strong>Vas a ver la app como {org.name}.</strong> Podés navegar todos sus
+        módulos y ver el contenido cargado (procesos, riesgos, política, etc.).
+        Los cambios están bloqueados a nivel base de datos — no vas a poder guardar
+        nada por error. Un banner rojo va a mostrarte que estás en este modo,
+        con botón para volver acá.
+      </div>
+
+      <div style={{ marginBottom: 12 }}>
+        <label style={{ display: 'block', fontSize: 12, color: colors.inkMid, marginBottom: 6 }}>
+          Motivo (obligatorio — queda en auditoría)
+        </label>
+        <input
+          value={reason} onChange={e => setReason(e.target.value)}
+          placeholder="Ej: Cliente pidió ayuda con módulo de riesgos"
+          style={{ width: '100%', padding: 10, fontSize: 14, border: `1px solid ${colors.hairline}` }}
+        />
+      </div>
+
+      <PanelActions
+        onCancel={onCancel}
+        onConfirm={submit}
+        confirmLabel={going ? 'Entrando…' : `Entrar como ${org.name}`}
+        saving={going}
       />
     </PanelWrap>
   )
