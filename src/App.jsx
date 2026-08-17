@@ -2,6 +2,7 @@ import { useState, useEffect, createContext, useContext, lazy, Suspense, Compone
 import { Toaster } from 'react-hot-toast'
 import { supabase } from './supabaseClient'
 import { OrgProvider, useOrg } from './OrgContext'
+import { useSuperAdmin } from './lib/useSuperAdmin'
 import { ConfirmRoot } from './lib/confirm'
 import { LoadingScreen } from './components/ui/misc'
 import { toast } from './lib/toast'
@@ -51,6 +52,7 @@ const AuditLogs = lazy(() => import('./AuditLogs'))
 const BillingSettings = lazy(() => import('./BillingSettings'))
 const Team = lazy(() => import('./Team'))
 const HelpSupport = lazy(() => import('./HelpSupport'))
+const AdminDashboard = lazy(() => import('./AdminDashboard'))
 import HelpButton from './components/ui/HelpButton'
 import { 
   Home, 
@@ -169,6 +171,7 @@ function App() {
   const isPricingRoute = pathname === '/pricing' || pathname === '/precios'
   const legalMatch = pathname.match(/^\/legal\/(privacidad|terminos|cookies)\/?$/)
   const isResetPasswordRoute = pathname === '/reset-password' || pathname === '/recuperar'
+  const isAdminRoute = pathname === '/admin' || pathname.startsWith('/admin/')
   // Landing es la home pública. /app y /login son alias que llevan al Login/Dashboard.
   const isHomeRoute = pathname === '/' || pathname === ''
   const isAppRoute = pathname === '/app' || pathname === '/login' || pathname.startsWith('/app/')
@@ -252,6 +255,17 @@ function App() {
     <Login />
   </>
 
+  // /admin — panel super_admin (renderiza standalone, sin sidebar ISO)
+  if (isAdminRoute) return (
+    <OrgProvider session={session}>
+      <Toaster position="top-right" />
+      <ConfirmRoot />
+      <Suspense fallback={<LoadingScreen label="Cargando panel de administración…" />}>
+        <AdminDashboard />
+      </Suspense>
+    </OrgProvider>
+  )
+
   return (
     <OrgProvider session={session}>
       <Toaster position="top-right" />
@@ -274,6 +288,7 @@ async function handleSignOut() {
 
 function AppShell() {
   const { org, loading: orgLoading, error: orgError, can, refresh } = useOrg()
+  const isSuperAdmin = useSuperAdmin()
   const [vistaActual, setVistaActual] = useState('inicio')
   const [onboardingForceCompleted, setOnboardingForceCompleted] = useState(false)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
@@ -415,6 +430,25 @@ function AppShell() {
           <NavItem id="equipo" label="Equipo y roles" icon={Users} />
           <NavItem id="billing" label="Plan y facturación" icon={CreditCard} />
           <NavItem id="ayuda" label="Ayuda y Soporte" icon={HelpCircle} />
+
+          {isSuperAdmin && (
+            <a
+              href="/admin"
+              className="nav-btn"
+              style={{
+                background: 'var(--primary-light, #F2DDDF)',
+                color: 'var(--primary-color, #8B2438)',
+                fontWeight: 600,
+                marginTop: 8,
+                display: 'flex', alignItems: 'center', gap: 8,
+                padding: '10px 12px', textDecoration: 'none',
+                border: '1px solid var(--primary-color, #8B2438)',
+              }}
+            >
+              <Shield size={18} />
+              <span>Panel Super-Admin</span>
+            </a>
+          )}
 
           <button onClick={handleSignOut} className="nav-btn logout">
             <LogOut size={18} />

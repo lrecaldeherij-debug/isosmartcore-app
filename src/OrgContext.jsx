@@ -30,7 +30,7 @@ export function OrgProvider({ session, children }) {
 
       const { data: prof, error: profErr } = await supabase
         .from('user_profiles')
-        .select('user_id, org_id, role, full_name')
+        .select('user_id, org_id, role, full_name, is_super_admin')
         .eq('user_id', session.user.id)
         .single()
 
