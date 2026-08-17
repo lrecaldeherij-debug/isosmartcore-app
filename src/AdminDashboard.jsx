@@ -23,7 +23,7 @@ import { toast } from './lib/toast'
 import { humanizeDbError } from './lib/humanizeDbError'
 import {
   Shield, Search, Building2, Users, Calendar, DollarSign, AlertCircle,
-  Eye, ArrowUpRight, Zap, TrendingUp, Clock, X, RefreshCw,
+  Eye, ArrowUpRight, Zap, TrendingUp, Clock, X, RefreshCw, ArrowLeft,
 } from 'lucide-react'
 
 export default function AdminDashboard() {
@@ -77,27 +77,42 @@ export default function AdminDashboard() {
       <div style={{ maxWidth: 1400, margin: '0 auto', padding: '32px 32px 80px' }}>
 
         {/* Header editorial */}
-        <div style={{ marginBottom: 40 }}>
-          <div style={{
-            fontFamily: families.mono, fontSize: 11, letterSpacing: tracking.wider,
-            color: colors.seal, textTransform: 'uppercase', fontWeight: weight.semibold,
-            marginBottom: 12,
-          }}>
-            # 00 · PANEL DE ADMINISTRACIÓN
+        <div style={{ marginBottom: 40, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 20 }}>
+          <div>
+            <div style={{
+              fontFamily: families.mono, fontSize: 11, letterSpacing: tracking.wider,
+              color: colors.seal, textTransform: 'uppercase', fontWeight: weight.semibold,
+              marginBottom: 12,
+            }}>
+              # 00 · PANEL DE ADMINISTRACIÓN
+            </div>
+            <h1 style={{
+              margin: 0, fontFamily: families.display, fontSize: 42,
+              fontWeight: weight.semibold, lineHeight: 1.1, letterSpacing: tracking.tight,
+              color: colors.ink,
+            }}>
+              Clientes activos.
+            </h1>
+            <div style={{
+              marginTop: 12, fontSize: 15, color: colors.inkMid, lineHeight: 1.5, maxWidth: 640,
+            }}>
+              Vista privada de todas las organizaciones del sistema. Aquí gestionás combos,
+              trials, planes y hacés soporte impersonando en modo lectura.
+            </div>
           </div>
-          <h1 style={{
-            margin: 0, fontFamily: families.display, fontSize: 42,
-            fontWeight: weight.semibold, lineHeight: 1.1, letterSpacing: tracking.tight,
-            color: colors.ink,
-          }}>
-            Clientes activos.
-          </h1>
-          <div style={{
-            marginTop: 12, fontSize: 15, color: colors.inkMid, lineHeight: 1.5, maxWidth: 640,
-          }}>
-            Vista privada de todas las organizaciones del sistema. Aquí gestionás combos,
-            trials, planes y hacés soporte impersonando en modo lectura.
-          </div>
+          <a
+            href="/app"
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 8, whiteSpace: 'nowrap',
+              padding: '10px 16px', background: colors.paperCool,
+              border: `1px solid ${colors.hairline}`, color: colors.ink,
+              fontSize: 13, fontFamily: families.body, fontWeight: weight.medium,
+              textDecoration: 'none', flexShrink: 0,
+            }}
+          >
+            <ArrowLeft size={14} />
+            Volver al expediente
+          </a>
         </div>
 
         {/* KPIs */}
