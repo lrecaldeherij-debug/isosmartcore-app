@@ -118,7 +118,10 @@ END;
 $$;
 
 -- 4. Actualizar list_all_organizations_admin para incluir effective_status
-CREATE OR REPLACE FUNCTION list_all_organizations_admin()
+-- Postgres no permite CREATE OR REPLACE cuando el RETURNS TABLE cambia de shape.
+-- Necesitamos DROP antes.
+DROP FUNCTION IF EXISTS list_all_organizations_admin();
+CREATE FUNCTION list_all_organizations_admin()
 RETURNS TABLE (
   id                    UUID,
   name                  TEXT,
