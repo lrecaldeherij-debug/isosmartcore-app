@@ -53,6 +53,24 @@ export function OrgProvider({ session, children }) {
       const canImpersonate = impersonateOrgId && prof.is_super_admin
       const targetOrgId = canImpersonate ? impersonateOrgId : prof.org_id
 
+      // Sync JWT metadata con URL: las policies _select_impersonate de tablas
+      // ISO leen user_metadata.impersonate_org_id. Si el user llega aquí sin
+      // ?impersonate= pero el metadata quedó de una sesión previa (cerró el
+      // navegador sin llamar stopImpersonation), hay que limpiarlo ANTES de
+      // que Dashboard corra queries — sino verá datos de la org impersonada
+      // vieja con el nombre de su org real.
+      //
+      // Si tiene ?impersonate= y todavía no está en metadata (o cambió),
+      // setearlo. Esto permite entrar en impersonate compartiendo el link
+      // directo sin pasar por startImpersonation.
+      const currentMeta = session.user.user_metadata?.impersonate_org_id || null
+      if (canImpersonate && currentMeta !== impersonateOrgId) {
+        await supabase.auth.updateUser({ data: { impersonate_org_id: impersonateOrgId } })
+      } else if (!canImpersonate && currentMeta) {
+        await supabase.auth.updateUser({ data: { impersonate_org_id: null } })
+      }
+      if (cancelled) return
+
       // Intenta primero la vista org_with_plan (v56). Si no existe (migración
       // sin correr), cae a la tabla organizations directa — la app sigue,
       // solo sin info de plan.
