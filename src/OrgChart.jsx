@@ -5,7 +5,8 @@ import { consultarIA } from './aiClient'
 import {
   Network, Plus, Pencil, Trash2, X, Save, Loader2, Sparkles,
   Download, GitBranch, LayoutGrid, List, User, Crown, Users,
-  Eye, ArrowRight, ShieldCheck, Building2, Briefcase, Search
+  Eye, ArrowRight, ShieldCheck, Building2, Briefcase, Search,
+  AlertTriangle, Wand2, CheckCircle2
 } from 'lucide-react'
 import IsoInfoCard from './IsoInfoCard'
 import { CLAUSE_GUIDES } from './clauseGuides'
@@ -142,6 +143,158 @@ export default function OrgChart({ alCambiarVista }) {
     const sgcResp = jobs.filter(j => j.is_sgc_responsible).length
     return { total, ocupados, vacantes, cobertura, areas, sgcResp }
   }, [jobs, personnelByJob])
+
+  // ───── Diagnóstico de salud del organigrama ─────
+  // Detectamos problemas comunes que hacen que el organigrama no se dibuje
+  // como árbol: falta de padres, falta de niveles, falta de responsable SGC,
+  // padres huérfanos. Cada problema sugiere una acción concreta.
+  const health = useMemo(() => {
+    if (jobs.length === 0) return { hasIssues: false, issues: [] }
+    const issues = []
+
+    const withParent = jobs.filter(j => j.parent_id && jobMap[j.parent_id]).length
+    const orphans = jobs.filter(j => j.parent_id && !jobMap[j.parent_id])
+    const roots = jobs.filter(j => !j.parent_id || !jobMap[j.parent_id])
+    const noLevel = jobs.filter(j => !j.level)
+    const noArea = jobs.filter(j => !j.area)
+    const sgcResp = jobs.filter(j => j.is_sgc_responsible).length
+
+    // Problema #1: nadie tiene padre y hay más de 1 cargo → se ve como lista
+    if (withParent === 0 && jobs.length > 1) {
+      issues.push({
+        severity: 'high',
+        title: 'Ningún cargo tiene "Reporta a" definido',
+        detail: `Los ${jobs.length} cargos aparecen como raíces sin conexión. El organigrama se muestra en columna en vez de árbol.`,
+        action: 'auto',
+      })
+    }
+    // Problema #2: muchos roots (más de 2) — probablemente falta jerarquizar
+    else if (roots.length > 2 && withParent > 0) {
+      issues.push({
+        severity: 'medium',
+        title: `${roots.length} cargos sin padre asignado`,
+        detail: `Un organigrama típico tiene 1 raíz (o 2 si hay Junta + Gerencia). Cargos sin padre: ${roots.slice(0, 5).map(r => r.title).join(', ')}${roots.length > 5 ? '…' : ''}`,
+        action: 'auto',
+      })
+    }
+
+    // Problema #3: cargos con parent_id apuntando a un cargo eliminado
+    if (orphans.length > 0) {
+      issues.push({
+        severity: 'medium',
+        title: `${orphans.length} cargo(s) con jefe eliminado`,
+        detail: `Estos apuntan a un padre que ya no existe: ${orphans.map(o => o.title).join(', ')}. Editalos y elegí otro padre o dejalos como raíz.`,
+      })
+    }
+
+    // Problema #4: cargos sin nivel definido — la auto-jerarquización no puede
+    if (noLevel.length > 0) {
+      issues.push({
+        severity: 'low',
+        title: `${noLevel.length} cargo(s) sin nivel (Estratégico/Táctico/Operativo)`,
+        detail: `Sin el campo "nivel" no se puede auto-organizar. Cargos afectados: ${noLevel.slice(0, 4).map(j => j.title).join(', ')}${noLevel.length > 4 ? '…' : ''}`,
+      })
+    }
+
+    // Problema #5: cargos sin área
+    if (noArea.length > 0) {
+      issues.push({
+        severity: 'low',
+        title: `${noArea.length} cargo(s) sin área asignada`,
+        detail: `El área ayuda a agrupar y a asignar padres correctamente. Cargos: ${noArea.slice(0, 4).map(j => j.title).join(', ')}${noArea.length > 4 ? '…' : ''}`,
+      })
+    }
+
+    // Problema #6: nadie es responsable del SGC (cláusula 5.3 lo exige)
+    if (sgcResp === 0) {
+      issues.push({
+        severity: 'medium',
+        title: 'Ningún cargo marcado como Responsable del SGC',
+        detail: 'La cláusula 5.3 exige asignar un responsable formal del Sistema de Gestión. Editá el cargo correspondiente (típico: Gerente de Calidad) y marcá la casilla.',
+      })
+    }
+    // Problema #7: más de un responsable SGC (permitido pero raro)
+    else if (sgcResp > 1) {
+      issues.push({
+        severity: 'low',
+        title: `${sgcResp} cargos marcados como Responsable del SGC`,
+        detail: 'Normalmente hay uno solo. Verificá que no sea un doble marcado por error.',
+      })
+    }
+
+    const canAutoOrganize = issues.some(i => i.action === 'auto')
+      && noLevel.length < jobs.length  // hace falta al menos algunos con nivel
+
+    return { hasIssues: issues.length > 0, issues, canAutoOrganize, roots: roots.length, orphans: orphans.length }
+  }, [jobs, jobMap])
+
+  // Auto-armar la jerarquía usando el campo `level`:
+  //   - Cargos con is_sgc_responsible marcado tienen prioridad como raíz si
+  //     su nivel es Estratégico. Sino, el primer Estratégico es la raíz.
+  //   - Táctico sin padre → cuelga del primer Estratégico
+  //   - Operativo sin padre → cuelga del primer Táctico de la MISMA área
+  //     (o del primer Táctico si no hay match de área, o del Estratégico si
+  //     no hay Táctico)
+  // NO tocamos cargos que ya tienen padre válido — respeta el trabajo previo.
+  const autoOrganizarJerarquia = async () => {
+    if (!await confirm(
+      'Voy a asignar automáticamente el campo "Reporta a" en los cargos que estén sueltos, usando el nivel (Estratégico/Táctico/Operativo) y el área. Los cargos que ya tienen jefe definido no se tocan. ¿Continuar?',
+      { tone: 'warning', confirmText: 'Auto-armar' }
+    )) return
+
+    const estrategicos = jobs.filter(j => j.level === 'Estratégico')
+    const tacticos     = jobs.filter(j => j.level === 'Táctico')
+
+    if (estrategicos.length === 0 && tacticos.length === 0) {
+      toast.error('No hay cargos con nivel Estratégico ni Táctico. Editá al menos uno como Estratégico (la cabeza) antes de auto-armar.')
+      return
+    }
+
+    // Elegir raíz preferida: SGC responsable Estratégico > primer Estratégico > primer Táctico
+    const raiz = estrategicos.find(j => j.is_sgc_responsible)
+              || estrategicos[0]
+              || tacticos[0]
+
+    const updates = []
+    for (const j of jobs) {
+      // Si ya tiene padre válido, respetamos
+      if (j.parent_id && jobMap[j.parent_id]) continue
+      // La raíz misma no se auto-asigna padre
+      if (j.id === raiz.id) continue
+
+      let newParentId = null
+      if (j.level === 'Estratégico') {
+        newParentId = raiz.id  // otros estratégicos cuelgan de la raíz
+      } else if (j.level === 'Táctico') {
+        newParentId = raiz.id
+      } else {
+        // Operativo: buscar Táctico de la misma área
+        const jefe = tacticos.find(t => t.area && j.area && t.area === j.area)
+                  || tacticos[0]
+                  || raiz
+        newParentId = jefe.id
+      }
+      if (newParentId && newParentId !== j.id) {
+        updates.push({ id: j.id, parent_id: newParentId })
+      }
+    }
+
+    if (updates.length === 0) {
+      toast.info('No había cargos sueltos para auto-organizar.')
+      return
+    }
+
+    let ok = 0, fail = 0
+    for (const u of updates) {
+      const { error } = await supabase.from('job_descriptions').update({ parent_id: u.parent_id }).eq('id', u.id)
+      if (error) fail++
+      else ok++
+    }
+
+    if (fail === 0) toast.success(`Organigrama auto-armado: ${ok} cargos vinculados.`)
+    else toast.warning(`${ok} vinculados, ${fail} fallaron. Revisá los errores.`)
+    fetchAll()
+  }
 
   // ───── Filtros ─────
   const matchSearch = (j) => {
@@ -399,6 +552,15 @@ Diseña una estructura coherente:
         />
       )}
 
+      {/* Banner de salud del organigrama */}
+      {health.hasIssues && (
+        <HealthBanner
+          issues={health.issues}
+          canAutoOrganize={health.canAutoOrganize}
+          onAutoOrganize={autoOrganizarJerarquia}
+        />
+      )}
+
       {/* Tabs vista + búsqueda */}
       <div style={{ display: 'flex', gap: '10px', marginBottom: '14px', flexWrap: 'wrap', alignItems: 'center' }}>
         <div style={{ display: 'flex', gap: '4px', border: '1px solid #cbd5e1', borderRadius: '6px', padding: '2px', background: 'white' }}>
@@ -483,6 +645,46 @@ function Kpi({ label, value, color, icon }) {
         <span style={{ fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', color: '#64748b' }}>{label}</span>
       </div>
       <div style={{ fontSize: '22px', fontWeight: 700, color: '#1e293b' }}>{value}</div>
+    </div>
+  )
+}
+
+function HealthBanner({ issues, canAutoOrganize, onAutoOrganize }) {
+  const highest = issues.reduce((max, i) =>
+    (i.severity === 'high') ? 'high'
+    : (max === 'high' ? 'high' : (i.severity === 'medium' ? 'medium' : max)),
+    'low')
+  const bg = highest === 'high' ? '#fef2f2' : highest === 'medium' ? '#fffbeb' : '#f0f9ff'
+  const border = highest === 'high' ? '#f87171' : highest === 'medium' ? '#fbbf24' : '#7dd3fc'
+  const icon = highest === 'high' ? '#dc2626' : highest === 'medium' ? '#d97706' : '#0284c7'
+
+  return (
+    <div style={{
+      background: bg, border: `2px solid ${border}`, borderRadius: '10px',
+      padding: '14px 16px', marginBottom: '16px',
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap', marginBottom: '10px' }}>
+        <h3 style={{
+          margin: 0, fontSize: '14px', color: icon,
+          display: 'flex', alignItems: 'center', gap: '8px',
+        }}>
+          <AlertTriangle size={18} />
+          Faltan datos para dibujar el organigrama correctamente
+        </h3>
+        {canAutoOrganize && (
+          <button onClick={onAutoOrganize} style={btn('#7c3aed')}>
+            <Wand2 size={14} /> Auto-armar jerarquía por nivel
+          </button>
+        )}
+      </div>
+      <ul style={{ margin: 0, padding: '0 0 0 20px', fontSize: '13px', color: '#334155', lineHeight: 1.5 }}>
+        {issues.map((iss, i) => (
+          <li key={i} style={{ marginBottom: '6px' }}>
+            <strong style={{ color: '#1e293b' }}>{iss.title}.</strong>{' '}
+            <span style={{ color: '#475569' }}>{iss.detail}</span>
+          </li>
+        ))}
+      </ul>
     </div>
   )
 }
