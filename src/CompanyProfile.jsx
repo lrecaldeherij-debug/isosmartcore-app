@@ -5,6 +5,7 @@ import { Building2, Save, Sparkles, Loader2, MapPin, Users, Target, Rocket } fro
 import { toast } from './lib/toast'
 import { confirm } from './lib/confirm'
 import { useOrg } from './OrgContext'
+import { humanizeDbError } from './lib/humanizeDbError'
 
 export default function CompanyProfile() {
   const { org } = useOrg()
@@ -51,26 +52,42 @@ export default function CompanyProfile() {
 
   const handleSave = async (e) => {
     e.preventDefault()
+    if (!org?.id) {
+      toast.error('No hay organización activa. Recargá la página.')
+      return
+    }
     setSaving(true)
-    
-    // Obtener usuario actual
+
     const { data: { user } } = await supabase.auth.getUser()
-    
-    const payload = { ...profile, user_id: user?.id }
-    delete payload.id // No enviamos ID en insert, y en update lo manejamos por query si es necesario pero aqui upsert es mejor
+
+    // Payload explícito: org_id + user_id garantizan que el INSERT respete
+    // WITH CHECK y el DEFAULT no falle. Antes se confiaba en el DEFAULT
+    // auth_org_id() y esto silenciosamente fallaba sin datos guardados
+    // (caso Talleres Mejía — Ago 2026).
+    const payload = { ...profile, user_id: user?.id, org_id: org.id }
+    delete payload.id
 
     if (profile.id) {
-        // Update
         const { error } = await supabase.from('company_profile').update(payload).eq('id', profile.id)
-        if (error) toast.error('Error actualizando: ' + error.message)
-        else toast.success('Perfil de la empresa actualizado')
+        if (error) {
+          console.error('[CompanyProfile update]', error)
+          toast.error(humanizeDbError(error, { table: 'company_profile' }))
+        } else toast.success('Perfil de la empresa actualizado')
     } else {
-        // Insert
-        const { error } = await supabase.from('company_profile').insert([payload])
-        if (error) toast.error('Error guardando: ' + error.message)
-        else {
+        const { data: inserted, error } = await supabase
+          .from('company_profile')
+          .insert([payload])
+          .select()
+          .single()
+        if (error) {
+          console.error('[CompanyProfile insert]', error, 'payload:', payload)
+          toast.error(humanizeDbError(error, { table: 'company_profile' }))
+        } else if (!inserted) {
+          console.error('[CompanyProfile insert] guardado devolvió sin filas', payload)
+          toast.error('Guardado no confirmado — verificá conexión y volvé a intentar.')
+        } else {
             toast.success('Perfil creado · El sistema ahora entiende mejor tu empresa')
-            fetchProfile()
+            setProfile(inserted) // usamos la fila insertada, ya trae el id nuevo
         }
     }
     setSaving(false)
