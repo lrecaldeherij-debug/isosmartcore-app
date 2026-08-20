@@ -4,8 +4,10 @@ import { consultarIA } from './aiClient'
 import { Building2, Save, Sparkles, Loader2, MapPin, Users, Target, Rocket } from 'lucide-react'
 import { toast } from './lib/toast'
 import { confirm } from './lib/confirm'
+import { useOrg } from './OrgContext'
 
 export default function CompanyProfile() {
+  const { org } = useOrg()
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [loadingIA, setLoadingIA] = useState(false)
@@ -24,16 +26,20 @@ export default function CompanyProfile() {
   })
 
   useEffect(() => {
-    fetchProfile()
-  }, [])
+    if (org?.id) fetchProfile()
+  }, [org?.id])
 
   const fetchProfile = async () => {
     setLoading(true)
+    // Filtro EXPLÍCITO por org_id. Antes confiaba en que RLS filtraba solo
+    // la org del user, pero cuando el super_admin visita otra org (impersonar)
+    // o la policy cross-org está activa, .single() puede traer una fila de
+    // otra org o dar error. Con el .eq('org_id') es determinístico.
     const { data, error } = await supabase
       .from('company_profile')
       .select('*')
-      .limit(1)
-      .single()
+      .eq('org_id', org.id)
+      .maybeSingle()
 
     if (error && error.code !== 'PGRST116') {
       console.error('Error fetching profile:', error)
