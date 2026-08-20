@@ -242,6 +242,32 @@ export default function Documents() {
     e.preventDefault()
     if (!org?.id) return showMsg('Organización no cargada', 'err')
 
+    // Chequeo de código duplicado. Reglas:
+    //   - Distintas VERSIONES del mismo documento comparten code (mismo
+    //     document_group_id). Eso es válido y no bloqueamos.
+    //   - Dos documentos DISTINTOS (distinto group) con el mismo code es
+    //     mala práctica ISO y confunde al auditor. Bloqueamos con mensaje
+    //     claro que explique cómo resolverlo.
+    const codeToCheck = form.code?.trim().toLowerCase()
+    if (codeToCheck) {
+      const currentGroupId = editingId
+        ? items.find(it => it.id === editingId)?.document_group_id
+        : groupIdParaVersion
+      const dup = items.find(it =>
+        (it.code || '').trim().toLowerCase() === codeToCheck
+        && it.document_group_id !== currentGroupId
+      )
+      if (dup) {
+        return showMsg(
+          `El código "${dup.code}" ya lo usa el documento "${dup.title}". ` +
+          `Si es una nueva versión de ese documento, cerrá este formulario y ` +
+          `usá "Nueva versión" en esa fila. Si es un documento distinto, ` +
+          `cambiá el código.`,
+          'err'
+        )
+      }
+    }
+
     const tagsArr = form.tags
       ? form.tags.split(',').map(t => t.trim()).filter(Boolean)
       : null
