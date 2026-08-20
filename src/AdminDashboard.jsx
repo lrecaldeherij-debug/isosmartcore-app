@@ -445,6 +445,7 @@ function OrgDetailModal({ org, onClose, onRefresh }) {
             <InfoItem label="Owner" value={org.owner_email} />
             <InfoItem label="Plan actual" value={org.plan_id} mono />
             <InfoItem label="Estado" value={org.subscription_status} mono />
+            <InfoItem label="Efectivo (calculado)" value={org.effective_status || '—'} mono />
             <InfoItem label="Usuarios" value={org.users_count} />
             <InfoItem
               label="Trial vence"

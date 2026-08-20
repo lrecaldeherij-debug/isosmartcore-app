@@ -59,7 +59,18 @@ export function usePlan() {
       }
     }
 
-    const status = org.effective_status || org.subscription_status || 'trialing'
+    // Cliente combo (asesoría + sistema): si is_combo_client=true y combo_end_date
+    // sigue en el futuro, tratar como active independiente del subscription_status.
+    // Es una safety net en caso de que la vista org_with_plan no haya recalculado
+    // effective_status (cache viejo, migración pendiente, etc.).
+    const today = new Date().toISOString().slice(0, 10)
+    const isActiveCombo = !!org.is_combo_client && org.combo_end_date && org.combo_end_date >= today
+    const isExpiredCombo = !!org.is_combo_client && org.combo_end_date && org.combo_end_date < today
+
+    let status
+    if (isActiveCombo) status = 'active'
+    else if (isExpiredCombo) status = 'expired'
+    else status = org.effective_status || org.subscription_status || 'trialing'
 
     const isTrialing = status === 'trialing'
     const isExpired  = status === 'expired'
@@ -67,7 +78,12 @@ export function usePlan() {
     const isPastDue  = status === 'past_due'
     const isCanceled = status === 'canceled'
 
-    const daysLeft = org.trial_days_left ?? null
+    // Días restantes: en combo cuenta hasta combo_end_date; sino, lo de trial
+    let daysLeft = org.trial_days_left ?? null
+    if (isActiveCombo) {
+      const end = new Date(org.combo_end_date + 'T00:00:00')
+      daysLeft = Math.max(0, Math.ceil((end - new Date()) / 86400000))
+    }
     const aiPromptsUsed = org.ai_prompts_used_month || 0
     const aiPromptsMax  = plan.ai_prompts_per_month
     const aiPromptsLeft = aiPromptsMax === null ? null : Math.max(0, aiPromptsMax - aiPromptsUsed)
