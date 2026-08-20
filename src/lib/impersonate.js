@@ -40,18 +40,38 @@ export function isImpersonating() {
  * @param {string} reason - motivo obligatorio (queda en admin_audit_log)
  */
 export async function startImpersonation(orgId, orgName, reason) {
+  console.log('[impersonate] Iniciando impersonate para org:', orgId, orgName)
+
   const { error: logErr } = await supabase.rpc('admin_log_impersonation', {
     p_org_id: orgId,
     p_reason: reason || null,
   })
-  if (logErr) throw new Error(logErr.message)
+  if (logErr) {
+    console.error('[impersonate] RPC log falló:', logErr)
+    throw new Error(logErr.message)
+  }
+  console.log('[impersonate] RPC log OK')
 
   // Setear impersonate_org_id en el JWT metadata → RLS ahora deja al
   // super_admin ver las filas de ESA org (y solo esa).
-  const { error: metaErr } = await supabase.auth.updateUser({
+  const { data: updData, error: metaErr } = await supabase.auth.updateUser({
     data: { impersonate_org_id: orgId }
   })
-  if (metaErr) throw new Error(metaErr.message)
+  if (metaErr) {
+    console.error('[impersonate] updateUser falló:', metaErr)
+    throw new Error(metaErr.message)
+  }
+  console.log('[impersonate] updateUser OK. user_metadata:', updData?.user?.user_metadata)
+
+  // Forzar refresh de la sesión para que el JWT nuevo con user_metadata
+  // actualizado quede persistido en storage antes del redirect.
+  const { data: refData, error: refErr } = await supabase.auth.refreshSession()
+  if (refErr) {
+    console.error('[impersonate] refreshSession falló:', refErr)
+  } else {
+    console.log('[impersonate] refreshSession OK. JWT metadata:',
+      JSON.parse(atob(refData.session.access_token.split('.')[1])).user_metadata)
+  }
 
   // Redirect duro para forzar recarga del OrgContext con el nuevo param
   window.location.href = `/app?${PARAM}=${orgId}`
