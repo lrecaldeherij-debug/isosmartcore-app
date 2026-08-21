@@ -168,6 +168,8 @@ function App() {
   const [loading, setLoading] = useState(true)
   const pathname = window.location.pathname
   const publicSurveyMatch = pathname.match(/^\/encuesta\/([A-Za-z0-9]+)\/?$/)
+  // Ruta corta /e/:slug — encuesta pública (QR) sin token individual
+  const publicSlugMatch = pathname.match(/^\/e\/([A-Za-z0-9-]+)\/?$/)
   const auditorMatch = pathname.match(/^\/auditor\/([A-Za-z0-9]+)\/?$/)
   const isPricingRoute = pathname === '/pricing' || pathname === '/precios'
   const legalMatch = pathname.match(/^\/legal\/(privacidad|terminos|cookies)\/?$/)
@@ -178,7 +180,7 @@ function App() {
   const isAppRoute = pathname === '/app' || pathname === '/login' || pathname.startsWith('/app/')
 
   useEffect(() => {
-    if (publicSurveyMatch || auditorMatch || isPricingRoute || legalMatch || isResetPasswordRoute) { setLoading(false); return }
+    if (publicSurveyMatch || publicSlugMatch || auditorMatch || isPricingRoute || legalMatch || isResetPasswordRoute) { setLoading(false); return }
     // La home no necesita esperar sesión para renderizar la landing, pero SÍ
     // chequeamos por si el usuario ya está logueado y podemos redirigir a /app.
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -196,8 +198,11 @@ function App() {
   const goApp = () => { window.history.pushState({}, '', '/app'); window.location.reload() }
   const goPricing = () => { window.history.pushState({}, '', '/pricing'); window.location.reload() }
 
-  // Ruta pública /encuesta/:token — no requiere login
+  // Ruta pública /encuesta/:token — no requiere login (opción 2: token individual)
   if (publicSurveyMatch) return <PublicSurvey token={publicSurveyMatch[1]} />
+
+  // Ruta pública /e/:slug — no requiere login (opción 1: QR + link único para todos)
+  if (publicSlugMatch) return <PublicSurvey slug={publicSlugMatch[1]} />
 
   // Ruta pública /auditor/:token — modo auditor read-only
   if (auditorMatch) return <AuditorView token={auditorMatch[1]} />

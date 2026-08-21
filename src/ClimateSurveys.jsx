@@ -10,6 +10,7 @@ import IsoInfoCard from './IsoInfoCard'
 import { CLAUSE_GUIDES } from './clauseGuides'
 import { toast } from './lib/toast'
 import { confirm } from './lib/confirm'
+import PublicCampaignPanel from './PublicCampaignPanel'
 
 const CATEGORIES = [
   { id: 'A', title: 'INSERCION AL PUESTO DE TRABAJO', questions: [
@@ -358,6 +359,9 @@ Responde EXCLUSIVAMENTE con un JSON con este formato:
       </div>
 
       <IsoInfoCard {...CLAUSE_GUIDES['7.1.4']} />
+
+      {/* ===== Campañas públicas por QR (opción anónima) ===== */}
+      {!mostrandoForm && <PublicCampaignPanel />}
 
       {/* ===== Dashboard agregado ===== */}
       {!mostrandoForm && dashboard && (

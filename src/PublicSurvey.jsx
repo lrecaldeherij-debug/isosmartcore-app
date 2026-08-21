@@ -49,7 +49,29 @@ const EMPTY_RESPONSES = CATEGORIES.reduce((acc, cat) => {
   return acc
 }, {})
 
-export default function PublicSurvey({ token }) {
+// Fingerprint simple del dispositivo: combina propiedades del navegador
+// que son estables entre visitas del mismo user + un ID aleatorio persistido
+// en localStorage. No identifica a la persona real, solo al dispositivo — sirve
+// para evitar que la MISMA persona responda 2 veces desde el mismo celu.
+function getDeviceFingerprint() {
+  try {
+    const key = 'isc_device_fp'
+    let fp = localStorage.getItem(key)
+    if (!fp) {
+      const rand = Math.random().toString(36).slice(2) + Date.now().toString(36)
+      const nav = `${navigator.userAgent}|${navigator.language}|${screen.width}x${screen.height}`
+      fp = btoa(nav).slice(0, 20) + '_' + rand.slice(0, 12)
+      localStorage.setItem(key, fp)
+    }
+    return fp
+  } catch {
+    return null  // Modo incógnito o sin localStorage: sin fingerprint, permitir
+  }
+}
+
+export default function PublicSurvey({ token, slug }) {
+  // Modo: 'token' = invitación individual, 'slug' = campaña pública QR
+  const mode = token ? 'token' : (slug ? 'slug' : 'invalid')
   const [loading, setLoading] = useState(true)
   const [invitation, setInvitation] = useState(null)
   const [errorCode, setErrorCode] = useState(null)
@@ -60,12 +82,28 @@ export default function PublicSurvey({ token }) {
 
   useEffect(() => {
     (async () => {
-      if (!token) {
+      if (mode === 'invalid') {
         setErrorCode('invitation_not_found')
         setLoading(false)
         return
       }
-      const { data, error } = await supabase.rpc('get_survey_invitation', { p_token: token })
+
+      // Modo público: primero chequear localStorage para no cargar la campaña
+      // si ya respondiste desde este dispositivo. Ahorra un roundtrip.
+      if (mode === 'slug') {
+        try {
+          if (localStorage.getItem(`isc_survey_done_${slug}`)) {
+            setErrorCode('already_responded')
+            setLoading(false)
+            return
+          }
+        } catch {}
+      }
+
+      const rpcName = mode === 'token' ? 'get_survey_invitation' : 'get_public_survey_by_slug'
+      const rpcArgs = mode === 'token' ? { p_token: token } : { p_slug: slug }
+
+      const { data, error } = await supabase.rpc(rpcName, rpcArgs)
       if (error) {
         setErrorCode('rpc_error')
         setLoading(false)
@@ -78,7 +116,7 @@ export default function PublicSurvey({ token }) {
       }
       setLoading(false)
     })()
-  }, [token])
+  }, [mode, token, slug])
 
   const handleRating = (qId, val) => {
     setResponses(r => ({ ...r, [qId]: val }))
@@ -87,20 +125,42 @@ export default function PublicSurvey({ token }) {
   const handleSubmit = async (e) => {
     e.preventDefault()
     setSubmitting(true)
-    const { data, error } = await supabase.rpc('submit_survey_response', {
-      p_token: token,
-      p_responses: responses,
-      p_notes: notes || null,
-    })
+
+    let data, error
+    if (mode === 'token') {
+      ({ data, error } = await supabase.rpc('submit_survey_response', {
+        p_token: token,
+        p_responses: responses,
+        p_notes: notes || null,
+      }))
+    } else {
+      // Modo público: agregar fingerprint para anti-doble-respuesta server-side
+      const fp = getDeviceFingerprint()
+      ;({ data, error } = await supabase.rpc('submit_public_survey_response', {
+        p_slug: slug,
+        p_responses: responses,
+        p_fingerprint: fp,
+        p_notes: notes || null,
+      }))
+    }
+
     setSubmitting(false)
     if (error) return toast.error('Error: ' + error.message)
     if (data?.error) {
       // Errores terminales: bloquean re-envío y muestran la pantalla de error.
-      if (['already_completed', 'invitation_not_found', 'expired'].includes(data.error)) {
+      const terminal = ['already_completed', 'invitation_not_found', 'expired',
+                        'campaign_not_found', 'campaign_closed', 'campaign_expired',
+                        'already_responded']
+      if (terminal.includes(data.error)) {
         setErrorCode(data.error)
         return
       }
       return toast.error('Error: ' + data.error)
+    }
+    // Persistir en localStorage para modo público: bloquea reenvío desde
+    // este dispositivo aunque limpie el fingerprint (double defense).
+    if (mode === 'slug') {
+      try { localStorage.setItem(`isc_survey_done_${slug}`, new Date().toISOString()) } catch {}
     }
     setDone(true)
   }
@@ -118,9 +178,13 @@ export default function PublicSurvey({ token }) {
   if (errorCode) {
     const messages = {
       invitation_not_found: { title: 'Invitación no encontrada', msg: 'El link que abriste no existe o ya fue eliminado.' },
+      campaign_not_found:   { title: 'Encuesta no encontrada', msg: 'El código QR o link que abriste no corresponde a una encuesta activa.' },
       already_completed:    { title: 'Ya respondiste', msg: 'Esta encuesta ya fue completada. ¡Gracias por tu participación!' },
+      already_responded:    { title: 'Ya respondiste', msg: 'Ya respondiste esta encuesta desde este dispositivo. Gracias por tu participación.' },
       expired:              { title: 'Invitación expirada', msg: 'El plazo para responder ya venció. Contacta a tu responsable si necesitas un nuevo link.' },
-      rpc_error:            { title: 'Error de conexión', msg: 'No pudimos validar el link. Vuelve a intentar en unos minutos.' },
+      campaign_closed:      { title: 'Encuesta cerrada', msg: 'La encuesta fue cerrada por el administrador. Contactá a tu responsable si necesitás más info.' },
+      campaign_expired:     { title: 'Encuesta vencida', msg: 'El plazo para responder ya venció.' },
+      rpc_error:            { title: 'Error de conexión', msg: 'No pudimos validar el link. Volvé a intentar en unos minutos.' },
     }
     const m = messages[errorCode] || messages.invitation_not_found
     return (
@@ -158,7 +222,11 @@ export default function PublicSurvey({ token }) {
         }}>
           <h1 style={{ margin: 0, fontSize: '1.5rem' }}>📊 {invitation.campaign_name}</h1>
           <p style={{ margin: '0.4rem 0 0 0', opacity: 0.9, fontSize: '0.95rem' }}>
-            Hola <strong>{invitation.person_name}</strong> — tus respuestas son confidenciales.
+            {mode === 'token' ? (
+              <>Hola <strong>{invitation.person_name}</strong> — tus respuestas son confidenciales.</>
+            ) : (
+              <>🔒 Tu respuesta es <strong>100% anónima</strong>. No guardamos tu nombre, teléfono ni datos personales.</>
+            )}
           </p>
           {invitation.campaign_description && (
             <p style={{ margin: '0.6rem 0 0 0', opacity: 0.85, fontSize: '0.85rem' }}>
