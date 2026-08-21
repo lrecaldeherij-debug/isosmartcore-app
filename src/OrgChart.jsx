@@ -6,7 +6,7 @@ import {
   Network, Plus, Pencil, Trash2, X, Save, Loader2, Sparkles,
   Download, GitBranch, LayoutGrid, List, User, Crown, Users,
   Eye, ArrowRight, ShieldCheck, Building2, Briefcase, Search,
-  AlertTriangle, Wand2, CheckCircle2
+  AlertTriangle, Wand2, CheckCircle2, Maximize2, Minimize2, Move
 } from 'lucide-react'
 import IsoInfoCard from './IsoInfoCard'
 import { CLAUSE_GUIDES } from './clauseGuides'
@@ -71,6 +71,9 @@ export default function OrgChart({ alCambiarVista }) {
   const [form, setForm] = useState(EMPTY_FORM)
 
   const [detailItem, setDetailItem] = useState(null)
+  const [fullscreen, setFullscreen] = useState(false)
+  const [draggingId, setDraggingId] = useState(null)
+  const [dragOverId, setDragOverId] = useState(null)  // 'root' o job.id
 
   // IA
   const [loadingIA, setLoadingIA] = useState(false)
@@ -293,6 +296,47 @@ export default function OrgChart({ alCambiarVista }) {
 
     if (fail === 0) toast.success(`Organigrama auto-armado: ${ok} cargos vinculados.`)
     else toast.warning(`${ok} vinculados, ${fail} fallaron. Revisá los errores.`)
+    fetchAll()
+  }
+
+  // ───── Drag & drop: reasignar padre arrastrando el cargo ─────
+  // El usuario arrastra un JobCard y lo suelta sobre otro cargo o sobre la
+  // zona "raíz" arriba. Actualizamos parent_id en DB inmediatamente.
+  //
+  // Validaciones:
+  //  - No se puede soltar sobre sí mismo
+  //  - No se puede soltar sobre uno de sus descendientes (crea ciclo)
+  //  - Si soltás sobre el mismo padre actual, no hacemos nada
+  const handleReparent = async (childId, newParentId) => {
+    if (childId === newParentId) return
+    const child = jobMap[childId]
+    if (!child) return
+
+    // newParentId puede ser 'root' → parent_id = null
+    const newParent = newParentId === 'root' ? null : newParentId
+
+    // Si es el mismo padre, no hacer nada
+    if ((child.parent_id || null) === newParent) return
+
+    // Validar ciclo si newParent no es null
+    if (newParent) {
+      const desc = getDescendants(childId)
+      if (desc.has(newParent)) {
+        toast.error(`No se puede: "${jobMap[newParent].title}" ya depende de "${child.title}" (crearía un ciclo).`)
+        return
+      }
+    }
+
+    const { error } = await supabase
+      .from('job_descriptions')
+      .update({ parent_id: newParent })
+      .eq('id', childId)
+    if (error) {
+      toast.error('No se pudo mover: ' + error.message)
+      return
+    }
+    const parentLabel = newParent ? jobMap[newParent].title : 'raíz'
+    toast.success(`"${child.title}" ahora reporta a ${parentLabel}.`)
     fetchAll()
   }
 
@@ -524,6 +568,9 @@ Diseña una estructura coherente:
           <button onClick={() => alCambiarVista && alCambiarVista('roles')} style={btn('#6b7280')}>
             <Briefcase size={16} /> Roles
           </button>
+          <button onClick={() => setFullscreen(true)} style={btn('#0ea5e9')}>
+            <Maximize2 size={16} /> Pantalla completa
+          </button>
           <button onClick={exportarPNG} style={btn('#16a34a')}><Download size={16} /> PNG</button>
           <button onClick={() => openNew()} style={btn('#0891b2')}><Plus size={16} /> Cargo</button>
         </div>
@@ -611,11 +658,41 @@ Diseña una estructura coherente:
               search={search}
               onClick={setDetailItem}
               onAddChild={openNew}
+              draggingId={draggingId}
+              dragOverId={dragOverId}
+              onDragStart={setDraggingId}
+              onDragEnd={() => { setDraggingId(null); setDragOverId(null) }}
+              onDragOverJob={setDragOverId}
+              onDrop={handleReparent}
             />
           )}
           {view === 'area' && <AreaView byArea={byArea} matchSearch={matchSearch} personnelByJob={personnelByJob} onClick={setDetailItem} />}
           {view === 'list' && <ListView jobs={jobs.filter(matchSearch)} jobMap={jobMap} personnelByJob={personnelByJob} onClick={setDetailItem} onEdit={openEdit} onDelete={handleDelete} />}
         </div>
+      )}
+
+      {/* Modal Pantalla Completa */}
+      {fullscreen && (
+        <FullscreenChart
+          onClose={() => setFullscreen(false)}
+          onExportPNG={exportarPNG}
+        >
+          <TreeView
+            roots={tree.roots}
+            tree={tree}
+            jobMap={jobMap}
+            personnelByJob={personnelByJob}
+            search={search}
+            onClick={setDetailItem}
+            onAddChild={openNew}
+            draggingId={draggingId}
+            dragOverId={dragOverId}
+            onDragStart={setDraggingId}
+            onDragEnd={() => { setDraggingId(null); setDragOverId(null) }}
+            onDragOverJob={setDragOverId}
+            onDrop={handleReparent}
+          />
+        </FullscreenChart>
       )}
 
       {/* Modal Detalle */}
@@ -689,24 +766,121 @@ function HealthBanner({ issues, canAutoOrganize, onAutoOrganize }) {
   )
 }
 
-function TreeView({ roots, tree, jobMap, personnelByJob, search, onClick, onAddChild }) {
+function FullscreenChart({ children, onClose, onExportPNG }) {
+  // Cerrar con Escape
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === 'Escape') onClose() }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onClose])
+
+  return createPortal(
+    <div style={{
+      position: 'fixed', inset: 0, background: 'white', zIndex: 9999,
+      display: 'flex', flexDirection: 'column',
+    }}>
+      {/* Barra superior */}
+      <div style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        padding: '10px 16px', borderBottom: '1px solid #e2e8f0', background: '#f8fafc',
+        gap: '12px', flexWrap: 'wrap',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <Network size={20} color="#0891b2" />
+          <div>
+            <div style={{ fontSize: '15px', fontWeight: 700, color: '#1e293b' }}>
+              Organigrama · pantalla completa
+            </div>
+            <div style={{ fontSize: '11px', color: '#64748b' }}>
+              Arrastrá cualquier cargo y soltalo sobre otro para cambiar su jefe.
+              Soltalo sobre la zona de arriba para hacerlo raíz.
+            </div>
+          </div>
+        </div>
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <button onClick={onExportPNG} style={btn('#16a34a')}>
+            <Download size={16} /> Exportar PNG
+          </button>
+          <button onClick={onClose} style={btn('#6b7280')}>
+            <Minimize2 size={16} /> Salir
+          </button>
+        </div>
+      </div>
+      {/* Área scrolleable con el árbol */}
+      <div style={{
+        flex: 1, overflow: 'auto', padding: '30px 20px',
+        background: '#fafafa',
+      }}>
+        <div style={{ minWidth: 'min-content' }}>
+          {children}
+        </div>
+      </div>
+    </div>,
+    document.body
+  )
+}
+
+function TreeView({ roots, tree, jobMap, personnelByJob, search, onClick, onAddChild, draggingId, dragOverId, onDragStart, onDragEnd, onDragOverJob, onDrop }) {
   if (!roots || roots.length === 0) {
     return <p style={{ color: '#94a3b8', textAlign: 'center', padding: '20px' }}>Sin cargos raíz.</p>
   }
+  const dragging = !!draggingId
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', alignItems: 'center' }}>
+      {/* Zona "Soltar aquí para hacer raíz" — solo visible mientras arrastrás */}
+      {dragging && (
+        <div
+          onDragOver={e => { e.preventDefault(); onDragOverJob('root') }}
+          onDragLeave={() => onDragOverJob(null)}
+          onDrop={e => {
+            e.preventDefault()
+            onDrop(draggingId, 'root')
+            onDragEnd()
+          }}
+          style={{
+            width: '100%', maxWidth: '520px',
+            padding: '12px 16px',
+            border: `2px dashed ${dragOverId === 'root' ? '#0891b2' : '#94a3b8'}`,
+            background: dragOverId === 'root' ? '#e0f2fe' : '#f8fafc',
+            color: dragOverId === 'root' ? '#075985' : '#475569',
+            borderRadius: '10px',
+            textAlign: 'center', fontSize: '13px', fontWeight: 600,
+          }}
+        >
+          <Crown size={14} style={{ verticalAlign: 'middle', marginRight: '6px' }} />
+          Soltar aquí para hacer este cargo raíz (sin jefe)
+        </div>
+      )}
       {roots.map(r => (
-        <TreeNode key={r.id} job={r} tree={tree} personnelByJob={personnelByJob} search={search} onClick={onClick} onAddChild={onAddChild} />
+        <TreeNode
+          key={r.id} job={r} tree={tree} personnelByJob={personnelByJob}
+          search={search} onClick={onClick} onAddChild={onAddChild}
+          draggingId={draggingId} dragOverId={dragOverId}
+          onDragStart={onDragStart} onDragEnd={onDragEnd}
+          onDragOverJob={onDragOverJob} onDrop={onDrop}
+        />
       ))}
     </div>
   )
 }
 
-function TreeNode({ job, tree, personnelByJob, search, onClick, onAddChild }) {
+function TreeNode({ job, tree, personnelByJob, search, onClick, onAddChild, draggingId, dragOverId, onDragStart, onDragEnd, onDragOverJob, onDrop }) {
   const children = tree.children[job.id] || []
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-      <JobCard job={job} personnel={personnelByJob[job.id] || []} onClick={() => onClick(job)} highlight={!!search && `${job.title || ''} ${job.current_holder || ''} ${job.area || ''}`.toLowerCase().includes(search.toLowerCase())} />
+      <JobCard
+        job={job}
+        personnel={personnelByJob[job.id] || []}
+        onClick={() => onClick(job)}
+        highlight={!!search && `${job.title || ''} ${job.current_holder || ''} ${job.area || ''}`.toLowerCase().includes(search.toLowerCase())}
+        draggable
+        isDragging={draggingId === job.id}
+        isDropTarget={dragOverId === job.id && draggingId && draggingId !== job.id}
+        onDragStart={() => onDragStart(job.id)}
+        onDragEnd={onDragEnd}
+        onDragOver={() => onDragOverJob(job.id)}
+        onDropOnCard={() => { onDrop(draggingId, job.id); onDragEnd() }}
+      />
       <button onClick={() => onAddChild(job.id)} style={{ marginTop: '4px', background: '#f1f5f9', border: '1px dashed #cbd5e1', color: '#475569', cursor: 'pointer', borderRadius: '4px', padding: '2px 8px', fontSize: '11px', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
         <Plus size={10} /> subordinado
       </button>
@@ -718,7 +892,13 @@ function TreeNode({ job, tree, personnelByJob, search, onClick, onAddChild }) {
             {children.map(ch => (
               <div key={ch.id} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                 <div style={{ width: '2px', height: '20px', background: '#cbd5e1', marginTop: '-20px', marginBottom: '6px' }} />
-                <TreeNode job={ch} tree={tree} personnelByJob={personnelByJob} search={search} onClick={onClick} onAddChild={onAddChild} />
+                <TreeNode
+                  job={ch} tree={tree} personnelByJob={personnelByJob}
+                  search={search} onClick={onClick} onAddChild={onAddChild}
+                  draggingId={draggingId} dragOverId={dragOverId}
+                  onDragStart={onDragStart} onDragEnd={onDragEnd}
+                  onDragOverJob={onDragOverJob} onDrop={onDrop}
+                />
               </div>
             ))}
           </div>
@@ -728,19 +908,47 @@ function TreeNode({ job, tree, personnelByJob, search, onClick, onAddChild }) {
   )
 }
 
-function JobCard({ job, personnel, onClick, compact, highlight }) {
+function JobCard({ job, personnel, onClick, compact, highlight, draggable, isDragging, isDropTarget, onDragStart, onDragEnd, onDragOver, onDropOnCard }) {
   const holder = job.current_holder || (personnel?.[0]?.full_name)
   const vacant = !holder
   const color = job.is_sgc_responsible ? '#16a34a' : job.level === 'Estratégico' ? '#7c3aed' : job.level === 'Táctico' ? '#0891b2' : '#0ea5e9'
+  // Estado visual durante drag: opacity al que se arrastra, halo cyan al target
+  const cardBorder = isDropTarget ? '#0891b2'
+    : highlight ? '#f59e0b'
+    : vacant ? '#fca5a5' : color
+  const cardShadow = isDropTarget ? '0 0 0 4px #67e8f9'
+    : highlight ? '0 0 0 3px #fde68a'
+    : '0 2px 6px rgba(0,0,0,0.06)'
   return (
-    <div onClick={onClick} style={{
-      background: vacant ? '#fef2f2' : 'white',
-      border: '2px solid ' + (highlight ? '#f59e0b' : (vacant ? '#fca5a5' : color)),
-      borderRadius: '8px', padding: compact ? '8px 10px' : '10px 12px',
-      cursor: 'pointer', minWidth: compact ? '160px' : '180px', maxWidth: '220px',
-      boxShadow: highlight ? '0 0 0 3px #fde68a' : '0 2px 6px rgba(0,0,0,0.06)',
-      transition: 'transform 0.15s',
-    }}
+    <div
+      onClick={onClick}
+      draggable={draggable ? 'true' : undefined}
+      onDragStart={draggable && onDragStart ? (e) => {
+        e.dataTransfer.effectAllowed = 'move'
+        // Firefox necesita algún dato para activar drag
+        e.dataTransfer.setData('text/plain', job.id)
+        onDragStart()
+      } : undefined}
+      onDragEnd={draggable && onDragEnd ? onDragEnd : undefined}
+      onDragOver={onDropOnCard ? (e) => {
+        e.preventDefault()
+        e.dataTransfer.dropEffect = 'move'
+        onDragOver && onDragOver()
+      } : undefined}
+      onDrop={onDropOnCard ? (e) => {
+        e.preventDefault()
+        onDropOnCard()
+      } : undefined}
+      style={{
+        background: vacant ? '#fef2f2' : 'white',
+        border: '2px solid ' + cardBorder,
+        borderRadius: '8px', padding: compact ? '8px 10px' : '10px 12px',
+        cursor: draggable ? 'grab' : 'pointer',
+        minWidth: compact ? '160px' : '180px', maxWidth: '220px',
+        boxShadow: cardShadow,
+        transition: 'transform 0.15s, opacity 0.15s',
+        opacity: isDragging ? 0.4 : 1,
+      }}
       onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-2px)'}
       onMouseLeave={e => e.currentTarget.style.transform = 'translateY(0)'}
     >
