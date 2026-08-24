@@ -184,6 +184,7 @@ export default function PublicSurvey({ token, slug }) {
       expired:              { title: 'Invitación expirada', msg: 'El plazo para responder ya venció. Contacta a tu responsable si necesitas un nuevo link.' },
       campaign_closed:      { title: 'Encuesta cerrada', msg: 'La encuesta fue cerrada por el administrador. Contactá a tu responsable si necesitás más info.' },
       campaign_expired:     { title: 'Encuesta vencida', msg: 'El plazo para responder ya venció.' },
+      rate_limit_exceeded:  { title: 'Demasiadas respuestas', msg: 'Estamos recibiendo un volumen inusual. Intentá de nuevo en unos minutos. Si el problema persiste, avisá a tu responsable.' },
       rpc_error:            { title: 'Error de conexión', msg: 'No pudimos validar el link. Volvé a intentar en unos minutos.' },
     }
     const m = messages[errorCode] || messages.invitation_not_found

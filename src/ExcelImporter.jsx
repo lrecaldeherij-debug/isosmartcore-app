@@ -9,10 +9,15 @@
 //      el mapeo, luego preview, luego import.
 //
 // El spec viene de excelTemplates.js.
+//
+// NOTA sobre la librería: usamos exceljs en vez de xlsx. Antes usábamos xlsx
+// pero está deprecated y arrastra dos vulnerabilidades sin fix (prototype
+// pollution + ReDoS). exceljs tiene API diferente (indexado desde 1, celdas
+// son objetos), pero es mantenido activamente.
 
 import { useState, useRef } from 'react'
 import { createPortal } from 'react-dom'
-import * as XLSX from 'xlsx'
+import ExcelJS from 'exceljs'
 import {
   Upload, Download, X, FileSpreadsheet, CheckCircle2, AlertCircle, Loader2, Sparkles, ArrowRight, ArrowLeft,
 } from 'lucide-react'
@@ -20,6 +25,25 @@ import { supabase } from './supabaseClient'
 import { consultarIA } from './aiClient'
 import { EXCEL_TEMPLATES, validateRow } from './excelTemplates'
 import { toast } from './lib/toast'
+
+// Normaliza el value de una celda exceljs. Puede venir como:
+//   - primitivo (string, number, boolean, Date)
+//   - { richText: [{ text }] } — celda con formato mixto
+//   - { formula, result } — celda con fórmula
+//   - { hyperlink, text } — link
+//   - null / undefined
+// Devuelve un valor plano compatible con lo que devolvía xlsx antes.
+function cellValue(v) {
+  if (v == null) return null
+  if (typeof v === 'object') {
+    if (v.richText) return v.richText.map(r => r.text).join('')
+    if ('result' in v) return v.result ?? null
+    if (v.text) return v.text
+    if (v instanceof Date) return v
+    return String(v)
+  }
+  return v
+}
 
 export default function ExcelImporter({ templateKey, onImported }) {
   const spec = EXCEL_TEMPLATES[templateKey]
@@ -42,16 +66,21 @@ export default function ExcelImporter({ templateKey, onImported }) {
 
   // ----- 1. Descargar plantilla -----
 
-  const downloadTemplate = () => {
+  const downloadTemplate = async () => {
     try {
       const headers = spec.columns.map(c => c.label)
       const example = spec.columns.map(c => c.example ?? '')
-      const ws = XLSX.utils.aoa_to_sheet([headers, example])
-      const wb = XLSX.utils.book_new()
       const safeName = (spec.label.replace(/[^A-Za-z0-9 _-]/g, '').trim() || 'Hoja1').substring(0, 31)
-      XLSX.utils.book_append_sheet(wb, ws, safeName)
 
-      const buf = XLSX.write(wb, { type: 'array', bookType: 'xlsx' })
+      const wb = new ExcelJS.Workbook()
+      const ws = wb.addWorksheet(safeName)
+      ws.addRow(headers)
+      ws.addRow(example)
+
+      // Header en bold para que se distinga de la fila de ejemplo.
+      ws.getRow(1).font = { bold: true }
+
+      const buf = await wb.xlsx.writeBuffer()
       const blob = new Blob([buf], {
         type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       })
@@ -77,28 +106,54 @@ export default function ExcelImporter({ templateKey, onImported }) {
 
     try {
       const data = await file.arrayBuffer()
-      const wb = XLSX.read(data, { type: 'array', cellDates: true })
-      const ws = wb.Sheets[wb.SheetNames[0]]
-      const json = XLSX.utils.sheet_to_json(ws, { defval: null })
+      const wb = new ExcelJS.Workbook()
+      await wb.xlsx.load(data)
+      const ws = wb.worksheets[0]
+      if (!ws) {
+        toast.warning('El archivo no tiene hojas')
+        return
+      }
+
+      // exceljs indexa filas y columnas desde 1. row.values[0] siempre es null,
+      // por eso todos los slice(1). Los headers vienen de la fila 1.
+      const headerRow = ws.getRow(1).values.slice(1).map(cellValue).map(v => v == null ? '' : String(v))
+      const headers = headerRow.filter(h => h !== '')
+
+      if (headers.length === 0) {
+        toast.warning('El archivo no tiene encabezados en la primera fila')
+        return
+      }
+
+      // Data rows: desde fila 2 hasta rowCount. Cada fila se transforma a un
+      // objeto { header: value } para que el resto del componente use la misma
+      // forma que devolvía xlsx.sheet_to_json.
+      const json = []
+      for (let i = 2; i <= ws.rowCount; i++) {
+        const rowValues = ws.getRow(i).values.slice(1)
+        // Descartar filas totalmente vacías (usuarios suelen dejar filas en blanco al final)
+        if (rowValues.every(v => v == null || v === '')) continue
+        const obj = {}
+        headerRow.forEach((h, idx) => {
+          if (h === '') return
+          obj[h] = cellValue(rowValues[idx])
+        })
+        json.push(obj)
+      }
 
       if (json.length === 0) {
         toast.warning('El archivo no tiene filas de datos')
         return
       }
 
-      const headers = Object.keys(json[0])
       setRawRows(json)
       setUserHeaders(headers)
 
-      const expectedLabels = spec.columns.map(c => c.label)
       const requiredLabels = spec.columns.filter(c => c.required).map(c => c.label)
       const hasAllRequired = requiredLabels.every(lbl => headers.includes(lbl))
 
       if (hasAllRequired) {
-        // Coincide con la plantilla → validamos directo
         validateAndShowPreview(json)
       } else {
-        // Necesitamos mapear con IA
         await requestAIMapping(headers, json.slice(0, 3))
       }
     } catch (err) {

@@ -286,18 +286,51 @@ function InvitePlaceholder() {
   )
 }
 
+// SHA-256 en el cliente. El plaintext nunca se envía al servidor; solo el hash
+// se persiste. Web Crypto está disponible en cualquier navegador moderno bajo
+// contexto seguro (HTTPS o localhost).
+async function sha256Hex(str) {
+  const buf = new TextEncoder().encode(str)
+  const digest = await crypto.subtle.digest('SHA-256', buf)
+  return Array.from(new Uint8Array(digest), b => b.toString(16).padStart(2, '0')).join('')
+}
+
+async function copyToClipboard(text) {
+  if (navigator.clipboard && window.isSecureContext) {
+    try { await navigator.clipboard.writeText(text); return true } catch {}
+  }
+  try {
+    const ta = document.createElement('textarea')
+    ta.value = text
+    ta.style.position = 'fixed'
+    ta.style.opacity = '0'
+    document.body.appendChild(ta)
+    ta.focus(); ta.select()
+    const ok = document.execCommand('copy')
+    document.body.removeChild(ta)
+    return ok
+  } catch { return false }
+}
+
 function AuditorTokensPanel() {
   const [tokens, setTokens] = useState([])
   const [loading, setLoading] = useState(true)
   const [creating, setCreating] = useState(false)
   const [newLabel, setNewLabel] = useState('')
   const [newDays, setNewDays] = useState(30)
+  const [newMaxUses, setNewMaxUses] = useState('')
+  // Modal show-once del link recién creado. Guardamos aquí el plaintext
+  // TEMPORALMENTE (memoria del componente, no persistido) para que el owner
+  // pueda copiar el link. Al cerrar el modal, se limpia y ya no se puede
+  // recuperar — es el único momento en toda la vida del token en que el
+  // plaintext existe fuera del hash.
+  const [freshLink, setFreshLink] = useState(null)  // { url, label, expiresAt, maxUses }
 
   const fetchTokens = async () => {
     setLoading(true)
     const { data, error } = await supabase
       .from('audit_share_tokens')
-      .select('*')
+      .select('id, org_id, label, created_at, expires_at, revoked_at, last_used_at, use_count, max_uses')
       .order('created_at', { ascending: false })
     if (error) { toast.error(error.message); setLoading(false); return }
     setTokens(data || [])
@@ -309,11 +342,19 @@ function AuditorTokensPanel() {
   const createToken = async () => {
     if (!newLabel.trim()) { toast.warning('Poné un nombre/motivo para el acceso'); return }
     if (newDays < 1 || newDays > 365) { toast.warning('Duración entre 1 y 365 días'); return }
+    const maxUsesParsed = newMaxUses.trim() === '' ? null : Number(newMaxUses)
+    if (maxUsesParsed !== null && (!Number.isInteger(maxUsesParsed) || maxUsesParsed < 1 || maxUsesParsed > 10000)) {
+      toast.warning('Máximo de usos entre 1 y 10000 (o vacío para ilimitado)')
+      return
+    }
 
-    // Token opaco aleatorio (64 hex chars)
+    // Token opaco aleatorio (64 hex chars = 32 bytes de entropía). Nunca va a
+    // BD en plaintext; solo su sha256. El plaintext vive únicamente en la URL
+    // que el owner copie en este momento.
     const bytes = new Uint8Array(32)
     crypto.getRandomValues(bytes)
-    const token = Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('')
+    const plaintext = Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('')
+    const tokenHash = await sha256Hex(plaintext)
 
     const expiresAt = new Date(Date.now() + newDays * 86400 * 1000).toISOString()
 
@@ -325,13 +366,22 @@ function AuditorTokensPanel() {
 
     const { error } = await supabase.from('audit_share_tokens').insert([{
       org_id: prof.org_id,
-      token,
+      token_hash: tokenHash,
       label: newLabel.trim(),
       expires_at: expiresAt,
+      max_uses: maxUsesParsed,
     }])
     if (error) { toast.error(error.message); return }
-    toast.success('Link creado')
-    setNewLabel(''); setNewDays(30); setCreating(false)
+
+    // Mostrar el link 1 sola vez. Si el owner cierra el modal sin copiar,
+    // pierde acceso — tiene que revocar y regenerar.
+    setFreshLink({
+      url: `${window.location.origin}/auditor/${plaintext}`,
+      label: newLabel.trim(),
+      expiresAt,
+      maxUses: maxUsesParsed,
+    })
+    setNewLabel(''); setNewDays(30); setNewMaxUses(''); setCreating(false)
     fetchTokens()
   }
 
@@ -349,39 +399,6 @@ function AuditorTokensPanel() {
     if (error) { toast.error(error.message); return }
     toast.success('Acceso revocado')
     fetchTokens()
-  }
-
-  const copyLink = async (t) => {
-    const url = `${window.location.origin}/auditor/${t.token}`
-    // Path moderno (HTTPS / clipboard API permitido)
-    if (navigator.clipboard && window.isSecureContext) {
-      try {
-        await navigator.clipboard.writeText(url)
-        toast.success('Link copiado al portapapeles')
-        return
-      } catch (err) {
-        // sigue al fallback
-      }
-    }
-    // Fallback: textarea + execCommand para HTTP, iframes, navegadores viejos
-    try {
-      const ta = document.createElement('textarea')
-      ta.value = url
-      ta.style.position = 'fixed'
-      ta.style.opacity = '0'
-      document.body.appendChild(ta)
-      ta.focus(); ta.select()
-      const ok = document.execCommand('copy')
-      document.body.removeChild(ta)
-      if (ok) {
-        toast.success('Link copiado al portapapeles')
-      } else {
-        throw new Error('execCommand devolvió false')
-      }
-    } catch (err) {
-      // No mentir: si no se pudo, mostrá el link y pide que lo copie a mano
-      toast.error('No se pudo copiar automáticamente. Cópialo manualmente: ' + url)
-    }
   }
 
   return (
@@ -425,10 +442,23 @@ function AuditorTokensPanel() {
               style={{ width: '90px', padding: '8px 10px', border: `1px solid ${colors.border}`, borderRadius: radius.lg, fontSize: font.base }}
             />
             <span style={{ alignSelf: 'center', color: colors.textFaint, fontSize: font.sm }}>días</span>
+            <input
+              type="number"
+              min="1"
+              max="10000"
+              placeholder="Máx usos (opcional)"
+              value={newMaxUses}
+              onChange={e => setNewMaxUses(e.target.value)}
+              title="Vacío = ilimitado. Si ponés un número, el link se inutiliza después de esa cantidad de accesos."
+              style={{ width: '160px', padding: '8px 10px', border: `1px solid ${colors.border}`, borderRadius: radius.lg, fontSize: font.base }}
+            />
+          </div>
+          <div style={{ fontSize: font.sm, color: colors.warningText, background: colors.warningLight, padding: '8px 10px', borderRadius: radius.md }}>
+            🔒 El link se mostrará <strong>una sola vez</strong> al crearlo. Guardalo bien: por seguridad no lo volvemos a mostrar después.
           </div>
           <div style={{ display: 'flex', gap: '8px' }}>
             <Button variant="primary" size="sm" onClick={createToken}>Crear link</Button>
-            <Button variant="ghost" size="sm" onClick={() => { setCreating(false); setNewLabel('') }}>Cancelar</Button>
+            <Button variant="ghost" size="sm" onClick={() => { setCreating(false); setNewLabel(''); setNewMaxUses('') }}>Cancelar</Button>
           </div>
         </div>
       )}
@@ -450,23 +480,28 @@ function AuditorTokensPanel() {
             <TokenRow
               key={t.id} token={t}
               isLast={i === tokens.length - 1}
-              onCopy={() => copyLink(t)}
               onRevoke={() => revoke(t)}
             />
           ))}
         </div>
       )}
+
+      {freshLink && <FreshLinkModal fresh={freshLink} onClose={() => setFreshLink(null)} />}
     </div>
   )
 }
 
-function TokenRow({ token, isLast, onCopy, onRevoke }) {
+function TokenRow({ token, isLast, onRevoke }) {
   const isRevoked = !!token.revoked_at
   const isExpired = !isRevoked && new Date(token.expires_at) < new Date()
-  const isActive = !isRevoked && !isExpired
+  const isUsedUp = !isRevoked && !isExpired && token.max_uses != null && token.use_count >= token.max_uses
+  const isActive = !isRevoked && !isExpired && !isUsedUp
 
   const daysLeft = isActive
     ? Math.max(0, Math.ceil((new Date(token.expires_at) - new Date()) / (1000 * 60 * 60 * 24)))
+    : null
+  const usesLeft = isActive && token.max_uses != null
+    ? Math.max(0, token.max_uses - token.use_count)
     : null
 
   return (
@@ -480,22 +515,107 @@ function TokenRow({ token, isLast, onCopy, onRevoke }) {
           <strong style={{ color: colors.text }}>{token.label}</strong>
           {isRevoked && <Badge bg={colors.dangerLight} color={colors.dangerText}>Revocado</Badge>}
           {isExpired && <Badge bg={colors.bgSubtle} color={colors.textMuted}>Expirado</Badge>}
+          {isUsedUp && <Badge bg={colors.bgSubtle} color={colors.textMuted}>Sin usos restantes</Badge>}
           {isActive && daysLeft <= 7 && <Badge bg={colors.warningLight} color={colors.warningText}>⏰ {daysLeft}d</Badge>}
           {isActive && daysLeft > 7 && <Badge bg={colors.successLight} color={colors.successText}>Activo</Badge>}
         </div>
         <div style={{ fontSize: font.sm, color: colors.textFaint, marginTop: '2px', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
           <Clock size={11} /> Expira {new Date(token.expires_at).toLocaleDateString()}
           {token.use_count > 0 && <span>· {token.use_count} acceso{token.use_count === 1 ? '' : 's'}</span>}
+          {usesLeft != null && <span>· {usesLeft} usos restantes</span>}
           {token.last_used_at && <span>· Último: {new Date(token.last_used_at).toLocaleString()}</span>}
         </div>
       </div>
 
       {isActive && (
-        <>
-          <Button variant="ghost" size="sm" icon={<Copy size={14} />} onClick={onCopy}>Copiar link</Button>
-          <Button variant="ghost" size="sm" icon={<Trash2 size={14} />} onClick={onRevoke}>Revocar</Button>
-        </>
+        <Button variant="ghost" size="sm" icon={<Trash2 size={14} />} onClick={onRevoke}>Revocar</Button>
       )}
+    </div>
+  )
+}
+
+function FreshLinkModal({ fresh, onClose }) {
+  const [copied, setCopied] = useState(false)
+  const [ackWarning, setAckWarning] = useState(false)
+
+  const doCopy = async () => {
+    const ok = await copyToClipboard(fresh.url)
+    if (ok) {
+      setCopied(true)
+      toast.success('Link copiado al portapapeles')
+    } else {
+      toast.error('No se pudo copiar. Seleccioná el link y copialo con Ctrl+C.')
+    }
+  }
+
+  const handleClose = () => {
+    if (!copied && !ackWarning) {
+      setAckWarning(true)
+      toast.warning('Confirmá que copiaste el link. No lo vamos a mostrar de nuevo.')
+      return
+    }
+    onClose()
+  }
+
+  return (
+    <div style={{
+      position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.6)',
+      backdropFilter: 'blur(4px)', zIndex: 1200,
+      display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem',
+    }}>
+      <div style={{
+        background: 'white', maxWidth: '640px', width: '100%',
+        borderRadius: radius['2xl'], boxShadow: '0 25px 60px -12px rgba(0,0,0,0.35)',
+        padding: '20px',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
+          <LinkIcon size={20} color={colors.primary} />
+          <h3 style={{ margin: 0, fontSize: font.xl, color: colors.text }}>
+            Link generado para <em>{fresh.label}</em>
+          </h3>
+        </div>
+
+        <div style={{
+          background: colors.warningLight, color: colors.warningText,
+          padding: '10px 12px', borderRadius: radius.md, marginBottom: '12px',
+          fontSize: font.sm, lineHeight: 1.5,
+        }}>
+          🔒 <strong>Este link se muestra una sola vez.</strong> Al cerrar este modal ya no
+          vas a poder verlo de nuevo. Copialo ahora y enviálo al auditor por un canal seguro
+          (WhatsApp, email cifrado, no lo pegues en Slack público).
+        </div>
+
+        <div style={{
+          background: colors.bgSubtle, border: `1px solid ${colors.border}`,
+          borderRadius: radius.lg, padding: '10px', marginBottom: '10px',
+          display: 'flex', alignItems: 'center', gap: '8px',
+        }}>
+          <input
+            readOnly
+            value={fresh.url}
+            onClick={e => e.target.select()}
+            style={{
+              flex: 1, fontFamily: 'monospace', fontSize: '12px',
+              padding: '6px 8px', border: `1px solid ${colors.border}`,
+              borderRadius: radius.md, background: 'white',
+            }}
+          />
+          <Button variant="primary" size="sm" icon={<Copy size={14} />} onClick={doCopy}>
+            {copied ? 'Copiado ✓' : 'Copiar'}
+          </Button>
+        </div>
+
+        <div style={{ fontSize: font.sm, color: colors.textFaint, marginBottom: '14px' }}>
+          Expira: {new Date(fresh.expiresAt).toLocaleString()}
+          {fresh.maxUses != null && <> · Máx {fresh.maxUses} usos</>}
+        </div>
+
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+          <Button variant={copied ? 'primary' : 'ghost'} size="sm" onClick={handleClose}>
+            {copied ? 'Cerrar' : ackWarning ? 'Cerrar sin copiar' : 'Cerrar'}
+          </Button>
+        </div>
+      </div>
     </div>
   )
 }

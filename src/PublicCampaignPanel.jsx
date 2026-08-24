@@ -40,9 +40,14 @@ function slugify(text) {
     .slice(0, 40)
 }
 
-// Sufijo aleatorio corto para hacer únicos slugs con el mismo nombre base
+// Sufijo aleatorio LARGO — 12 hex chars = 16^12 combinaciones. Suficiente
+// para bloquear enumeración por scan del endpoint público. El slug queda
+// legible ("clima-q3-2026-a1b2c3d4e5f6") y a la vez inadivinable. Antes
+// eran 4 chars (36^4 = 1.6M — enumerable en minutos con requests paralelos).
 function randomSuffix() {
-  return Math.random().toString(36).slice(2, 6)
+  const bytes = new Uint8Array(6)
+  crypto.getRandomValues(bytes)
+  return Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('')
 }
 
 export default function PublicCampaignPanel() {

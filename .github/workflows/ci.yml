@@ -1,0 +1,53 @@
+name: CI
+
+# Corre en cada push y en cada PR contra main.
+# El objetivo es simple: si el build o el lint fallan, GitHub bloquea el merge
+# antes que Vercel descubra el problema al momento del deploy. Es la red mínima
+# que evita romper producción con un typo o una regla de eslint violada.
+#
+# NO deployamos desde acá — Vercel sigue conectado al repo y hace su propio
+# deploy en push a main. Este workflow solo es la validación previa.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Cancelar corridas viejas del mismo branch cuando llega un push nuevo.
+# Ahorra minutos de Actions y hace más rápido ver el feedback del último commit.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      # npm ci es más estricto que npm install: usa exactamente lo que dice
+      # package-lock.json y falla si hay drift. Es lo correcto para CI.
+      - name: Install dependencies
+        run: npm ci
+
+      # Lint no bloquea el CI todavía — el repo tiene deuda pre-existente
+      # (~120 errores acumulados de fast-refresh, unused vars, etc.) que no
+      # tiene sentido fixear en el mismo PR que agrega el CI. Lo dejamos
+      # visible como "annotations" en GitHub para irla drenando, pero solo
+      # el build es blocking. TODO: activar failOnError cuando bajemos la
+      # deuda a ≤10 warnings.
+      - name: Lint (soft)
+        run: npm run lint
+        continue-on-error: true
+
+      - name: Build
+        run: npm run build
