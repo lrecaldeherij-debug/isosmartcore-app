@@ -161,14 +161,30 @@ Deno.serve(async (req: Request) => {
     return json({ error: "No se pudo crear la campaña: " + (campErr?.message ?? "") }, 500);
   }
 
-  // 2. Traer los empleados con email
-  const { data: people, error: peopleErr } = await admin
+  // 2. Traer los empleados con email — SIEMPRE filtrar por org_id porque
+  // admin (service_role) hace bypass de RLS. Sin este filtro, un owner
+  // podría enumerar UUIDs de personnel de otras orgs y leer nombre+email
+  // + enviarles encuestas desde nuestro dominio Resend.
+  const { data: peopleRaw, error: peopleErr } = await admin
     .from("personnel")
-    .select("id, full_name, email")
+    .select("id, org_id, full_name, email")
+    .eq("org_id", profile.org_id)
     .in("id", personIds);
 
   if (peopleErr) {
     return json({ error: "Error consultando personnel: " + peopleErr.message }, 500);
+  }
+
+  // Defense-in-depth: filtrar de nuevo por org_id (por si en el futuro algún
+  // .eq previo se rompe). Y si el cliente pasó IDs que no existen o son de
+  // otra org, avisar cuántos quedaron afuera — indicio de intento de leak.
+  const people = (peopleRaw ?? []).filter(p => p.org_id === profile.org_id);
+  const filteredOut = personIds.length - people.length;
+  if (filteredOut > 0) {
+    console.warn(
+      `send-survey-invitations: ${filteredOut} person_ids ignorados (no existen o son de otra org). ` +
+      `Invocado por user=${user.id} org=${profile.org_id}. IDs pedidos: ${personIds.length}, resueltos: ${people.length}.`
+    );
   }
 
   const expiresAt = new Date(Date.now() + expiresInDays * 24 * 60 * 60 * 1000).toISOString();

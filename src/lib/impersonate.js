@@ -4,6 +4,8 @@
 // Flujo:
 //  1. En /admin, super_admin click "Ver como cliente" → startImpersonation(orgId, reason)
 //     - Loguea en admin_audit_log (RPC)
+//     - Setea user_metadata.impersonate_org_id vía updateUser
+//     - Fuerza refreshSession para que el JWT nuevo quede en storage
 //     - Redirige a /app?impersonate=<orgId>
 //  2. OrgContext detecta el ?impersonate=<orgId> y (si el user es super_admin)
 //     carga esa org en lugar de la propia.
@@ -11,7 +13,7 @@
 //  4. Cualquier intento de mutación es bloqueado por RLS (WITH CHECK falla
 //     porque auth_org_id() devuelve la org REAL del super_admin, no la
 //     impersonada). Además el banner recuerda que es modo lectura.
-//  5. Click "Salir" en el banner → stopImpersonation() → redirect a /admin
+//  5. Click "Salir" en el banner → stopImpersonation() → limpia metadata + redirect a /admin
 // =============================================================================
 
 import { supabase } from '../supabaseClient'
@@ -35,43 +37,33 @@ export function isImpersonating() {
  * dar acceso cross-org al super_admin. Sin este metadata, el super_admin
  * verá los datos de su propia org aunque el sidebar diga otro nombre.
  *
+ * NOTA de seguridad: no logueamos el JWT parseado ni el user_metadata en
+ * consola. En una sesión de soporte con screen-share, ese log revelaba
+ * is_super_admin=true y otros claims sensibles.
+ *
  * @param {string} orgId - UUID de la org que vas a impersonar
  * @param {string} orgName - nombre visible (solo para el toast local)
  * @param {string} reason - motivo obligatorio (queda en admin_audit_log)
  */
 export async function startImpersonation(orgId, orgName, reason) {
-  console.log('[impersonate] Iniciando impersonate para org:', orgId, orgName)
-
   const { error: logErr } = await supabase.rpc('admin_log_impersonation', {
     p_org_id: orgId,
     p_reason: reason || null,
   })
-  if (logErr) {
-    console.error('[impersonate] RPC log falló:', logErr)
-    throw new Error(logErr.message)
-  }
-  console.log('[impersonate] RPC log OK')
+  if (logErr) throw new Error(logErr.message)
 
   // Setear impersonate_org_id en el JWT metadata → RLS ahora deja al
   // super_admin ver las filas de ESA org (y solo esa).
-  const { data: updData, error: metaErr } = await supabase.auth.updateUser({
+  const { error: metaErr } = await supabase.auth.updateUser({
     data: { impersonate_org_id: orgId }
   })
-  if (metaErr) {
-    console.error('[impersonate] updateUser falló:', metaErr)
-    throw new Error(metaErr.message)
-  }
-  console.log('[impersonate] updateUser OK. user_metadata:', updData?.user?.user_metadata)
+  if (metaErr) throw new Error(metaErr.message)
 
   // Forzar refresh de la sesión para que el JWT nuevo con user_metadata
-  // actualizado quede persistido en storage antes del redirect.
-  const { data: refData, error: refErr } = await supabase.auth.refreshSession()
-  if (refErr) {
-    console.error('[impersonate] refreshSession falló:', refErr)
-  } else {
-    console.log('[impersonate] refreshSession OK. JWT metadata:',
-      JSON.parse(atob(refData.session.access_token.split('.')[1])).user_metadata)
-  }
+  // actualizado quede persistido en storage antes del redirect. Sin esto,
+  // la próxima página cargaba con el JWT viejo y las policies _select_impersonate
+  // no matcheaban.
+  await supabase.auth.refreshSession()
 
   // Redirect duro para forzar recarga del OrgContext con el nuevo param
   window.location.href = `/app?${PARAM}=${orgId}`
@@ -88,8 +80,7 @@ export async function stopImpersonation() {
     await supabase.auth.updateUser({
       data: { impersonate_org_id: null }
     })
-  } catch (e) {
-    console.error('[impersonate] No pude limpiar el metadata:', e)
+  } catch {
     // Continuamos el redirect igual. OrgContext tiene un safety net que
     // vuelve a limpiar si detecta URL sin ?impersonate=.
   }

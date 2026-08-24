@@ -12,7 +12,8 @@ import {
   AlertCircle, Trash2
 } from 'lucide-react'
 import { toast } from './lib/toast'
-import { confirm } from './lib/confirm'
+import { confirm, promptText } from './lib/confirm'
+import { humanizeDbError } from './lib/humanizeDbError'
 
 const ENTITY_LABELS = {
   documents_versions: 'Documento',
@@ -48,25 +49,43 @@ export default function ApprovalQueue() {
   }
 
   const handleApprove = async (a) => {
-    const comment = prompt('Comentario de aprobación (opcional):') || null
-    if (comment === null && !confirm('¿Aprobar sin comentario?')) return
+    // promptText devuelve null si el user cancela, string si envía.
+    // Aunque devuelva null (sin comentario), preguntamos si igual quiere aprobar.
+    const comment = await promptText('Comentario de aprobación (opcional)', {
+      placeholder: 'Motivo, contexto, condiciones… (opcional)',
+      confirmText: 'Aprobar',
+    })
+    if (comment === null) {
+      // Bug histórico: !confirm(Promise) siempre era false → aprobaba igual.
+      // Ahora esperamos la Promise correctamente.
+      const proceed = await confirm('¿Aprobar sin comentario?', {
+        tone: 'warning',
+        confirmText: 'Aprobar sin comentario',
+      })
+      if (!proceed) return
+    }
     const { error } = await supabase.rpc('approve_entity', {
       p_approval_id: a.id,
       p_comment: comment,
     })
-    if (error) showMsg(error.message, 'err')
-    else { showMsg('Aprobado.'); load() }
+    if (error) toast.error(humanizeDbError(error))
+    else { toast.success('Aprobado.'); load() }
   }
 
   const handleReject = async (a) => {
-    const reason = prompt('Motivo del rechazo (obligatorio):')
+    const reason = await promptText('Motivo del rechazo', {
+      required: true,
+      tone: 'danger',
+      placeholder: 'Explicá por qué se rechaza (queda en auditoría)',
+      confirmText: 'Rechazar',
+    })
     if (!reason) return
     const { error } = await supabase.rpc('reject_entity', {
       p_approval_id: a.id,
       p_reason: reason,
     })
-    if (error) showMsg(error.message, 'err')
-    else { showMsg('Rechazado.'); load() }
+    if (error) toast.error(humanizeDbError(error))
+    else { toast.success('Rechazado.'); load() }
   }
 
   const handleCancel = async (a) => {

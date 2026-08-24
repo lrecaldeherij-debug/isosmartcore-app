@@ -9,6 +9,7 @@ import {
 } from 'lucide-react'
 import { toast } from './lib/toast'
 import { confirm } from './lib/confirm'
+import { humanizeDbError } from './lib/humanizeDbError'
 import { colors, radius, shadow, font, space, families, tracking, weight } from './components/ui/tokens'
 import Button from './components/ui/Button'
 import Badge from './components/ui/Badge'
@@ -542,67 +543,126 @@ function StatBubble({ icon: Icon, label, sub, first }) {
 
 // ═══════════════════════════════════════════════════════════
 // PERSISTENCIA POR PASO
+//
+// IMPORTANTE: cada await destructura { error } y lo maneja explícitamente.
+// El bug histórico (pre-2026-08-21) era que 8 llamadas Supabase ignoraban
+// el error → el wizard mostraba "guardado" y avanzaba aunque RLS o unique
+// hubieran rechazado. El cliente terminaba onboarding con company_profile
+// / quality_policy / processes vacíos (le pasó a Talleres Mejía con el ADN).
+//
+// Regla: si CUALQUIER escritura falla, toast humanizado + return false.
+// El wizard NO avanza hasta que el paso persiste realmente.
 // ═══════════════════════════════════════════════════════════
 async function saveCurrentStep(currentStep, org, company, fodaFactors, policyText, processList, objective) {
+  const fail = (label, err) => {
+    console.error(`[Onboarding] Paso ${currentStep} — ${label}:`, err)
+    toast.error(`No se pudo guardar (${label}): ${humanizeDbError(err)}`)
+    return false
+  }
+
   try {
     if (currentStep === 0) {
-      // Empresa
+      // ── Paso 0: Empresa ────────────────────────────────────────────────
       if (!company.name) { toast.warning('Poné el nombre de la empresa'); return false }
-      const { data: existing } = await supabase.from('company_profile').select('id').maybeSingle()
+
+      const { data: existing, error: selErr } = await supabase
+        .from('company_profile').select('id')
+        .eq('org_id', org.id).maybeSingle()
+      if (selErr) return fail('leer perfil', selErr)
+
       const payload = { ...company, org_id: org.id }
       delete payload.id
+
       if (existing) {
-        await supabase.from('company_profile').update(payload).eq('id', existing.id)
+        const { error } = await supabase
+          .from('company_profile').update(payload).eq('id', existing.id)
+        if (error) return fail('actualizar perfil de empresa', error)
       } else {
-        await supabase.from('company_profile').insert([payload])
+        const { error } = await supabase
+          .from('company_profile').insert([payload]).select().single()
+        if (error) return fail('crear perfil de empresa', error)
       }
+
     } else if (currentStep === 1) {
-      // FODA: sincronizar (borrar los que no están + insertar los nuevos)
-      const existing = (await supabase.from('context_analysis').select('id')).data || []
-      const existingIds = new Set(existing.map(e => e.id))
+      // ── Paso 1: FODA (sincronizar) ─────────────────────────────────────
+      const { data: existingRows, error: fetchErr } = await supabase
+        .from('context_analysis').select('id').eq('org_id', org.id)
+      if (fetchErr) return fail('leer FODA existente', fetchErr)
+
+      const existingIds = new Set((existingRows || []).map(e => e.id))
       const incomingIds = new Set(fodaFactors.filter(f => f.id).map(f => f.id))
       const toDelete = [...existingIds].filter(id => !incomingIds.has(id))
+
       if (toDelete.length) {
-        await supabase.from('context_analysis').delete().in('id', toDelete)
+        const { error } = await supabase
+          .from('context_analysis').delete().in('id', toDelete)
+        if (error) return fail('eliminar factores FODA obsoletos', error)
       }
+
       const toInsert = fodaFactors.filter(f => !f.id).map(f => ({
+        org_id: org.id,
         type: f.type || (['Fortaleza', 'Debilidad'].includes(f.category) ? 'Interno' : 'Externo'),
         category: f.category,
         factor: f.factor,
         impact_level: f.impact_level || 'Medio',
       }))
       if (toInsert.length) {
-        await supabase.from('context_analysis').insert(toInsert)
+        const { error } = await supabase.from('context_analysis').insert(toInsert)
+        if (error) return fail('crear factores FODA', error)
       }
+
     } else if (currentStep === 2) {
-      // Política
-      if (!policyText.trim()) { toast.warning('Escribe la política o usa la IA para redactarla'); return false }
-      const { data: existing } = await supabase.from('quality_policy').select('id').order('created_at', { ascending: false }).limit(1).maybeSingle()
+      // ── Paso 2: Política de calidad ────────────────────────────────────
+      if (!policyText.trim()) { toast.warning('Escribe la política o usá la IA para redactarla'); return false }
+
+      const { data: existing, error: selErr } = await supabase
+        .from('quality_policy').select('id')
+        .eq('org_id', org.id)
+        .order('created_at', { ascending: false }).limit(1).maybeSingle()
+      if (selErr) return fail('leer política', selErr)
+
       if (existing) {
-        await supabase.from('quality_policy').update({ policy_text: policyText, status: 'Borrador' }).eq('id', existing.id)
+        const { error } = await supabase
+          .from('quality_policy')
+          .update({ policy_text: policyText, status: 'Borrador' })
+          .eq('id', existing.id)
+        if (error) return fail('actualizar política', error)
       } else {
-        await supabase.from('quality_policy').insert([{ policy_text: policyText, status: 'Borrador' }])
+        const { error } = await supabase
+          .from('quality_policy')
+          .insert([{ org_id: org.id, policy_text: policyText, status: 'Borrador' }])
+        if (error) return fail('crear política', error)
       }
+
     } else if (currentStep === 3) {
-      // Procesos: sincronizar
-      const existing = (await supabase.from('processes').select('id, name')).data || []
-      const existingMap = new Map(existing.map(e => [e.name.toLowerCase(), e.id]))
+      // ── Paso 3: Procesos (sincronizar por nombre) ──────────────────────
+      const { data: existingRows, error: fetchErr } = await supabase
+        .from('processes').select('id, name').eq('org_id', org.id)
+      if (fetchErr) return fail('leer procesos', fetchErr)
+
+      const existingMap = new Map((existingRows || []).map(e => [e.name.toLowerCase(), e.id]))
       for (const p of processList) {
         if (!p.name) continue
         if (p.id) {
-          await supabase.from('processes').update({
+          const { error } = await supabase.from('processes').update({
             name: p.name, process_type: p.process_type, objective: p.objective
           }).eq('id', p.id)
+          if (error) return fail(`actualizar proceso "${p.name}"`, error)
         } else if (!existingMap.has(p.name.toLowerCase())) {
-          await supabase.from('processes').insert([{
+          const { error } = await supabase.from('processes').insert([{
+            org_id: org.id,
             name: p.name, process_type: p.process_type, objective: p.objective
           }])
+          if (error) return fail(`crear proceso "${p.name}"`, error)
         }
       }
+
     } else if (currentStep === 4) {
-      // Objetivo
-      if (!objective.name && !objective.objective) return true // skip silent if empty
+      // ── Paso 4: Objetivo de calidad ────────────────────────────────────
+      if (!objective.name && !objective.objective) return true // skip silent si vacío
+
       const payload = {
+        org_id: org.id,
         name: objective.name || objective.objective?.slice(0, 80),
         objective: objective.objective || objective.name,
         indicator: objective.indicator,
@@ -615,17 +675,25 @@ async function saveCurrentStep(currentStep, org, company, fodaFactors, policyTex
         status: 'Borrador',
         is_specific: true, is_measurable: true, is_achievable: true, is_relevant: true, is_time_bound: true,
       }
-      const { data: existing } = await supabase.from('quality_objectives').select('id').order('created_at', { ascending: false }).limit(1).maybeSingle()
+
+      const { data: existing, error: selErr } = await supabase
+        .from('quality_objectives').select('id')
+        .eq('org_id', org.id)
+        .order('created_at', { ascending: false }).limit(1).maybeSingle()
+      if (selErr) return fail('leer objetivo', selErr)
+
       if (existing && (objective.id === existing.id)) {
-        await supabase.from('quality_objectives').update(payload).eq('id', existing.id)
+        const { error } = await supabase
+          .from('quality_objectives').update(payload).eq('id', existing.id)
+        if (error) return fail('actualizar objetivo', error)
       } else {
-        await supabase.from('quality_objectives').insert([payload])
+        const { error } = await supabase.from('quality_objectives').insert([payload])
+        if (error) return fail('crear objetivo', error)
       }
     }
     return true
   } catch (err) {
-    toast.error('Error guardando: ' + err.message)
-    return false
+    return fail('excepción inesperada', err)
   }
 }
 

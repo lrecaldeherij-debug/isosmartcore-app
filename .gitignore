@@ -39,3 +39,8 @@ test-supabase.html
 
 # One-off internal scripts (no deploy)
 scripts/
+
+# Artifacts locales de auditoría — no commitear
+revision-*.txt
+estructura-*.txt
+busqueda-*.txt
