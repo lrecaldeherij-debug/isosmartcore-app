@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo } from 'react'
 import { createPortal } from 'react-dom'
 import { supabase } from './supabaseClient'
+import { useOrg } from './OrgContext'
 import { consultarIA } from './aiClient'
 import {
   Sparkles, Loader2, Send, User, Pencil, Trash2, X,
@@ -81,6 +82,8 @@ function scoreColor(avg) {
 }
 
 export default function ClimateSurveys() {
+  const { org } = useOrg()
+  const orgId = org?.id
   const [personnel, setPersonnel] = useState([])
   const [surveys, setSurveys] = useState([])
   const [loading, setLoading] = useState(true)
@@ -110,12 +113,14 @@ export default function ClimateSurveys() {
   })
 
   useEffect(() => {
+    if (!orgId) return
     fetchPersonnel()
     fetchSurveys()
-  }, [])
+  }, [orgId])
 
+  // Defense-in-depth: filtramos explícitamente por org_id además de RLS.
   const fetchPersonnel = async () => {
-    const { data } = await supabase.from('personnel').select('id, full_name, email').order('full_name')
+    const { data } = await supabase.from('personnel').select('id, full_name, email').eq('org_id', orgId).order('full_name')
     setPersonnel(data || [])
   }
 
@@ -124,6 +129,7 @@ export default function ClimateSurveys() {
     const { data } = await supabase
       .from('climate_surveys')
       .select('*, personnel(full_name)')
+      .eq('org_id', orgId)
       .order('survey_date', { ascending: false, nullsFirst: false })
     setSurveys(data || [])
     setLoading(false)

@@ -1,5 +1,6 @@
 import { useEffect, useState, useMemo } from 'react'
 import { supabase } from './supabaseClient'
+import { useOrg } from './OrgContext'
 import {
   AlertTriangle, CheckCircle2, Target, Truck, TrendingUp,
   AlertOctagon, Calendar, ArrowRight, ShieldAlert, Users,
@@ -15,11 +16,13 @@ const NC_OPEN_STATUSES = ['Identificada', 'En Análisis', 'Acción Definida', 'E
 const CONTEXT_REVIEW_MONTHS = 12
 
 export default function Dashboard({ alCambiarVista }) {
+  const { org } = useOrg()
+  const orgId = org?.id
   const [raw, setRaw] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
 
-  useEffect(() => { cargarDatos() }, [])
+  useEffect(() => { if (orgId) cargarDatos() }, [orgId])
 
   async function cargarDatos() {
     setLoading(true)
@@ -28,30 +31,34 @@ export default function Dashboard({ alCambiarVista }) {
     const currentYear = today.getFullYear()
 
     try {
+      // Defense-in-depth: cada SELECT filtra explícitamente por org_id además
+      // de RLS. Si una migración futura afloja las policies, este filtro
+      // evita mostrar datos cross-org. En modo impersonate, org.id ya es la
+      // org efectiva (OrgContext lo maneja).
       const [
         risks, ncs, suppliers, objectives, measurements, personnel,
         scope, audits, training, opps, processes, jobs, stakeholders,
         context, documents, commMatrix, policy, strategicActions, review
       ] = await Promise.all([
-        supabase.from('risk_matrix').select('score_initial, score_residual, status, control_measure'),
-        supabase.from('non_conformities').select('id, status, type, severity, due_date, effectiveness_result, closure_date, is_recurrent, created_at, root_cause, five_whys').limit(500),
-        supabase.from('suppliers').select('evaluation_score, status'),
-        supabase.from('quality_objectives').select('id, target, current, status, baseline_value'),
-        supabase.from('objective_measurements').select('objective_id, value, measured_at').order('measured_at', { ascending: false }).limit(200),
-        supabase.from('personnel').select('id, status, next_evaluation_date, job_id, competency_gap'),
-        supabase.from('scope_declaration').select('next_review_date, status, scope_statement, processes_covered, last_reviewed').maybeSingle(),
-        supabase.from('internal_audits').select('status, planned_date, audit_date, year, is_finished'),
-        supabase.from('training_records').select('status, efficacy_result, planned_year, training_date, planned_quarter'),
-        supabase.from('improvement_opportunities').select('status, priority'),
-        supabase.from('processes').select('id, name, process_type'),
-        supabase.from('job_descriptions').select('id, title, competencies_json'),
-        supabase.from('stakeholders').select('id, name, expectations, needs'),
-        supabase.from('context_analysis').select('id, last_reviewed_date'),
-        supabase.from('documents').select('id').limit(1000),
-        supabase.from('communication_matrix').select('id').limit(1000),
-        supabase.from('quality_policy').select('policy_text, status').maybeSingle(),
-        supabase.from('strategic_actions').select('id').limit(500),
-        supabase.from('management_review').select('review_date'),
+        supabase.from('risk_matrix').select('score_initial, score_residual, status, control_measure').eq('org_id', orgId),
+        supabase.from('non_conformities').select('id, status, type, severity, due_date, effectiveness_result, closure_date, is_recurrent, created_at, root_cause, five_whys').eq('org_id', orgId).limit(500),
+        supabase.from('suppliers').select('evaluation_score, status').eq('org_id', orgId),
+        supabase.from('quality_objectives').select('id, target, current, status, baseline_value').eq('org_id', orgId),
+        supabase.from('objective_measurements').select('objective_id, value, measured_at').eq('org_id', orgId).order('measured_at', { ascending: false }).limit(200),
+        supabase.from('personnel').select('id, status, next_evaluation_date, job_id, competency_gap').eq('org_id', orgId),
+        supabase.from('scope_declaration').select('next_review_date, status, scope_statement, processes_covered, last_reviewed').eq('org_id', orgId).maybeSingle(),
+        supabase.from('internal_audits').select('status, planned_date, audit_date, year, is_finished').eq('org_id', orgId),
+        supabase.from('training_records').select('status, efficacy_result, planned_year, training_date, planned_quarter').eq('org_id', orgId),
+        supabase.from('improvement_opportunities').select('status, priority').eq('org_id', orgId),
+        supabase.from('processes').select('id, name, process_type').eq('org_id', orgId),
+        supabase.from('job_descriptions').select('id, title, competencies_json').eq('org_id', orgId),
+        supabase.from('stakeholders').select('id, name, expectations, needs').eq('org_id', orgId),
+        supabase.from('context_analysis').select('id, last_reviewed_date').eq('org_id', orgId),
+        supabase.from('documents').select('id').eq('org_id', orgId).limit(1000),
+        supabase.from('communication_matrix').select('id').eq('org_id', orgId).limit(1000),
+        supabase.from('quality_policy').select('policy_text, status').eq('org_id', orgId).maybeSingle(),
+        supabase.from('strategic_actions').select('id').eq('org_id', orgId).limit(500),
+        supabase.from('management_review').select('review_date').eq('org_id', orgId),
       ])
 
       setRaw({

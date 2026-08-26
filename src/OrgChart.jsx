@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, Fragment } from 'react'
 import { createPortal } from 'react-dom'
 import { supabase } from './supabaseClient'
+import { useOrg } from './OrgContext'
 import { consultarIA } from './aiClient'
 import {
   Network, Plus, Pencil, Trash2, X, Save, Loader2, Sparkles,
@@ -56,6 +57,8 @@ function parseAiArray(raw) {
 
 // ─────────────────────────────────────────────────────
 export default function OrgChart({ alCambiarVista }) {
+  const { org } = useOrg()
+  const orgId = org?.id
   const [jobs, setJobs] = useState([])
   const [processes, setProcesses] = useState([])
   const [personnel, setPersonnel] = useState([])
@@ -82,15 +85,17 @@ export default function OrgChart({ alCambiarVista }) {
 
   const chartRef = useRef(null)
 
-  useEffect(() => { fetchAll() }, [])
+  useEffect(() => { if (orgId) fetchAll() }, [orgId])
 
   const fetchAll = async () => {
     setLoading(true)
+    // Defense-in-depth: cada SELECT filtra explícitamente por org_id además
+    // de RLS. Ver Dashboard.jsx para el racional detallado.
     const [jd, pr, ps, cp] = await Promise.all([
-      supabase.from('job_descriptions').select('*').order('position_index', { ascending: true }),
-      supabase.from('processes').select('id, name, type').order('name'),
-      supabase.from('personnel').select('id, full_name, job_title, job_id').order('full_name'),
-      supabase.from('company_profile').select('*').maybeSingle(),
+      supabase.from('job_descriptions').select('*').eq('org_id', orgId).order('position_index', { ascending: true }),
+      supabase.from('processes').select('id, name, type').eq('org_id', orgId).order('name'),
+      supabase.from('personnel').select('id, full_name, job_title, job_id').eq('org_id', orgId).order('full_name'),
+      supabase.from('company_profile').select('*').eq('org_id', orgId).maybeSingle(),
     ])
     setJobs(jd.data || [])
     setProcesses(pr.data || [])

@@ -158,7 +158,7 @@ export default function Documents() {
 
   const [form, setForm] = useState(defaultForm())
 
-  useEffect(() => { fetchAll() }, [])
+  useEffect(() => { if (org?.id) fetchAll() }, [org?.id])
 
   const showMsg = (text, kind = 'ok') => {
     setMsg({ text, kind })
@@ -167,8 +167,13 @@ export default function Documents() {
 
   const fetchAll = async () => {
     setLoading(true)
+    // Defense-in-depth: filtramos por org_id además de RLS. Notar que
+    // approvals/user_profiles NO llevan org_id filter — approvals ya filtra
+    // por entity_type y no expone datos cross-org (los ids matchean solo con
+    // los docs que ya trajimos); user_profiles se limita a los miembros de
+    // la org via RLS (own-org select policy).
     const [{ data: docs }, { data: apps }, { data: mems }] = await Promise.all([
-      supabase.from('documents_versions').select('*').order('created_at', { ascending: false }),
+      supabase.from('documents_versions').select('*').eq('org_id', org.id).order('created_at', { ascending: false }),
       supabase.from('approvals').select('*').eq('entity_type', 'documents_versions'),
       supabase.from('user_profiles').select('user_id, full_name'),
     ])

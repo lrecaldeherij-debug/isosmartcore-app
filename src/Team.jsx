@@ -18,24 +18,27 @@ import { PageHeader, EmptyState, Spinner, Grid } from './components/ui/misc'
  * - Otros roles no acceden.
  */
 export default function Team() {
-  const { role: myRole, profile } = useOrg()
+  const { role: myRole, profile, org } = useOrg()
   const plan = usePlan()
   const [members, setMembers] = useState([])
   const [loading, setLoading] = useState(true)
 
   const canRead = can(myRole, 'team', 'read')
   const canWrite = can(myRole, 'team', 'write')
+  const orgId = org?.id
 
   useEffect(() => {
-    if (!canRead) { setLoading(false); return }
+    if (!canRead || !orgId) { setLoading(false); return }
     fetchMembers()
-  }, [canRead])
+  }, [canRead, orgId])
 
   const fetchMembers = async () => {
     setLoading(true)
+    // Defense-in-depth: filter explícito por org_id.
     const { data, error } = await supabase
       .from('user_profiles')
       .select('user_id, full_name, role, created_at')
+      .eq('org_id', orgId)
       .order('created_at')
     if (error) { toast.error(error.message); setLoading(false); return }
     setMembers(data || [])
@@ -313,6 +316,8 @@ async function copyToClipboard(text) {
 }
 
 function AuditorTokensPanel() {
+  const { org } = useOrg()
+  const orgId = org?.id
   const [tokens, setTokens] = useState([])
   const [loading, setLoading] = useState(true)
   const [creating, setCreating] = useState(false)
@@ -328,16 +333,18 @@ function AuditorTokensPanel() {
 
   const fetchTokens = async () => {
     setLoading(true)
+    // Defense-in-depth: filter explícito por org_id.
     const { data, error } = await supabase
       .from('audit_share_tokens')
       .select('id, org_id, label, created_at, expires_at, revoked_at, last_used_at, use_count, max_uses')
+      .eq('org_id', orgId)
       .order('created_at', { ascending: false })
     if (error) { toast.error(error.message); setLoading(false); return }
     setTokens(data || [])
     setLoading(false)
   }
 
-  useEffect(() => { fetchTokens() }, [])
+  useEffect(() => { if (orgId) fetchTokens() }, [orgId])
 
   const createToken = async () => {
     if (!newLabel.trim()) { toast.warning('Poné un nombre/motivo para el acceso'); return }
