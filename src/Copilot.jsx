@@ -205,8 +205,8 @@ export default function Copilot() {
         </button>
       )}
 
-      {/* SIDEBAR — panel deslizante. z-index 1100 para tapar el HelpButton
-          (que está en 1000 por default) cuando el copilot está abierto. */}
+      {/* SIDEBAR — panel deslizante. z-index 9000 para tapar el HelpButton
+          (que usa 8000 en components/ui/HelpButton.jsx) mientras está abierto. */}
       <div
         style={{
           position: 'fixed',
@@ -218,7 +218,7 @@ export default function Copilot() {
           background: 'white',
           boxShadow: open ? '-20px 0 50px -20px rgba(0,0,0,0.2)' : 'none',
           transition: 'right 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
-          zIndex: 1100,
+          zIndex: 9000,
           display: 'flex',
           flexDirection: 'column',
           borderLeft: '1px solid #e2e8f0',
@@ -458,10 +458,13 @@ function MessageBubble({ message, onCitationClick }) {
         padding: '10px 14px',
         fontSize: '13.5px',
         lineHeight: 1.55,
-        whiteSpace: 'pre-wrap',
         wordBreak: 'break-word',
       }}>
-        <div>{message.text}</div>
+        {isUser ? (
+          <div style={{ whiteSpace: 'pre-wrap' }}>{message.text}</div>
+        ) : (
+          <MarkdownRender text={message.text} citations={message.citations} onCitationClick={onCitationClick} />
+        )}
         {message.citations && message.citations.length > 0 && (
           <div style={{
             marginTop: '10px',
@@ -523,6 +526,148 @@ function MessageBubble({ message, onCitationClick }) {
       </div>
     </div>
   )
+}
+
+// Renderer mínimo de markdown para las respuestas del copiloto.
+// Cubre lo que Gemini efectivamente devuelve: **bold**, *italic*, [N]
+// como referencias a citations, listas numeradas y con guión, headers.
+// No renderiza tablas, code blocks ni imágenes (no aparecen en este uso).
+function MarkdownRender({ text, citations = [], onCitationClick }) {
+  if (!text) return null
+  const lines = text.split(/\r?\n/)
+  const nodes = []
+  let currentList = null  // { type: 'ul'|'ol', items: [] }
+
+  const flushList = () => {
+    if (currentList) {
+      const ListTag = currentList.type
+      nodes.push(
+        <ListTag key={`list-${nodes.length}`} style={{
+          margin: '4px 0 8px 0',
+          paddingLeft: '22px',
+        }}>
+          {currentList.items.map((it, i) => (
+            <li key={i} style={{ marginBottom: '4px' }}>
+              {renderInline(it, citations, onCitationClick)}
+            </li>
+          ))}
+        </ListTag>
+      )
+      currentList = null
+    }
+  }
+
+  lines.forEach((raw, idx) => {
+    const line = raw.replace(/\s+$/, '')  // trim right
+    // Header (####, ###, ##, #)
+    const headerMatch = line.match(/^(#{1,4})\s+(.*)$/)
+    if (headerMatch) {
+      flushList()
+      const level = headerMatch[1].length
+      const content = headerMatch[2]
+      const sizes = { 1: '17px', 2: '15px', 3: '14px', 4: '13.5px' }
+      const weights = { 1: 700, 2: 700, 3: 700, 4: 600 }
+      nodes.push(
+        <div key={idx} style={{
+          fontSize: sizes[level],
+          fontWeight: weights[level],
+          margin: level <= 2 ? '12px 0 6px 0' : '8px 0 4px 0',
+          color: '#1e293b',
+        }}>
+          {renderInline(content, citations, onCitationClick)}
+        </div>
+      )
+      return
+    }
+    // Bullet list (* item, - item) — permite hasta 2 espacios de indent
+    const bulletMatch = line.match(/^(\s{0,4})[*\-]\s+(.*)$/)
+    if (bulletMatch) {
+      const content = bulletMatch[2]
+      if (!currentList || currentList.type !== 'ul') {
+        flushList()
+        currentList = { type: 'ul', items: [] }
+      }
+      currentList.items.push(content)
+      return
+    }
+    // Numbered list (1. item, 2. item)
+    const numMatch = line.match(/^(\s{0,4})\d+\.\s+(.*)$/)
+    if (numMatch) {
+      const content = numMatch[2]
+      if (!currentList || currentList.type !== 'ol') {
+        flushList()
+        currentList = { type: 'ol', items: [] }
+      }
+      currentList.items.push(content)
+      return
+    }
+    // Línea vacía → separador de párrafo
+    if (line.trim() === '') {
+      flushList()
+      return
+    }
+    // Párrafo normal
+    flushList()
+    nodes.push(
+      <div key={idx} style={{ margin: '4px 0' }}>
+        {renderInline(line, citations, onCitationClick)}
+      </div>
+    )
+  })
+  flushList()
+
+  return <>{nodes}</>
+}
+
+// Procesa **bold**, *italic* y [N] dentro de una línea.
+function renderInline(text, citations, onCitationClick) {
+  if (!text) return null
+  // Split por tokens: **...**, *...*, [N]. Regex captura los delimitadores
+  // para que el split preserve los matches como items.
+  const parts = text.split(/(\*\*[^*]+\*\*|\*[^*\n]+\*|\[\d+\])/g)
+  return parts.map((part, i) => {
+    if (!part) return null
+    if (part.startsWith('**') && part.endsWith('**')) {
+      return <strong key={i}>{part.slice(2, -2)}</strong>
+    }
+    if (part.startsWith('*') && part.endsWith('*') && part.length > 2) {
+      return <em key={i}>{part.slice(1, -1)}</em>
+    }
+    const citMatch = part.match(/^\[(\d+)\]$/)
+    if (citMatch) {
+      const n = Number(citMatch[1])
+      const citation = citations.find(c => c.index === n)
+      if (!citation) return <span key={i} style={{ color: '#94a3b8' }}>[{n}]</span>
+      return (
+        <button
+          key={i}
+          onClick={() => onCitationClick(citation)}
+          title={citation.title}
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            background: '#4f46e5',
+            color: 'white',
+            border: 'none',
+            borderRadius: '4px',
+            fontSize: '10px',
+            fontWeight: 700,
+            padding: '1px 5px',
+            margin: '0 1px',
+            cursor: 'pointer',
+            minWidth: '16px',
+            lineHeight: 1.4,
+            fontFamily: 'inherit',
+            verticalAlign: 'baseline',
+          }}
+        >
+          {n}
+        </button>
+      )
+    }
+    return <span key={i}>{part}</span>
+  })
 }
 
 function TypingIndicator() {
