@@ -5,13 +5,26 @@
 // Firma pública:  consultarIA(prompt, systemContext?) → Promise<string>
 // Si hay error, devuelve un JSON serializado con la forma { error: "..." } para
 // preservar el contrato que esperan los componentes existentes.
+//
+// Todo el `prompt` pasa por sanitizeUserPrompt() para neutralizar prompt
+// injection y envolverlo en delimitadores. El `systemContext` viene del
+// código, no del user — no se sanitiza.
 
 import { supabase } from './supabaseClient'
+import { sanitizeUserPrompt } from './lib/sanitizePrompt'
 
 export async function consultarIA(prompt, systemContext = '') {
+  const { sanitized, warnings, wasModified } = sanitizeUserPrompt(prompt)
+
+  // Loguear solo cuando el sanitizer modificó algo, para no ensuciar la
+  // consola. En un futuro esto puede ir a telemetría agregada.
+  if (wasModified && warnings.length > 0) {
+    console.info('[aiClient] sanitizer applied:', warnings.join(', '))
+  }
+
   try {
     const { data, error } = await supabase.functions.invoke('gemini-proxy', {
-      body: { prompt, systemContext },
+      body: { prompt: sanitized, systemContext },
     })
 
     if (error) {
