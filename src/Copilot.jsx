@@ -109,6 +109,45 @@ export default function Copilot() {
     setTimeout(() => inputRef.current?.focus(), 50)
   }
 
+  // Envía una pregunta directamente (usado por los chips del empty state)
+  const askDirect = (question) => {
+    if (loading || !org?.id) return
+    setInput(question)
+    // Pequeño delay para que setInput termine antes que send lea el estado
+    setTimeout(() => {
+      // Como send() lee de `input` state que puede no estar actualizado todavía,
+      // pasamos directamente. Adaptamos: hacemos inline el flujo minimo.
+      const userMsg = { role: 'user', text: question }
+      const newMessages = [...messages, userMsg]
+      setMessages(newMessages)
+      setInput('')
+      setLoading(true)
+      const history = messages.slice(-6).map(m => ({ role: m.role, text: m.text }))
+      supabase.functions.invoke('copilot-chat', { body: { question, history } })
+        .then(async ({ data, error }) => {
+          setLoading(false)
+          if (error || !data?.text) {
+            let errText = 'No se pudo obtener respuesta. Reintentá en un momento.'
+            if (error?.context?.text) {
+              try {
+                const bodyText = await error.context.text()
+                const parsed = JSON.parse(bodyText)
+                if (parsed?.error) errText = parsed.error
+              } catch { /* ignore */ }
+            } else if (data?.error) errText = data.error
+            setMessages([...newMessages, { role: 'assistant', text: errText, error: true }])
+            return
+          }
+          setMessages([...newMessages, {
+            role: 'assistant',
+            text: data.text,
+            citations: data.citations || [],
+            model: data.model,
+          }])
+        })
+    }, 30)
+  }
+
   const onKeyDown = (e) => {
     // Enter envía, Shift+Enter hace newline
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -166,7 +205,8 @@ export default function Copilot() {
         </button>
       )}
 
-      {/* SIDEBAR — panel deslizante */}
+      {/* SIDEBAR — panel deslizante. z-index 1100 para tapar el HelpButton
+          (que está en 1000 por default) cuando el copilot está abierto. */}
       <div
         style={{
           position: 'fixed',
@@ -178,7 +218,7 @@ export default function Copilot() {
           background: 'white',
           boxShadow: open ? '-20px 0 50px -20px rgba(0,0,0,0.2)' : 'none',
           transition: 'right 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
-          zIndex: 1000,
+          zIndex: 1100,
           display: 'flex',
           flexDirection: 'column',
           borderLeft: '1px solid #e2e8f0',
@@ -235,7 +275,7 @@ export default function Copilot() {
           }}
         >
           {messages.length === 0 && (
-            <EmptyState />
+            <EmptyState onExampleClick={askDirect} disabled={loading} />
           )}
           {messages.map((m, i) => (
             <MessageBubble key={i} message={m} onCitationClick={openCitation} />
@@ -325,7 +365,7 @@ export default function Copilot() {
 
 // ─────────── Sub-componentes ───────────
 
-function EmptyState() {
+function EmptyState({ onExampleClick, disabled }) {
   const examples = [
     '¿Cuáles son mis 3 riesgos más críticos?',
     'Resumime las NCs abiertas',
@@ -358,28 +398,45 @@ function EmptyState() {
       </p>
       <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
         {examples.map((ex, i) => (
-          <ExampleChip key={i} text={ex} />
+          <ExampleChip key={i} text={ex} onClick={() => onExampleClick(ex)} disabled={disabled} />
         ))}
       </div>
     </div>
   )
 }
 
-function ExampleChip({ text }) {
-  // Los ejemplos son solo visuales — clickearlos podría pre-llenar el input.
-  // Por ahora los dejamos como sugerencias visuales para no complicar el estado.
+function ExampleChip({ text, onClick, disabled }) {
   return (
-    <div style={{
-      background: 'white',
-      border: '1px solid #e2e8f0',
-      borderRadius: '8px',
-      padding: '10px 12px',
-      fontSize: '12px',
-      color: '#475569',
-      textAlign: 'left',
-    }}>
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      style={{
+        background: 'white',
+        border: '1px solid #e2e8f0',
+        borderRadius: '8px',
+        padding: '10px 12px',
+        fontSize: '12px',
+        color: '#475569',
+        textAlign: 'left',
+        cursor: disabled ? 'not-allowed' : 'pointer',
+        opacity: disabled ? 0.6 : 1,
+        transition: 'background 0.15s ease, border-color 0.15s ease',
+        fontFamily: 'inherit',
+        width: '100%',
+      }}
+      onMouseEnter={e => {
+        if (disabled) return
+        e.currentTarget.style.background = '#f5f3ff'
+        e.currentTarget.style.borderColor = '#c4b5fd'
+      }}
+      onMouseLeave={e => {
+        if (disabled) return
+        e.currentTarget.style.background = 'white'
+        e.currentTarget.style.borderColor = '#e2e8f0'
+      }}
+    >
       {text}
-    </div>
+    </button>
   )
 }
 
