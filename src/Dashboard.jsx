@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo } from 'react'
 import { supabase } from './supabaseClient'
 import { useOrg } from './OrgContext'
+import { computeImplementation } from './lib/computeImplementation'
 import {
   AlertTriangle, CheckCircle2, Target, Truck, TrendingUp,
   AlertOctagon, Calendar, ArrowRight, ShieldAlert, Users,
@@ -11,9 +12,6 @@ import {
 import { colors, families, tracking, weight, font } from './components/ui/tokens'
 
 const NC_OPEN_STATUSES = ['Identificada', 'En Análisis', 'Acción Definida', 'En Implementación', 'En Verificación', 'Reabierta']
-
-// Cuántos meses considerar "revisión vigente"
-const CONTEXT_REVIEW_MONTHS = 12
 
 export default function Dashboard({ alCambiarVista }) {
   const { org } = useOrg()
@@ -244,159 +242,6 @@ export default function Dashboard({ alCambiarVista }) {
   )
 }
 
-// ═══════════════════════════════════════════════════════════
-// CÁLCULO DE IMPLEMENTACIÓN
-// ═══════════════════════════════════════════════════════════
-function computeImplementation(r) {
-  const today = r.today
-  const monthsAgo = (m) => { const d = new Date(today); d.setMonth(d.getMonth() - m); return d }
-  const reviewCutoff = monthsAgo(CONTEXT_REVIEW_MONTHS)
-  const Y = r.currentYear
-
-  const item = (code, name, route, ok, pct, why) => ({ code, name, route, ok, pct, why })
-
-  const byClause = [
-    // 4.1 Contexto
-    (() => {
-      const factores = r.context.length
-      const reviewedRecent = r.context.filter(c => c.last_reviewed_date && new Date(c.last_reviewed_date) > reviewCutoff).length
-      const pct = Math.min(100, Math.round((factores >= 3 ? 50 : factores * 15) + (reviewedRecent / Math.max(factores, 1) * 50)))
-      return item('4.1', 'Contexto (FODA)', 'contexto', pct >= 70, pct, `${factores} factores · ${reviewedRecent} revisados <${CONTEXT_REVIEW_MONTHS}m`)
-    })(),
-    // 4.2 Stakeholders
-    (() => {
-      const total = r.stakeholders.length
-      const completos = r.stakeholders.filter(s => s.expectations || s.needs).length
-      const pct = Math.min(100, Math.round((total >= 3 ? 50 : total * 15) + (completos / Math.max(total, 1) * 50)))
-      return item('4.2', 'Partes Interesadas', 'stakeholders', pct >= 70, pct, `${total} mapeadas · ${completos} con needs/expectations`)
-    })(),
-    // 4.3 Alcance
-    (() => {
-      const s = r.scope
-      if (!s) return item('4.3', 'Alcance del SGC', 'alcance', false, 0, 'No declarado')
-      let pct = 20
-      if (s.scope_statement) pct += 25
-      if (s.status === 'Aprobada' || s.status === 'Comunicada') pct += 25
-      if (s.processes_covered) pct += 15
-      if (s.last_reviewed && new Date(s.last_reviewed) > reviewCutoff) pct += 15
-      return item('4.3', 'Alcance del SGC', 'alcance', pct >= 70, pct, `Status: ${s.status || 'Borrador'}`)
-    })(),
-    // 4.4 Procesos
-    (() => {
-      const total = r.processes.length
-      const tipados = r.processes.filter(p => p.process_type).length
-      const pct = Math.min(100, Math.round((total >= 3 ? 60 : total * 20) + (tipados / Math.max(total, 1) * 40)))
-      return item('4.4', 'Mapa de Procesos', 'procesos', pct >= 70, pct, `${total} procesos · ${tipados} clasificados`)
-    })(),
-    // 5.2 Política
-    (() => {
-      const p = r.policy
-      if (!p) return item('5.2', 'Política de Calidad', 'politica', false, 0, 'Sin política declarada')
-      let pct = 30
-      if (p.policy_text) pct += 30
-      if (p.status === 'Aprobada' || p.status === 'Comunicada') pct += 40
-      return item('5.2', 'Política de Calidad', 'politica', pct >= 70, pct, `Status: ${p.status || 'Borrador'}`)
-    })(),
-    // 5.3 Roles
-    (() => {
-      const total = r.jobs.length
-      const conCompetencias = r.jobs.filter(j => j.competencies_json && Object.keys(j.competencies_json).length).length
-      const pct = Math.min(100, Math.round((total >= 3 ? 50 : total * 15) + (conCompetencias / Math.max(total, 1) * 50)))
-      return item('5.3', 'Roles y Responsabilidades', 'roles', pct >= 70, pct, `${total} cargos · ${conCompetencias} con competencias`)
-    })(),
-    // 6.1 Riesgos
-    (() => {
-      const total = r.risks.length
-      const conControl = r.risks.filter(x => x.control_measure).length
-      const pct = Math.min(100, Math.round((total >= 5 ? 50 : total * 10) + (conControl / Math.max(total, 1) * 50)))
-      return item('6.1', 'Riesgos y Oportunidades', 'riesgos', pct >= 70, pct, `${total} riesgos · ${conControl} con control`)
-    })(),
-    // 6.2 Objetivos
-    (() => {
-      const total = r.objectives.length
-      const medidos = new Set(r.measurements.map(m => m.objective_id)).size
-      const pct = Math.min(100, Math.round((total >= 3 ? 50 : total * 15) + (medidos / Math.max(total, 1) * 50)))
-      return item('6.2', 'Objetivos de Calidad', 'objetivos', pct >= 70, pct, `${total} objetivos · ${medidos} con medición`)
-    })(),
-    // 6.2.b Plan estratégico
-    (() => {
-      const total = r.strategicActions.length
-      const pct = Math.min(100, total >= 3 ? 100 : total * 30)
-      return item('6.2b', 'Plan de Acción Estratégico', 'plan_estrategico', pct >= 70, pct, `${total} acciones definidas`)
-    })(),
-    // 7.1.2 Personal
-    (() => {
-      const total = r.personnel.length
-      const evaluados = r.personnel.filter(p => p.job_id || p.competency_gap).length
-      const pct = Math.min(100, Math.round((total >= 1 ? 40 : 0) + (evaluados / Math.max(total, 1) * 60)))
-      return item('7.1.2', 'Personal / Competencia', 'personal', pct >= 70, pct, `${total} personas · ${evaluados} con evaluación`)
-    })(),
-    // 7.2 Formación
-    (() => {
-      const total = r.training.length
-      const planAnual = r.training.filter(t => t.planned_year === Y).length
-      const pct = Math.min(100, Math.round((total >= 1 ? 30 : 0) + (planAnual >= 3 ? 70 : planAnual * 20)))
-      return item('7.2', 'Plan de Capacitación', 'formacion', pct >= 70, pct, `${total} cursos · ${planAnual} en plan ${Y}`)
-    })(),
-    // 7.4 Comunicación
-    (() => {
-      const total = r.commMatrix.length
-      const pct = Math.min(100, total >= 3 ? 100 : total * 30)
-      return item('7.4', 'Comunicación', 'comunicaciones', pct >= 70, pct, `${total} canales definidos`)
-    })(),
-    // 7.5 Documentos
-    (() => {
-      const total = r.documents.length
-      const pct = Math.min(100, total >= 5 ? 100 : total * 18)
-      return item('7.5', 'Información Documentada', 'documentos', pct >= 70, pct, `${total} documentos registrados`)
-    })(),
-    // 8.4 Proveedores
-    (() => {
-      const total = r.suppliers.length
-      const evaluados = r.suppliers.filter(s => s.evaluation_score).length
-      const pct = Math.min(100, Math.round((total >= 1 ? 40 : 0) + (evaluados / Math.max(total, 1) * 60)))
-      return item('8.4', 'Control Proveedores', 'proveedores', pct >= 70, pct, `${total} proveedores · ${evaluados} evaluados`)
-    })(),
-    // 9.2 Auditorías internas
-    (() => {
-      const total = r.audits.filter(a => a.year === Y || (a.audit_date && new Date(a.audit_date).getFullYear() === Y)).length
-      const cerradas = r.audits.filter(a => (a.status === 'Cerrada' || a.is_finished) && (a.year === Y || (a.audit_date && new Date(a.audit_date).getFullYear() === Y))).length
-      const pct = Math.min(100, Math.round((total >= 1 ? 50 : 0) + (cerradas / Math.max(total, 1) * 50)))
-      return item('9.2', 'Auditoría Interna', 'auditorias', pct >= 70, pct, `${total} en ${Y} · ${cerradas} cerradas`)
-    })(),
-    // 9.3 Revisión Dirección
-    (() => {
-      const total = r.review.filter(rv => rv.review_date && new Date(rv.review_date).getFullYear() === Y).length
-      const pct = total >= 1 ? 100 : 0
-      return item('9.3', 'Revisión por la Dirección', 'revision_direccion', pct >= 70, pct, `${total} revisiones en ${Y}`)
-    })(),
-    // 10.2 No Conformidades (módulo activo)
-    (() => {
-      const total = r.ncs.length
-      const conCausa = r.ncs.filter(n => n.root_cause || (Array.isArray(n.five_whys) && n.five_whys.length)).length
-      const pct = total === 0 ? 50 : Math.min(100, Math.round(50 + (conCausa / total * 50)))
-      return item('10.2', 'No Conformidades', 'no_conformidades', pct >= 70, pct, `${total} registradas · ${conCausa} con causa raíz`)
-    })(),
-    // 10.3 Mejora
-    (() => {
-      const total = r.opps.length
-      const implementadas = r.opps.filter(o => o.status === 'Implementada').length
-      const pct = Math.min(100, Math.round((total >= 1 ? 40 : 0) + (implementadas / Math.max(total, 1) * 60)))
-      return item('10.3', 'Mejora Continua', 'mejora_continua', pct >= 70, pct, `${total} oportunidades · ${implementadas} implementadas`)
-    })(),
-  ]
-
-  const globalPct = Math.round(byClause.reduce((a, c) => a + c.pct, 0) / byClause.length)
-  const cumplidos = byClause.filter(c => c.ok).length
-
-  let nivel, nivelColor, nivelIcon
-  if (globalPct < 25) { nivel = 'Inicial'; nivelColor = '#dc2626'; nivelIcon = '🌱' }
-  else if (globalPct < 50) { nivel = 'En implementación'; nivelColor = '#f59e0b'; nivelIcon = '🛠' }
-  else if (globalPct < 80) { nivel = 'Implementado'; nivelColor = '#0891b2'; nivelIcon = '✅' }
-  else { nivel = 'Optimizado'; nivelColor = '#16a34a'; nivelIcon = '🏆' }
-
-  return { byClause, globalPct, cumplidos, total: byClause.length, nivel, nivelColor, nivelIcon }
-}
 
 // ═══════════════════════════════════════════════════════════
 // CÁLCULO MÉTRICAS OPERATIVAS

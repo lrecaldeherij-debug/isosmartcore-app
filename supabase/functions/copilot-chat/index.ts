@@ -159,12 +159,17 @@ Deno.serve(async (req: Request) => {
   }
 
   // Body
-  let body: { question?: string; history?: Array<{ role: string; text: string }> };
+  let body: {
+    question?: string;
+    history?: Array<{ role: string; text: string }>;
+    snapshot?: any;  // frontend puede pasar el snapshot ya computado (mismo formato que Dashboard)
+  };
   try { body = await req.json(); }
   catch { return json({ error: "Body inválido" }, 400); }
 
   const question = String(body.question || "").trim();
-  const history = Array.isArray(body.history) ? body.history.slice(-6) : [];  // últimas 6 msgs
+  const history = Array.isArray(body.history) ? body.history.slice(-6) : [];
+  const clientSnapshot = body.snapshot || null;  // opcional
   if (!question) return json({ error: "Falta 'question'" }, 400);
   if (question.length > 4000) return json({ error: "Pregunta demasiado larga" }, 400);
 
@@ -186,27 +191,29 @@ Deno.serve(async (req: Request) => {
     return json({ error: `Embedding falló: ${(e as Error).message}` }, 502);
   }
 
-  // 2. Retrieval + snapshot en paralelo. El snapshot es un resumen ejecutivo
-  //    del SGC (% por cláusula + counts operativos) que le permite al modelo
-  //    detectar inconsistencias entre la pregunta y los datos reales
-  //    ("me preguntás por 4.4 al 50% pero 4.4 está al 100%, ¿quisiste decir 4.1?").
+  // 2. Retrieval. El snapshot preferentemente viene del body (frontend
+  //    computeImplementation — mismos números que ve el user en el Dashboard).
+  //    Si no vino, fallback a la RPC get_sgc_snapshot (SQL simplificado).
   const admin = createClient(supabaseUrl, serviceRole);
-  const [searchRes, snapshotRes] = await Promise.all([
+  const promises: Promise<any>[] = [
     admin.rpc("rag_search", {
       p_org_id: effectiveOrgId,
       p_query_embedding: "[" + queryEmbedding.join(",") + "]",
       p_top_k: TOP_K,
     }),
-    admin.rpc("get_sgc_snapshot", { p_org_id: effectiveOrgId }),
-  ]);
+  ];
+  if (!clientSnapshot) {
+    promises.push(admin.rpc("get_sgc_snapshot", { p_org_id: effectiveOrgId }));
+  }
+  const results = await Promise.all(promises);
+  const searchRes = results[0];
+  const snapshotRes = clientSnapshot ? { data: null, error: null } : results[1];
 
   if (searchRes.error) {
     console.error("copilot-chat: rag_search falló", searchRes.error);
     return json({ error: `Búsqueda RAG falló: ${searchRes.error.message}` }, 500);
   }
-  if (snapshotRes.error) {
-    // Snapshot es best-effort — si falla, seguimos sin él. El copilot va a
-    // ser menos preciso pero no rompe la respuesta.
+  if (!clientSnapshot && snapshotRes.error) {
     console.warn("copilot-chat: get_sgc_snapshot falló, sigo sin snapshot", snapshotRes.error);
   }
 
@@ -214,7 +221,7 @@ Deno.serve(async (req: Request) => {
     id: string; source_table: string; source_id: string;
     title: string; content: string; similarity: number;
   }>;
-  const snapshot = snapshotRes.data || null;
+  const snapshot = clientSnapshot || snapshotRes.data || null;
 
   // 3. Armar prompt
   const contextBlock = contextChunks.length === 0
@@ -223,8 +230,15 @@ Deno.serve(async (req: Request) => {
         `[${i + 1}] ${c.title}\n${c.content}`
       ).join("\n\n---\n\n");
 
+  // Elegir formato del snapshot según su origen. El del cliente tiene
+  // `byClause: [{code, name, pct, ok, why}]`; el de la RPC tiene `clauses: {...}`.
   const snapshotBlock = snapshot
-    ? `\n\nESTADO ACTUAL DEL SGC (resumen ejecutivo — usalo para chequear consistencia con la pregunta):\n${JSON.stringify(snapshot.clauses, null, 2)}`
+    ? (snapshot.byClause
+        ? `\n\nESTADO ACTUAL DEL SGC (${snapshot.globalPct}% global, nivel ${snapshot.nivel}, ${snapshot.cumplidos}/${snapshot.total} cláusulas cumplidas ≥70%):\n` +
+          snapshot.byClause.map((c: any) =>
+            `- Cláusula ${c.code} ${c.name}: ${c.pct}% ${c.ok ? '✓' : '✗'} — ${c.why}`
+          ).join("\n")
+        : `\n\nESTADO ACTUAL DEL SGC:\n${JSON.stringify(snapshot.clauses || snapshot, null, 2)}`)
     : "";
 
   const historyBlock = history.length === 0 ? "" :

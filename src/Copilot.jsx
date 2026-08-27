@@ -14,7 +14,38 @@
 import { useState, useRef, useEffect } from 'react'
 import { supabase } from './supabaseClient'
 import { useOrg } from './OrgContext'
+import { computeImplementation, loadSnapshotData } from './lib/computeImplementation'
 import { Sparkles, Send, X, Loader2, MessageSquarePlus, ExternalLink } from 'lucide-react'
+
+// Cache del snapshot por org (5 min). Evita cargar 19 queries en cada pregunta.
+// Key = orgId. Value = { snapshot, expiresAt }.
+const snapshotCache = new Map()
+const SNAPSHOT_TTL_MS = 5 * 60 * 1000
+
+async function getSnapshot(orgId) {
+  const cached = snapshotCache.get(orgId)
+  if (cached && cached.expiresAt > Date.now()) return cached.snapshot
+  try {
+    const raw = await loadSnapshotData(supabase, orgId)
+    const impl = computeImplementation(raw)
+    // Enviamos solo lo útil para el LLM: código, nombre, %, cumplido, por qué.
+    // Sin objetos internos ni tokens visuales.
+    const snapshot = {
+      globalPct: impl.globalPct,
+      nivel: impl.nivel,
+      cumplidos: impl.cumplidos,
+      total: impl.total,
+      byClause: impl.byClause.map(c => ({
+        code: c.code, name: c.name, pct: c.pct, ok: c.ok, why: c.why,
+      })),
+    }
+    snapshotCache.set(orgId, { snapshot, expiresAt: Date.now() + SNAPSHOT_TTL_MS })
+    return snapshot
+  } catch (err) {
+    console.warn('[Copilot] no pude cargar snapshot:', err.message)
+    return null
+  }
+}
 
 // Mapa source_table → nombre de la vista del router para poder navegar.
 // Coincide con los IDs de vistaActual en App.jsx.
@@ -85,8 +116,12 @@ export default function Copilot() {
     // Ventana de historial que le pasamos al backend (últimos 6, sin la actual)
     const history = messages.slice(-6).map(m => ({ role: m.role, text: m.text }))
 
+    // Snapshot: mismos % que el Dashboard, cacheado 5 min por org. Si falla
+    // (raro), el backend hace fallback a la RPC get_sgc_snapshot.
+    const snapshot = await getSnapshot(org.id)
+
     const { data, error } = await supabase.functions.invoke('copilot-chat', {
-      body: { question, history },
+      body: { question, history, snapshot },
     })
 
     setLoading(false)
@@ -122,42 +157,37 @@ export default function Copilot() {
   }
 
   // Envía una pregunta directamente (usado por los chips del empty state)
-  const askDirect = (question) => {
+  const askDirect = async (question) => {
     if (loading || !org?.id) return
-    setInput(question)
-    // Pequeño delay para que setInput termine antes que send lea el estado
-    setTimeout(() => {
-      // Como send() lee de `input` state que puede no estar actualizado todavía,
-      // pasamos directamente. Adaptamos: hacemos inline el flujo minimo.
-      const userMsg = { role: 'user', text: question }
-      const newMessages = [...messages, userMsg]
-      setMessages(newMessages)
-      setInput('')
-      setLoading(true)
-      const history = messages.slice(-6).map(m => ({ role: m.role, text: m.text }))
-      supabase.functions.invoke('copilot-chat', { body: { question, history } })
-        .then(async ({ data, error }) => {
-          setLoading(false)
-          if (error || !data?.text) {
-            let errText = 'No se pudo obtener respuesta. Reintentá en un momento.'
-            if (error?.context?.text) {
-              try {
-                const bodyText = await error.context.text()
-                const parsed = JSON.parse(bodyText)
-                if (parsed?.error) errText = parsed.error
-              } catch { /* ignore */ }
-            } else if (data?.error) errText = data.error
-            setMessages([...newMessages, { role: 'assistant', text: errText, error: true }])
-            return
-          }
-          setMessages([...newMessages, {
-            role: 'assistant',
-            text: data.text,
-            citations: data.citations || [],
-            model: data.model,
-          }])
-        })
-    }, 30)
+    const userMsg = { role: 'user', text: question }
+    const newMessages = [...messages, userMsg]
+    setMessages(newMessages)
+    setInput('')
+    setLoading(true)
+    const history = messages.slice(-6).map(m => ({ role: m.role, text: m.text }))
+    const snapshot = await getSnapshot(org.id)
+    supabase.functions.invoke('copilot-chat', { body: { question, history, snapshot } })
+      .then(async ({ data, error }) => {
+        setLoading(false)
+        if (error || !data?.text) {
+          let errText = 'No se pudo obtener respuesta. Reintentá en un momento.'
+          if (error?.context?.text) {
+            try {
+              const bodyText = await error.context.text()
+              const parsed = JSON.parse(bodyText)
+              if (parsed?.error) errText = parsed.error
+            } catch { /* ignore */ }
+          } else if (data?.error) errText = data.error
+          setMessages([...newMessages, { role: 'assistant', text: errText, error: true }])
+          return
+        }
+        setMessages([...newMessages, {
+          role: 'assistant',
+          text: data.text,
+          citations: data.citations || [],
+          model: data.model,
+        }])
+      })
   }
 
   const onKeyDown = (e) => {
