@@ -21,7 +21,10 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-const MODELS = (Deno.env.get("GEMINI_MODELS") ?? "gemini-2.5-flash,gemini-2.0-flash,gemini-1.5-flash")
+// gemini-2.0-flash fue retirado en 2026 (respuesta oficial de Google apunta
+// a gemini-3.6-flash). gemini-1.5-flash también deprecado. Actualizamos el
+// default; el env var GEMINI_MODELS sigue permitiendo override sin redeploy.
+const MODELS = (Deno.env.get("GEMINI_MODELS") ?? "gemini-3.6-flash,gemini-2.5-flash,gemini-1.5-flash")
   .split(",")
   .map(s => s.trim())
   .filter(Boolean);

@@ -22,7 +22,11 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 const EMBEDDING_MODELS = (Deno.env.get("GEMINI_EMBEDDING_MODELS") ?? "gemini-embedding-001,text-embedding-004,embedding-001")
   .split(",").map(s => s.trim()).filter(Boolean);
 const EMBEDDING_DIMS = 768;
-const CHAT_MODEL = Deno.env.get("COPILOT_MODEL") ?? "gemini-2.0-flash";
+// Fallback multi-modelo. gemini-2.0-flash fue removido en 2026 (respuesta
+// oficial: "use models/gemini-3.6-flash"). Mantenemos gemini-2.5-flash y
+// gemini-1.5-flash como plan B por si el nuevo tiene rate limit.
+const CHAT_MODELS = (Deno.env.get("COPILOT_MODELS") ?? "gemini-3.6-flash,gemini-2.5-flash,gemini-1.5-flash")
+  .split(",").map(s => s.trim()).filter(Boolean);
 const CHAT_TIMEOUT_MS = 25000;
 const TOP_K = 5;
 
@@ -216,42 +220,68 @@ PREGUNTA DEL USUARIO: ${question}
 
 Respondé ahora:`;
 
-  // 4. Generación
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${CHAT_MODEL}:generateContent?key=${apiKey}`;
-  const ctl = new AbortController();
-  const timeoutId = setTimeout(() => ctl.abort(), CHAT_TIMEOUT_MS);
-  try {
-    const res = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: fullPrompt }] }],
-      }),
-      signal: ctl.signal,
-    });
-    clearTimeout(timeoutId);
-    const data: any = await res.json();
-    if (!res.ok) {
-      const msg = data?.error?.message ?? `HTTP ${res.status}`;
-      return json({ error: `Gemini generación: ${msg}` }, 502);
-    }
-    const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-    if (!text) return json({ error: "Respuesta vacía de Gemini" }, 502);
+  // 4. Generación con fallback multi-modelo. Google retira modelos con
+  //    frecuencia (gemini-2.0-flash desapareció en 2026 sin previo aviso —
+  //    la respuesta oficial ya trae el nombre del reemplazo). Este loop
+  //    prueba modelos en orden y solo hace fallback ante 404/400.
+  let lastError = "sin respuesta";
+  let usedModel: string | null = null;
+  let answerText: string | null = null;
 
-    return json({
-      text: text.trim(),
-      citations: contextChunks.map((c, i) => ({
-        index: i + 1,
-        source_table: c.source_table,
-        source_id: c.source_id,
-        title: c.title,
-        similarity: Number(c.similarity.toFixed(3)),
-      })),
-      model: CHAT_MODEL,
-    });
-  } catch (e) {
-    clearTimeout(timeoutId);
-    const isTimeout = (e as Error).name === "AbortError";
-    return json({ error: isTimeout ? `Timeout ${CHAT_TIMEOUT_MS}ms` : (e as Error).message }, 502);
+  for (const model of CHAT_MODELS) {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+    const ctl = new AbortController();
+    const timeoutId = setTimeout(() => ctl.abort(), CHAT_TIMEOUT_MS);
+    try {
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: fullPrompt }] }],
+        }),
+        signal: ctl.signal,
+      });
+      clearTimeout(timeoutId);
+      const data: any = await res.json();
+
+      if (!res.ok) {
+        const status = res.status;
+        const msg = data?.error?.message ?? `HTTP ${status}`;
+        lastError = `${model}: ${msg}`;
+        // Solo fallback ante 400/404 (modelo retirado). Rate limit (429),
+        // auth (401/403) o server error (500+) propagan.
+        if (status === 400 || status === 404) continue;
+        return json({ error: `Gemini: ${msg}` }, 502);
+      }
+
+      const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (!text) {
+        lastError = `${model}: respuesta vacía`;
+        continue;
+      }
+      answerText = text.trim();
+      usedModel = model;
+      break;
+    } catch (e) {
+      clearTimeout(timeoutId);
+      const isTimeout = (e as Error).name === "AbortError";
+      lastError = `${model}: ${isTimeout ? `timeout ${CHAT_TIMEOUT_MS}ms` : (e as Error).message}`;
+    }
   }
+
+  if (!answerText) {
+    return json({ error: `Todos los modelos de chat fallaron. Último: ${lastError}` }, 502);
+  }
+
+  return json({
+    text: answerText,
+    citations: contextChunks.map((c, i) => ({
+      index: i + 1,
+      source_table: c.source_table,
+      source_id: c.source_id,
+      title: c.title,
+      similarity: Number(c.similarity.toFixed(3)),
+    })),
+    model: usedModel,
+  });
 });
