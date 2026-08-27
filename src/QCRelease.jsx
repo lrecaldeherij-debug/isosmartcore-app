@@ -11,6 +11,7 @@ import IsoInfoCard from './IsoInfoCard'
 import { CLAUSE_GUIDES } from './clauseGuides'
 import { toast } from './lib/toast'
 import { confirm } from './lib/confirm'
+import WorkOrderTimeline from './components/WorkOrderTimeline'
 
 const DECISION_OPTIONS = ['Liberado', 'Liberación condicional', 'Rechazado']
 const DECISION_COLORS = {
@@ -603,6 +604,8 @@ export default function QCRelease() {
                   <p style={{ margin: '0.2rem 0 0 0', fontSize: '0.88rem' }}>{detailItem.notes}</p>
                 </div>
               )}
+
+              <WorkOrderTimeline sourceTable="qc_inspections" sourceId={detailItem.id} />
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.75rem 1.25rem', borderTop: '1px solid #e2e8f0' }}>
               <button onClick={() => handleDeleteInspection(detailItem)} className="btn btn-ghost" style={{ color: '#ef4444' }}>

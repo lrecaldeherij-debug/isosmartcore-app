@@ -11,6 +11,7 @@ import IsoInfoCard from './IsoInfoCard'
 import { CLAUSE_GUIDES } from './clauseGuides'
 import { toast } from './lib/toast'
 import { confirm } from './lib/confirm'
+import WorkOrderTimeline from './components/WorkOrderTimeline'
 
 const STATUS_OPTIONS = ['Borrador', 'En Revisión', 'Aprobado', 'Rechazado', 'En Producción', 'Entregado']
 const PRIORITY_OPTIONS = ['Alta', 'Media', 'Baja']
@@ -720,6 +721,8 @@ Devuelve EXCLUSIVAMENTE este JSON (sin markdown, sin texto extra):
                   </div>
                 </div>
               )}
+
+              <WorkOrderTimeline sourceTable="customer_orders" sourceId={detailItem.id} />
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.75rem 1.25rem', borderTop: '1px solid #e2e8f0' }}>
               <button onClick={() => handleDelete(detailItem)} className="btn btn-ghost" style={{ color: '#ef4444' }}>

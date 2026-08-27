@@ -53,7 +53,9 @@ const BillingSettings = lazy(() => import('./BillingSettings'))
 const Team = lazy(() => import('./Team'))
 const HelpSupport = lazy(() => import('./HelpSupport'))
 const AdminDashboard = lazy(() => import('./AdminDashboard'))
+const BandejaOperativa = lazy(() => import('./BandejaOperativa'))
 import HelpButton from './components/ui/HelpButton'
+import { isOperator, initialViewForRole, OPERATOR_ALLOWED_VIEWS } from './lib/roles'
 import Copilot from './Copilot'
 import ImpersonateBanner from './components/ImpersonateBanner'
 import { 
@@ -294,9 +296,10 @@ async function handleSignOut() {
 }
 
 function AppShell() {
-  const { org, loading: orgLoading, error: orgError, can, refresh } = useOrg()
+  const { org, loading: orgLoading, error: orgError, can, refresh, role } = useOrg()
   const isSuperAdmin = useSuperAdmin()
-  const [vistaActual, setVistaActual] = useState('inicio')
+  const operator = isOperator(role)
+  const [vistaActual, setVistaActual] = useState(() => initialViewForRole(role))
   const [onboardingForceCompleted, setOnboardingForceCompleted] = useState(false)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [expandedSections, setExpandedSections] = useState({
@@ -332,7 +335,17 @@ function AppShell() {
     )
   }
 
-  const navegarA = (vista) => { setVistaActual(vista); setMobileMenuOpen(false) }
+  const navegarA = (vista) => {
+    // Guardrail: si es operator y la vista no esta en su whitelist, mandamos
+    // a su bandeja. Ademas de la UI oculta, esto bloquea navegacion via URL
+    // o via alCambiarVista('riesgos') desde componentes hijos.
+    if (operator && !OPERATOR_ALLOWED_VIEWS.has(vista)) {
+      setVistaActual('bandeja_operativa')
+    } else {
+      setVistaActual(vista)
+    }
+    setMobileMenuOpen(false)
+  }
 
   const toggleSection = (section) => {
     setExpandedSections(prev => ({
@@ -376,6 +389,25 @@ function AppShell() {
         </div>
         
         <NavContext.Provider value={{ vistaActual, navegarA, expandedSections, toggleSection }}>
+        {operator ? (
+          // Sidebar reducido para operator: solo su bandeja + modulos operativos.
+          // No ve politica, riesgos, contexto, FODA, auditorias, revision, team, billing.
+          <nav className="nav-menu">
+            <NavItem id="bandeja_operativa" label="Mi bandeja" icon={Home} />
+            <div style={{ margin: '10px 0', borderTop: '1px solid var(--sidebar-border)' }}></div>
+            <div className="nav-group-title">Operación (8)</div>
+            <NavItem id="ventas" label="Pedidos (8.2)" icon={ShoppingCart} />
+            <NavItem id="produccion" label="Producción (8.5)" icon={Factory} />
+            <NavItem id="liberacion" label="Liberación (8.6)" icon={CheckCircle} />
+            <NavItem id="incidentes" label="Cambios e Incidentes" icon={AlertOctagon} />
+            <div style={{ margin: '10px 0', borderTop: '1px solid var(--sidebar-border)' }}></div>
+            <NavItem id="ayuda" label="Ayuda y Soporte" icon={HelpCircle} />
+            <button onClick={handleSignOut} className="nav-btn logout">
+              <LogOut size={18} />
+              <span>Cerrar Sesión</span>
+            </button>
+          </nav>
+        ) : (
         <nav className="nav-menu">
           <NavItem id="perfil_empresa" label="ADN de la Empresa" icon={Building2} />
           <NavItem id="inicio" label="Tablero Principal" icon={Home} />
@@ -463,12 +495,14 @@ function AppShell() {
             <span>Cerrar Sesión</span>
           </button>
         </nav>
+        )}
         </NavContext.Provider>
       </aside>
 
       {/* CONTENIDO */}
       <main className="main-content">
         <Suspense fallback={<LoadingScreen label="Cargando módulo…" />}>
+        {vistaActual === 'bandeja_operativa' && <BandejaOperativa alCambiarVista={navegarA} />}
         {vistaActual === 'inicio' && <Dashboard alCambiarVista={navegarA} />}
         {vistaActual === 'guia' && <ImplementationGuide alCambiarVista={navegarA} />}
         {vistaActual === 'perfil_empresa' && <CompanyProfile />}

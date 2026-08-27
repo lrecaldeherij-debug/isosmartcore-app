@@ -10,6 +10,7 @@ import IsoInfoCard from './IsoInfoCard'
 import { CLAUSE_GUIDES } from './clauseGuides'
 import { toast } from './lib/toast'
 import { confirm } from './lib/confirm'
+import WorkOrderTimeline from './components/WorkOrderTimeline'
 
 const STATUS_OPTIONS = ['Pendiente', 'En Proceso', 'En Pausa', 'Terminado', 'Cancelado']
 const STATUS_COLORS = {
@@ -777,6 +778,8 @@ export default function ProductionControl() {
                   </div>
                 </div>
               )}
+
+              <WorkOrderTimeline sourceTable="production_orders" sourceId={detailItem.id} />
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.75rem 1.25rem', borderTop: '1px solid #e2e8f0' }}>
               <button onClick={() => handleDelete(detailItem)} className="btn btn-ghost" style={{ color: '#ef4444' }}>

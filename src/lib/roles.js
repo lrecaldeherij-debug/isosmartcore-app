@@ -1,10 +1,11 @@
 // =============================================================================
 // Definición central de roles y permisos.
 //
-// El enum `org_role` en Postgres tiene 4 valores:
+// El enum `org_role` en Postgres tiene 5 valores:
 //   owner            — propietario de la org (puede todo, gestiona equipo + plan)
 //   quality_manager  — gestor de calidad (CRUD en todos los módulos ISO)
 //   auditor          — auditor (lee todo, edita solo auditorías y hallazgos)
+//   operator         — comercial/producción/QC (CRUD solo en módulos operativos 8.x)
 //   viewer           — operario (solo lectura)
 //
 // Las RLS en Postgres ya restringen ACCESO por org. Acá agregamos restricciones
@@ -13,21 +14,26 @@
 // =============================================================================
 
 export const ROLES = {
-  owner:           { label: 'Propietario',     desc: 'Dueño de la cuenta. Acceso total + facturación + gestión de equipo.', color: '#dc2626', icon: '👑' },
-  quality_manager: { label: 'Gestor calidad',  desc: 'CRUD completo en todos los módulos ISO. No accede a facturación.',     color: '#0891b2', icon: '🛡️' },
-  auditor:         { label: 'Auditor',         desc: 'Lee todo. Edita solo auditorías internas y registra hallazgos.',       color: '#f59e0b', icon: '🔍' },
-  viewer:          { label: 'Operario',        desc: 'Solo lectura. Ideal para personal operativo que consulta políticas.',  color: '#64748b', icon: '👁️' },
+  owner:           { label: 'Propietario',     desc: 'Dueño de la cuenta. Acceso total + facturación + gestión de equipo.',                   color: '#dc2626', icon: '👑' },
+  quality_manager: { label: 'Gestor calidad',  desc: 'CRUD completo en todos los módulos ISO. No accede a facturación.',                       color: '#0891b2', icon: '🛡️' },
+  auditor:         { label: 'Auditor',         desc: 'Lee todo. Edita solo auditorías internas y registra hallazgos.',                         color: '#f59e0b', icon: '🔍' },
+  operator:        { label: 'Operativo',       desc: 'Comercial, producción o QC. Registra pedidos, avances y liberaciones. No ve política.', color: '#7c3aed', icon: '🛠️' },
+  viewer:          { label: 'Operario',        desc: 'Solo lectura. Ideal para personal operativo que consulta políticas.',                    color: '#64748b', icon: '👁️' },
 }
 
-export const ROLE_ORDER = ['owner', 'quality_manager', 'auditor', 'viewer']
+export const ROLE_ORDER = ['owner', 'quality_manager', 'auditor', 'operator', 'viewer']
 
 // ─── Permisos por entidad ───
 // Cada entidad declara qué roles pueden hacer qué.
-// La regla general: owner y quality_manager hacen todo. Auditor y viewer son más restringidos.
+// La regla general: owner y quality_manager hacen todo. Auditor, operator y
+// viewer son más restringidos.
 
 const FULL_WRITE = new Set(['owner', 'quality_manager'])
 const AUDIT_WRITE = new Set(['owner', 'quality_manager', 'auditor'])
-const READ_ALL = new Set(['owner', 'quality_manager', 'auditor', 'viewer'])
+// Escritura operativa: owner, QM y operator (para que el operativo cargue
+// pedidos/produccion/liberacion sin necesidad de escalar a QM).
+const OPERATIONAL_WRITE = new Set(['owner', 'quality_manager', 'operator'])
+const READ_ALL = new Set(['owner', 'quality_manager', 'auditor', 'operator', 'viewer'])
 
 export const PERMISSIONS = {
   // Módulos ISO operativos
@@ -43,14 +49,17 @@ export const PERMISSIONS = {
   training_records:        { read: READ_ALL, write: FULL_WRITE, delete: new Set(['owner', 'quality_manager']) },
   personnel:               { read: READ_ALL, write: FULL_WRITE, delete: new Set(['owner', 'quality_manager']) },
   suppliers:               { read: READ_ALL, write: FULL_WRITE, delete: new Set(['owner', 'quality_manager']) },
-  customer_requirements:   { read: READ_ALL, write: FULL_WRITE, delete: new Set(['owner', 'quality_manager']) },
+  customer_requirements:   { read: READ_ALL, write: OPERATIONAL_WRITE, delete: new Set(['owner', 'quality_manager']) },
+  customer_orders:         { read: READ_ALL, write: OPERATIONAL_WRITE, delete: new Set(['owner', 'quality_manager']) },
   documents:               { read: READ_ALL, write: FULL_WRITE, delete: new Set(['owner', 'quality_manager']) },
   communication_matrix:    { read: READ_ALL, write: FULL_WRITE, delete: new Set(['owner', 'quality_manager']) },
 
-  // Producción / operativo
-  production_orders:       { read: READ_ALL, write: FULL_WRITE, delete: new Set(['owner', 'quality_manager']) },
-  qc_release:              { read: READ_ALL, write: FULL_WRITE, delete: new Set(['owner', 'quality_manager']) },
-  operational_incidents:   { read: READ_ALL, write: FULL_WRITE, delete: new Set(['owner', 'quality_manager']) },
+  // Producción / operativo — operator también escribe acá (su bandeja)
+  production_orders:       { read: READ_ALL, write: OPERATIONAL_WRITE, delete: new Set(['owner', 'quality_manager']) },
+  qc_release:              { read: READ_ALL, write: OPERATIONAL_WRITE, delete: new Set(['owner', 'quality_manager']) },
+  operational_incidents:   { read: READ_ALL, write: OPERATIONAL_WRITE, delete: new Set(['owner', 'quality_manager']) },
+  work_order_events:       { read: READ_ALL, write: OPERATIONAL_WRITE, delete: new Set(['owner', 'quality_manager']) },
+  work_order_attachments:  { read: READ_ALL, write: OPERATIONAL_WRITE, delete: new Set(['owner', 'quality_manager']) },
 
   // Mejora y auditoría — auditor puede ESCRIBIR
   non_conformities:        { read: READ_ALL, write: AUDIT_WRITE, delete: new Set(['owner', 'quality_manager']) },
@@ -93,3 +102,27 @@ export function isHigherOrEqual(roleA, roleB) {
   if (ia === -1 || ib === -1) return false
   return ia <= ib
 }
+
+// ─── Helpers para el rol operator ───
+// El operator ve UI reducida: solo su bandeja + los modulos operativos.
+// Estas vistas del router (vistaActual en App.jsx) son las unicas accesibles
+// para operator. Si intenta navegar a otra, redirigimos a su bandeja.
+export const OPERATOR_ALLOWED_VIEWS = new Set([
+  'bandeja_operativa',   // pantalla nueva: dashboard del operativo
+  'ventas',              // Pedidos 8.2
+  'produccion',          // Produccion 8.5
+  'liberacion',          // QC 8.6
+  'incidentes',          // Cambios e incidentes 8.5.3/8.5.6
+  'ayuda',               // Ayuda y soporte
+])
+
+export function isOperator(role) {
+  return role === 'operator'
+}
+
+// Devuelve la vista inicial segun rol. Operator arranca en su bandeja,
+// el resto en el Dashboard SGC.
+export function initialViewForRole(role) {
+  return role === 'operator' ? 'bandeja_operativa' : 'inicio'
+}
+
