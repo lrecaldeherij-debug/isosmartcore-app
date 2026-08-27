@@ -159,9 +159,19 @@ Deno.serve(async (req: Request) => {
     }
   `;
 
-  // ── 8. Fallback por modelo con timeout ───────────────────────────────
+  // ── 8. Fallback por modelo con timeout + auto-parseo del reemplazo ──
+  // Cuando Google retira un modelo devuelve 404 con "Please use models/X" —
+  // extraemos X del mensaje y lo agregamos al head de la queue. Sistema
+  // se auto-repara sin redeploy.
   let lastError = "Sin respuesta";
-  for (const model of MODELS) {
+  const queue = [...MODELS];
+  const attempted = new Set<string>();
+
+  while (queue.length > 0) {
+    const model = queue.shift()!;
+    if (attempted.has(model)) continue;
+    attempted.add(model);
+
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
     const ctl = new AbortController();
     const timeoutId = setTimeout(() => ctl.abort(), MODEL_TIMEOUT_MS);
@@ -183,6 +193,14 @@ Deno.serve(async (req: Request) => {
           return json({ error: "API Key de Gemini inválida" }, 502);
         }
         lastError = `${model}: ${msg}`;
+        // Auto-parseo: si es 404/400 y Google sugiere reemplazo, prepend.
+        if (resp.status === 404 || resp.status === 400) {
+          const suggested = msg.match(/models\/([a-z0-9\-\.]+)/i)?.[1];
+          if (suggested && !attempted.has(suggested)) {
+            console.info(`gemini-proxy: ${model} retirado, sugiere ${suggested} → prepend`);
+            queue.unshift(suggested);
+          }
+        }
         continue;
       }
 

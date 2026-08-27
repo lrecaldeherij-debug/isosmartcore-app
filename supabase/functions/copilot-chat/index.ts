@@ -78,16 +78,28 @@ async function tryEmbedModel(apiKey: string, model: string, text: string): Promi
 
 async function embedQuery(apiKey: string, text: string): Promise<number[]> {
   const errors: string[] = [];
-  for (const model of EMBEDDING_MODELS) {
+  const queue = [...EMBEDDING_MODELS];
+  const attempted = new Set<string>();
+  while (queue.length > 0) {
+    const model = queue.shift()!;
+    if (attempted.has(model)) continue;
+    attempted.add(model);
     try {
       return await tryEmbedModel(apiKey, model, text);
     } catch (e) {
       const msg = (e as Error).message;
       errors.push(`${model}: ${msg}`);
+      // Solo hacer fallback ante 404/400/dims. 401/429/500 propagan.
       if (!/HTTP (400|404)/.test(msg) && !/dims incorrectas/.test(msg)) throw e;
+      // Auto-parseo: si Google sugiere un reemplazo, prepend.
+      const suggested = msg.match(/models\/([a-z0-9\-\.]+)/i)?.[1];
+      if (suggested && !attempted.has(suggested)) {
+        console.info(`copilot-chat/embed: ${model} retirado, sugiere ${suggested} → prepend`);
+        queue.unshift(suggested);
+      }
     }
   }
-  throw new Error(`Todos los modelos fallaron: ${errors.join(" | ")}`);
+  throw new Error(`Todos los modelos de embedding fallaron: ${errors.join(" | ")}`);
 }
 
 Deno.serve(async (req: Request) => {
@@ -220,15 +232,24 @@ PREGUNTA DEL USUARIO: ${question}
 
 Respondé ahora:`;
 
-  // 4. Generación con fallback multi-modelo. Google retira modelos con
-  //    frecuencia (gemini-2.0-flash desapareció en 2026 sin previo aviso —
-  //    la respuesta oficial ya trae el nombre del reemplazo). Este loop
-  //    prueba modelos en orden y solo hace fallback ante 404/400.
+  // 4. Generación con fallback multi-modelo + auto-parseo del reemplazo.
+  //    Google retira modelos con frecuencia (gemini-2.0-flash desapareció
+  //    en 2026 sin previo aviso). En el mensaje de error 404 SIEMPRE nos
+  //    dice el reemplazo ("Please use models/gemini-3.6-flash"). Lo
+  //    extraemos y lo agregamos al head de la cola para que el sistema
+  //    se auto-repare sin redeploy.
   let lastError = "sin respuesta";
   let usedModel: string | null = null;
   let answerText: string | null = null;
 
-  for (const model of CHAT_MODELS) {
+  // Copia mutable de la lista para poder prepend el modelo sugerido cuando aparezca
+  const modelQueue = [...CHAT_MODELS];
+  const attempted = new Set<string>();
+
+  while (modelQueue.length > 0) {
+    const model = modelQueue.shift()!;
+    if (attempted.has(model)) continue;
+    attempted.add(model);
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
     const ctl = new AbortController();
     const timeoutId = setTimeout(() => ctl.abort(), CHAT_TIMEOUT_MS);
@@ -250,8 +271,16 @@ Respondé ahora:`;
         lastError = `${model}: ${msg}`;
         // Solo fallback ante 400/404 (modelo retirado). Rate limit (429),
         // auth (401/403) o server error (500+) propagan.
-        if (status === 400 || status === 404) continue;
-        return json({ error: `Gemini: ${msg}` }, 502);
+        if (status !== 400 && status !== 404) {
+          return json({ error: `Gemini: ${msg}` }, 502);
+        }
+        // Auto-parseo: si el error sugiere un reemplazo, ponelo al head.
+        const suggested = msg.match(/models\/([a-z0-9\-\.]+)/i)?.[1];
+        if (suggested && !attempted.has(suggested)) {
+          console.info(`copilot-chat: modelo ${model} retirado, Google sugiere ${suggested} → prepend`);
+          modelQueue.unshift(suggested);
+        }
+        continue;
       }
 
       const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
@@ -267,7 +296,7 @@ Respondé ahora:`;
       const isTimeout = (e as Error).name === "AbortError";
       lastError = `${model}: ${isTimeout ? `timeout ${CHAT_TIMEOUT_MS}ms` : (e as Error).message}`;
     }
-  }
+  }  // end while
 
   if (!answerText) {
     return json({ error: `Todos los modelos de chat fallaron. Último: ${lastError}` }, 502);

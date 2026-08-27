@@ -162,14 +162,24 @@ async function tryEmbedModel(apiKey: string, model: string, text: string): Promi
 
 async function embedWithGemini(apiKey: string, text: string): Promise<number[]> {
   const errors: string[] = [];
-  for (const model of EMBEDDING_MODELS) {
+  const queue = [...EMBEDDING_MODELS];
+  const attempted = new Set<string>();
+  while (queue.length > 0) {
+    const model = queue.shift()!;
+    if (attempted.has(model)) continue;
+    attempted.add(model);
     try {
       return await tryEmbedModel(apiKey, model, text);
     } catch (e) {
       const msg = (e as Error).message;
       errors.push(`${model}: ${msg}`);
-      // Solo hacer fallback si es 404/400 (modelo no existe). Si es 401/429/500, propagar.
       if (!/HTTP (400|404)/.test(msg) && !/dims incorrectas/.test(msg)) throw e;
+      // Auto-parseo del modelo sugerido por Google en el error 404.
+      const suggested = msg.match(/models\/([a-z0-9\-\.]+)/i)?.[1];
+      if (suggested && !attempted.has(suggested)) {
+        console.info(`embed-and-index: ${model} retirado, sugiere ${suggested} → prepend`);
+        queue.unshift(suggested);
+      }
     }
   }
   throw new Error(`Todos los modelos de embedding fallaron: ${errors.join(" | ")}`);

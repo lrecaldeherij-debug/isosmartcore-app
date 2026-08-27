@@ -8,3 +8,8 @@ verify_jwt = true
 
 [functions.invite-member]
 verify_jwt = true
+
+# ai-health-check corre desde un cron externo (GH Actions) sin JWT.
+# No expone data — solo pinguea Gemini para saber qué modelos siguen vivos.
+[functions.ai-health-check]
+verify_jwt = false

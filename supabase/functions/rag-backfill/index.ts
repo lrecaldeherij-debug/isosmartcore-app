@@ -119,13 +119,23 @@ async function tryEmbedModel(apiKey: string, model: string, text: string): Promi
 
 async function embedText(apiKey: string, text: string): Promise<number[]> {
   const errors: string[] = [];
-  for (const model of EMBEDDING_MODELS) {
+  const queue = [...EMBEDDING_MODELS];
+  const attempted = new Set<string>();
+  while (queue.length > 0) {
+    const model = queue.shift()!;
+    if (attempted.has(model)) continue;
+    attempted.add(model);
     try {
       return await tryEmbedModel(apiKey, model, text);
     } catch (e) {
       const msg = (e as Error).message;
       errors.push(`${model}: ${msg}`);
       if (!/HTTP (400|404)/.test(msg) && !/dims incorrectas/.test(msg)) throw e;
+      const suggested = msg.match(/models\/([a-z0-9\-\.]+)/i)?.[1];
+      if (suggested && !attempted.has(suggested)) {
+        console.info(`rag-backfill: ${model} retirado, sugiere ${suggested} → prepend`);
+        queue.unshift(suggested);
+      }
     }
   }
   throw new Error(`Todos los modelos fallaron: ${errors.join(" | ")}`);

@@ -1,0 +1,74 @@
+name: AI Health Check
+
+# Corre diario 09:00 UTC (~04:00 hora Quito) y también manualmente.
+# Pinguea todos los modelos de Gemini que usamos y falla el workflow si
+# alguno devuelve 404 (modelo retirado). El fail te llega por email de
+# GitHub — así te enterás antes que un user se tope con el bug.
+#
+# Requiere el secret AI_HEALTH_URL en Repo Settings → Secrets:
+#   https://<project-ref>.supabase.co/functions/v1/ai-health-check
+# Y AI_HEALTH_ANON_KEY con la anon key de Supabase (aunque la función
+# tenga verify_jwt=false, Supabase igual pide apikey a nivel del gateway).
+
+on:
+  schedule:
+    # 09:00 UTC = 04:00 Ecuador. Antes de que arranque el día laboral.
+    - cron: '0 9 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: ai-health
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Ping ai-health-check
+        env:
+          AI_HEALTH_URL: ${{ secrets.AI_HEALTH_URL }}
+          AI_HEALTH_ANON_KEY: ${{ secrets.AI_HEALTH_ANON_KEY }}
+        run: |
+          if [ -z "$AI_HEALTH_URL" ] || [ -z "$AI_HEALTH_ANON_KEY" ]; then
+            echo "::error::Faltan secrets AI_HEALTH_URL o AI_HEALTH_ANON_KEY"
+            exit 1
+          fi
+
+          # -f falla si HTTP >= 400. Escribe el body a stdout independientemente.
+          echo "Pingueando $AI_HEALTH_URL"
+          HTTP_CODE=$(curl -s -o response.json -w "%{http_code}" \
+            -H "apikey: $AI_HEALTH_ANON_KEY" \
+            -H "Authorization: Bearer $AI_HEALTH_ANON_KEY" \
+            "$AI_HEALTH_URL")
+
+          echo "HTTP: $HTTP_CODE"
+          echo "--- Response body ---"
+          cat response.json
+          echo ""
+          echo "---------------------"
+
+          # Extract summary con jq para el step summary
+          if command -v jq >/dev/null; then
+            {
+              echo "### AI Health Check"
+              echo ""
+              echo "**HTTP:** \`$HTTP_CODE\`"
+              echo ""
+              echo "**Summary:** \`$(jq -c .summary response.json)\`"
+              echo ""
+              echo "**Details:**"
+              echo '```json'
+              jq . response.json
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+          # 200 = todo OK. 503 = al menos 1 modelo caído — falla el workflow
+          # para que llegue notificación de GitHub.
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "::error::Al menos un modelo de IA está caído (HTTP $HTTP_CODE). Revisá la salida arriba y actualizá GEMINI_MODELS / COPILOT_MODELS / GEMINI_EMBEDDING_MODELS con el reemplazo sugerido."
+            exit 1
+          fi
+
+          echo "✓ Todos los modelos respondiendo OK"
