@@ -25,7 +25,12 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-const EMBEDDING_MODEL = "text-embedding-004";
+// Modelos con fallback. text-embedding-004 dio 404 en producción (Google
+// deprecó el path v1beta/models/text-embedding-004 durante 2026); el modelo
+// vigente es gemini-embedding-001, que soporta outputDimensionality=768 para
+// mantener compatibilidad con vector(768) sin recrear el índice.
+const EMBEDDING_MODELS = (Deno.env.get("GEMINI_EMBEDDING_MODELS") ?? "gemini-embedding-001,text-embedding-004,embedding-001")
+  .split(",").map(s => s.trim()).filter(Boolean);
 const EMBEDDING_DIMS = 768;
 
 const CORS = {
@@ -121,33 +126,53 @@ async function sha256Hex(str: string): Promise<string> {
   return Array.from(new Uint8Array(digest), b => b.toString(16).padStart(2, "0")).join("");
 }
 
-async function embedWithGemini(apiKey: string, text: string): Promise<number[]> {
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${EMBEDDING_MODEL}:embedContent?key=${apiKey}`;
+async function tryEmbedModel(apiKey: string, model: string, text: string): Promise<number[]> {
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:embedContent?key=${apiKey}`;
+  const body: any = {
+    content: { parts: [{ text }] },
+    taskType: "RETRIEVAL_DOCUMENT",
+  };
+  // gemini-embedding-001 default es 3072 dims — pedimos 768 para el pgvector actual.
+  if (model === "gemini-embedding-001") body.outputDimensionality = EMBEDDING_DIMS;
+
   const ctl = new AbortController();
   const timeoutId = setTimeout(() => ctl.abort(), 20000);
   try {
     const res = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        content: { parts: [{ text }] },
-      }),
+      body: JSON.stringify(body),
       signal: ctl.signal,
     });
     clearTimeout(timeoutId);
     if (!res.ok) {
       const errText = await res.text();
-      throw new Error(`Gemini embedding HTTP ${res.status}: ${errText.slice(0, 200)}`);
+      throw new Error(`HTTP ${res.status}: ${errText.slice(0, 300)}`);
     }
     const data: any = await res.json();
     const values = data?.embedding?.values;
     if (!Array.isArray(values) || values.length !== EMBEDDING_DIMS) {
-      throw new Error(`Embedding vacío o dims incorrectas (esperado ${EMBEDDING_DIMS})`);
+      throw new Error(`dims incorrectas: got ${values?.length}, want ${EMBEDDING_DIMS}`);
     }
     return values;
   } finally {
     clearTimeout(timeoutId);
   }
+}
+
+async function embedWithGemini(apiKey: string, text: string): Promise<number[]> {
+  const errors: string[] = [];
+  for (const model of EMBEDDING_MODELS) {
+    try {
+      return await tryEmbedModel(apiKey, model, text);
+    } catch (e) {
+      const msg = (e as Error).message;
+      errors.push(`${model}: ${msg}`);
+      // Solo hacer fallback si es 404/400 (modelo no existe). Si es 401/429/500, propagar.
+      if (!/HTTP (400|404)/.test(msg) && !/dims incorrectas/.test(msg)) throw e;
+    }
+  }
+  throw new Error(`Todos los modelos de embedding fallaron: ${errors.join(" | ")}`);
 }
 
 // pgvector espera formato "[0.1,0.2,...]"

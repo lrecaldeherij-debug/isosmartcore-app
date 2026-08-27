@@ -19,7 +19,9 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-const EMBEDDING_MODEL = "text-embedding-004";
+const EMBEDDING_MODELS = (Deno.env.get("GEMINI_EMBEDDING_MODELS") ?? "gemini-embedding-001,text-embedding-004,embedding-001")
+  .split(",").map(s => s.trim()).filter(Boolean);
+const EMBEDDING_DIMS = 768;
 const CHAT_MODEL = Deno.env.get("COPILOT_MODEL") ?? "gemini-2.0-flash";
 const CHAT_TIMEOUT_MS = 25000;
 const TOP_K = 5;
@@ -37,22 +39,51 @@ function json(body: unknown, status = 200) {
   });
 }
 
-async function embedQuery(apiKey: string, text: string): Promise<number[]> {
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${EMBEDDING_MODEL}:embedContent?key=${apiKey}`;
+async function tryEmbedModel(apiKey: string, model: string, text: string): Promise<number[]> {
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:embedContent?key=${apiKey}`;
+  const body: any = {
+    content: { parts: [{ text }] },
+    // La query del user va con taskType RETRIEVAL_QUERY (asimétrico con
+    // RETRIEVAL_DOCUMENT usado al indexar — mejora calidad de retrieval).
+    taskType: "RETRIEVAL_QUERY",
+  };
+  if (model === "gemini-embedding-001") body.outputDimensionality = EMBEDDING_DIMS;
+
   const ctl = new AbortController();
   const t = setTimeout(() => ctl.abort(), 15000);
   try {
     const res = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ content: { parts: [{ text }] } }),
+      body: JSON.stringify(body),
       signal: ctl.signal,
     });
     clearTimeout(t);
-    if (!res.ok) throw new Error(`Gemini embed HTTP ${res.status}`);
+    if (!res.ok) {
+      const errText = await res.text();
+      throw new Error(`HTTP ${res.status}: ${errText.slice(0, 200)}`);
+    }
     const data: any = await res.json();
-    return data?.embedding?.values || [];
+    const values = data?.embedding?.values;
+    if (!Array.isArray(values) || values.length !== EMBEDDING_DIMS) {
+      throw new Error(`dims incorrectas: got ${values?.length}, want ${EMBEDDING_DIMS}`);
+    }
+    return values;
   } finally { clearTimeout(t); }
+}
+
+async function embedQuery(apiKey: string, text: string): Promise<number[]> {
+  const errors: string[] = [];
+  for (const model of EMBEDDING_MODELS) {
+    try {
+      return await tryEmbedModel(apiKey, model, text);
+    } catch (e) {
+      const msg = (e as Error).message;
+      errors.push(`${model}: ${msg}`);
+      if (!/HTTP (400|404)/.test(msg) && !/dims incorrectas/.test(msg)) throw e;
+    }
+  }
+  throw new Error(`Todos los modelos fallaron: ${errors.join(" | ")}`);
 }
 
 Deno.serve(async (req: Request) => {

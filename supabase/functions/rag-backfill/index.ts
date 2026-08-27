@@ -26,7 +26,8 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-const EMBEDDING_MODEL = "text-embedding-004";
+const EMBEDDING_MODELS = (Deno.env.get("GEMINI_EMBEDDING_MODELS") ?? "gemini-embedding-001,text-embedding-004,embedding-001")
+  .split(",").map(s => s.trim()).filter(Boolean);
 const EMBEDDING_DIMS = 768;
 
 const CORS = {
@@ -91,18 +92,43 @@ async function sha256Hex(s: string): Promise<string> {
   return Array.from(new Uint8Array(d), b => b.toString(16).padStart(2, "0")).join("");
 }
 
-async function embedText(apiKey: string, text: string): Promise<number[]> {
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${EMBEDDING_MODEL}:embedContent?key=${apiKey}`;
+async function tryEmbedModel(apiKey: string, model: string, text: string): Promise<number[]> {
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:embedContent?key=${apiKey}`;
+  const body: any = {
+    content: { parts: [{ text }] },
+    taskType: "RETRIEVAL_DOCUMENT",
+  };
+  if (model === "gemini-embedding-001") body.outputDimensionality = EMBEDDING_DIMS;
+
   const res = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ content: { parts: [{ text }] } }),
+    body: JSON.stringify(body),
   });
-  if (!res.ok) throw new Error(`Gemini HTTP ${res.status}`);
+  if (!res.ok) {
+    const errText = await res.text();
+    throw new Error(`HTTP ${res.status}: ${errText.slice(0, 300)}`);
+  }
   const data: any = await res.json();
   const values = data?.embedding?.values;
-  if (!Array.isArray(values) || values.length !== EMBEDDING_DIMS) throw new Error("embedding inválido");
+  if (!Array.isArray(values) || values.length !== EMBEDDING_DIMS) {
+    throw new Error(`dims incorrectas: got ${values?.length}, want ${EMBEDDING_DIMS}`);
+  }
   return values;
+}
+
+async function embedText(apiKey: string, text: string): Promise<number[]> {
+  const errors: string[] = [];
+  for (const model of EMBEDDING_MODELS) {
+    try {
+      return await tryEmbedModel(apiKey, model, text);
+    } catch (e) {
+      const msg = (e as Error).message;
+      errors.push(`${model}: ${msg}`);
+      if (!/HTTP (400|404)/.test(msg) && !/dims incorrectas/.test(msg)) throw e;
+    }
+  }
+  throw new Error(`Todos los modelos fallaron: ${errors.join(" | ")}`);
 }
 
 const TABLES = ["risk_matrix", "non_conformities", "documents_versions"];
