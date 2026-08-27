@@ -38,7 +38,9 @@ const EMBEDDING_MODELS = (Deno.env.get("GEMINI_EMBEDDING_MODELS") ?? "gemini-emb
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "content-type",
+  // authorization + apikey son necesarios porque Supabase gateway los pide
+  // aunque verify_jwt=false; el cliente supabase-js siempre los envía.
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
 };
 
