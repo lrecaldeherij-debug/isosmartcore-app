@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { supabase } from './supabaseClient'
 import { consultarIA } from './aiClient'
+import { indexRow, deindexRow } from './lib/ragIndex'
 import {
   AlertOctagon, Plus, Search, Filter, Eye, Pencil, Trash2, X,
   Sparkles, Loader2, CheckCircle2, AlertTriangle, Clock, Award,
@@ -339,11 +340,13 @@ export default function NonConformities({ datosPrellenados, alCambiarVista }) {
       const { error } = await supabase.from('non_conformities').update(payload).eq('id', editingId)
       if (error) { toast.error(error.message); return }
       toast.success('NC actualizada')
+      indexRow('non_conformities', editingId)
     } else {
       payload.change_log = [{ at: new Date().toISOString(), changes: [{ field: 'created', from: null, to: form.description?.slice(0, 80) }] }]
-      const { error } = await supabase.from('non_conformities').insert([payload])
+      const { data: inserted, error } = await supabase.from('non_conformities').insert([payload]).select('id').single()
       if (error) { toast.error(error.message); return }
       toast.success('NC registrada')
+      if (inserted?.id) indexRow('non_conformities', inserted.id)
     }
 
     setMostrandoForm(false)
@@ -358,6 +361,7 @@ export default function NonConformities({ datosPrellenados, alCambiarVista }) {
     const { error } = await supabase.from('non_conformities').delete().eq('id', id)
     if (error) { toast.error(error.message); return }
     toast.success('NC eliminada')
+    deindexRow('non_conformities', id)
     fetchAll()
   }
 

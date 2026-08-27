@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import { supabase } from './supabaseClient'
 import { useOrg } from './OrgContext'
 import { consultarIA } from './aiClient'
+import { indexRow, deindexRow } from './lib/ragIndex'
 import {
   ShieldCheck, Send, Pencil, Trash2, AlertCircle, CheckCircle2, History,
   Download, X, Eye, Filter, Search, BarChart3, Sparkles, Loader2,
@@ -295,6 +296,7 @@ export default function Documents() {
       }
       const { error } = await supabase.from('documents_versions').update(payload).eq('id', editingId)
       if (error) return showMsg(error.message, 'err')
+      indexRow('documents_versions', editingId)
       setMostrandoForm(false); setEditingId(null); setForm(defaultForm())
       fetchAll()
       return
@@ -336,9 +338,10 @@ export default function Documents() {
       tags: tagsArr,
     }
 
-    const { error } = await supabase.from('documents_versions').insert([payload])
+    const { data: inserted, error } = await supabase.from('documents_versions').insert([payload]).select('id').single()
     setUploading(false)
     if (error) return showMsg(error.message, 'err')
+    if (inserted?.id) indexRow('documents_versions', inserted.id)
     setMostrandoForm(false)
     setGroupIdParaVersion(null)
     setForm(defaultForm())
@@ -361,7 +364,11 @@ export default function Documents() {
     if (!await confirm('¿Eliminar este borrador?', { tone: 'danger', confirmText: 'Eliminar' })) return
     const { error } = await supabase.from('documents_versions').delete().eq('id', id)
     if (error) toast.error(error.message)
-    else { toast.success('Borrador eliminado'); fetchAll() }
+    else {
+      deindexRow('documents_versions', id)
+      toast.success('Borrador eliminado')
+      fetchAll()
+    }
   }
 
   const handleSubmitForApproval = async (doc) => {

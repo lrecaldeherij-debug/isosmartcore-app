@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, Fragment } from 'react'
 import { createPortal } from 'react-dom'
 import { supabase } from './supabaseClient'
 import { consultarIA } from './aiClient'
+import { indexRow, deindexRow } from './lib/ragIndex'
 import {
   ShieldAlert, Sparkles, Loader2, Plus, Search, Filter, Eye, Pencil, Trash2,
   X, Save, Target, TrendingUp, AlertTriangle, CheckCircle2, Layers, Grid3x3,
@@ -309,11 +310,13 @@ export default function RisksOpportunities() {
       const { error } = await supabase.from('risk_matrix').update(payload).eq('id', editingId)
       if (error) { toast.error(error.message); return }
       toast.success(`${form.type} actualizado`)
+      indexRow('risk_matrix', editingId)
     } else {
       payload.change_log = [{ at: new Date().toISOString(), changes: [{ field: 'created', from: null, to: (form.risk_description || '').slice(0, 80) }] }]
-      const { error } = await supabase.from('risk_matrix').insert([payload])
+      const { data: inserted, error } = await supabase.from('risk_matrix').insert([payload]).select('id').single()
       if (error) { toast.error(error.message); return }
       toast.success(`${form.type} registrado`)
+      if (inserted?.id) indexRow('risk_matrix', inserted.id)
     }
 
     setMostrandoForm(false)
@@ -328,6 +331,7 @@ export default function RisksOpportunities() {
     const { error } = await supabase.from('risk_matrix').delete().eq('id', id)
     if (error) { toast.error(error.message); return }
     toast.success('Eliminado')
+    deindexRow('risk_matrix', id)
     fetchAll()
   }
 

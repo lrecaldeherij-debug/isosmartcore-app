@@ -54,6 +54,7 @@ const Team = lazy(() => import('./Team'))
 const HelpSupport = lazy(() => import('./HelpSupport'))
 const AdminDashboard = lazy(() => import('./AdminDashboard'))
 import HelpButton from './components/ui/HelpButton'
+import Copilot from './Copilot'
 import ImpersonateBanner from './components/ImpersonateBanner'
 import { 
   Home, 
@@ -507,6 +508,8 @@ function AppShell() {
     </div>
     {/* Botón flotante de ayuda — escondido cuando ya estás en la página de ayuda */}
     {vistaActual !== 'ayuda' && <HelpButton />}
+    {/* Copiloto IA — botón flotante ⚡ arriba del HelpButton */}
+    <Copilot />
     </>
   )
 }
