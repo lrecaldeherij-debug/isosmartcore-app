@@ -7,6 +7,7 @@ import {
 } from 'lucide-react'
 import { supabase } from './supabaseClient'
 import { consultarIA } from './aiClient'
+import { indexRow, deindexRow } from './lib/ragIndex'
 import IsoInfoCard from './IsoInfoCard'
 import { CLAUSE_GUIDES } from './clauseGuides'
 import { toast } from './lib/toast'
@@ -227,7 +228,10 @@ export default function InternalAudits({ alReportar }) {
   const handleDelete = async (id) => {
     if (!await confirm('¿Eliminar esta auditoría?', { tone: 'danger', confirmText: 'Eliminar' })) return
     const { error } = await supabase.from('internal_audits').delete().eq('id', id)
-    if (error) toast.error(error.message); else { toast.success('Auditoría eliminada'); fetchAll() }
+    if (error) toast.error(error.message); else {
+      deindexRow('internal_audits', id)
+      toast.success('Auditoría eliminada'); fetchAll()
+    }
   }
 
   const handleSubmit = async (e) => {
@@ -253,10 +257,12 @@ export default function InternalAudits({ alReportar }) {
       payload.change_log = [...(prev?.change_log || []), { at: new Date().toISOString(), changes }]
       const { error } = await supabase.from('internal_audits').update(payload).eq('id', editingId)
       if (error) return toast.error(error.message)
+      indexRow('internal_audits', editingId)
     } else {
       payload.change_log = [{ at: new Date().toISOString(), changes: [{ field: 'created', from: null, to: payload.audit_process }] }]
-      const { error } = await supabase.from('internal_audits').insert([payload])
+      const { data: inserted, error } = await supabase.from('internal_audits').insert([payload]).select('id').single()
       if (error) return toast.error(error.message)
+      if (inserted?.id) indexRow('internal_audits', inserted.id)
     }
     setShowForm(false); resetForm(); fetchAll()
   }

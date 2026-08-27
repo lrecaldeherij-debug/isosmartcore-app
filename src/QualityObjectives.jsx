@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { supabase } from './supabaseClient'
 import { consultarIA } from './aiClient'
+import { indexRow, deindexRow } from './lib/ragIndex'
 import {
   Target, Sparkles, Loader2, Plus, Search, Filter, Eye, Pencil, Trash2, X,
   Save, RefreshCw, TrendingUp, ExternalLink, CheckCircle2, AlertTriangle,
@@ -337,11 +338,13 @@ export default function QualityObjectives({ alCambiarVista }) {
       const { error } = await supabase.from('quality_objectives').update(payload).eq('id', editingId)
       if (error) { toast.error(error.message); return }
       toast.success('Objetivo actualizado')
+      indexRow('quality_objectives', editingId)
     } else {
       payload.change_log = [{ at: new Date().toISOString(), changes: [{ field: 'created', from: null, to: form.name || form.objective?.slice(0, 80) }] }]
-      const { error } = await supabase.from('quality_objectives').insert([payload])
+      const { data: inserted, error } = await supabase.from('quality_objectives').insert([payload]).select('id').single()
       if (error) { toast.error(error.message); return }
       toast.success('Objetivo creado')
+      if (inserted?.id) indexRow('quality_objectives', inserted.id)
     }
     setMostrandoForm(false); setEditingId(null); setForm(EMPTY_FORM); setOriginalForm(null)
     fetchAll()
@@ -352,6 +355,7 @@ export default function QualityObjectives({ alCambiarVista }) {
     const { error } = await supabase.from('quality_objectives').delete().eq('id', id)
     if (error) { toast.error(error.message); return }
     toast.success('Objetivo eliminado')
+    deindexRow('quality_objectives', id)
     fetchAll()
   }
 

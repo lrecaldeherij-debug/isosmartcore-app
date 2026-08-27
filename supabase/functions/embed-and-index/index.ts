@@ -117,6 +117,88 @@ function extractChunkFromRow(table: string, row: any): { content: string; title:
     };
   }
 
+  if (table === "context_analysis") {
+    const content = stringifyForEmbedding({
+      "Tipo": row.type, "Categoría": row.category, "Factor": row.factor,
+      "Descripción": row.description, "Estrategia": row.strategy, "Estado": row.status,
+    });
+    if (!content) return null;
+    return {
+      content,
+      title: `Contexto · ${row.type || ""} ${(row.factor || row.category || "sin factor").slice(0, 60)}`.trim(),
+    };
+  }
+
+  if (table === "processes") {
+    const content = stringifyForEmbedding({
+      "Código": row.code, "Nombre": row.name, "Tipo": row.process_type,
+      "Objetivo": row.objective, "Alcance": row.scope, "Responsable": row.responsible_role,
+      "Entradas": row.inputs, "Salidas": row.outputs, "Indicadores": row.indicators,
+    });
+    if (!content) return null;
+    return {
+      content,
+      title: `Proceso · ${row.code || ""} ${(row.name || "sin nombre").slice(0, 60)}`.trim(),
+    };
+  }
+
+  if (table === "quality_policy") {
+    const content = stringifyForEmbedding({
+      "Política final": row.final_policy_statement || row.policy_text,
+      "Compromisos": row.commitments,
+      "Estado": row.status,
+      "Última revisión": row.last_reviewed,
+    });
+    if (!content) return null;
+    return { content, title: "Política de Calidad" };
+  }
+
+  if (table === "quality_objectives") {
+    const content = stringifyForEmbedding({
+      "Nombre": row.name, "Objetivo": row.objective, "Categoría": row.category,
+      "Indicador": row.indicator, "Unidad": row.unit,
+      "Meta": row.target, "Actual": row.current, "Baseline": row.baseline_value,
+      "Estado": row.status, "Año": row.year,
+    });
+    if (!content) return null;
+    return {
+      content,
+      title: `Objetivo · ${(row.name || row.objective || "sin nombre").slice(0, 60)}`,
+    };
+  }
+
+  if (table === "internal_audits") {
+    const content = stringifyForEmbedding({
+      "Tipo": row.audit_type, "Proceso auditado": row.audit_process,
+      "Estado": row.status, "Año": row.year,
+      "Fecha planificada": row.planned_date, "Fecha real": row.audit_date,
+      "Auditor líder": row.lead_auditor, "Alcance": row.audit_scope,
+      "Criterios": row.audit_criteria, "Conclusiones": row.conclusions,
+      "Finalizada": row.is_finished ? "sí" : "no",
+    });
+    if (!content) return null;
+    return {
+      content,
+      title: `Auditoría · ${row.year || ""} ${(row.audit_process || row.audit_type || "").slice(0, 60)}`.trim(),
+    };
+  }
+
+  if (table === "management_review") {
+    const content = stringifyForEmbedding({
+      "Tipo": row.review_type, "Fecha": row.review_date,
+      "Presidida por": row.chairperson, "Estado": row.status,
+      "Período": (row.period_start && row.period_end)
+        ? `${row.period_start} → ${row.period_end}` : null,
+      "Salidas — oportunidades": row.outputs_improvement_opportunities,
+      "Salidas — cambios necesarios": row.outputs_changes_needed,
+    });
+    if (!content) return null;
+    return {
+      content,
+      title: `Revisión Dirección · ${row.review_date || row.review_type || "sin fecha"}`,
+    };
+  }
+
   return null;
 }
 
@@ -190,7 +272,17 @@ function vectorToPgLiteral(vec: number[]): string {
   return "[" + vec.join(",") + "]";
 }
 
-const ALLOWED_TABLES = new Set(["risk_matrix", "non_conformities", "documents_versions"]);
+const ALLOWED_TABLES = new Set([
+  "risk_matrix",
+  "non_conformities",
+  "documents_versions",
+  "context_analysis",
+  "processes",
+  "quality_policy",
+  "quality_objectives",
+  "internal_audits",
+  "management_review",
+]);
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });

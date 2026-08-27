@@ -18,7 +18,17 @@
 
 import { supabase } from '../supabaseClient'
 
-const ALLOWED = new Set(['risk_matrix', 'non_conformities', 'documents_versions'])
+const ALLOWED = new Set([
+  'risk_matrix',
+  'non_conformities',
+  'documents_versions',
+  'context_analysis',
+  'processes',
+  'quality_policy',
+  'quality_objectives',
+  'internal_audits',
+  'management_review',
+])
 
 /**
  * Reindexar una fila (útil después de insert o update).

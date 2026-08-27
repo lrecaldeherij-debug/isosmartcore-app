@@ -22,12 +22,24 @@ const TABLE_TO_VIEW = {
   risk_matrix: 'riesgos',
   non_conformities: 'no_conformidades',
   documents_versions: 'documentos',
+  context_analysis: 'contexto',
+  processes: 'procesos',
+  quality_policy: 'politica',
+  quality_objectives: 'objetivos',
+  internal_audits: 'auditorias',
+  management_review: 'revision_direccion',
 }
 
 const CITATION_LABELS = {
   risk_matrix: 'Riesgo',
   non_conformities: 'No conformidad',
   documents_versions: 'Documento',
+  context_analysis: 'Contexto',
+  processes: 'Proceso',
+  quality_policy: 'Política',
+  quality_objectives: 'Objetivo',
+  internal_audits: 'Auditoría',
+  management_review: 'Revisión',
 }
 
 export default function Copilot() {

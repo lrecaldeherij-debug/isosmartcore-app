@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { supabase } from './supabaseClient'
 import { consultarIA } from './aiClient'
+import { indexRow } from './lib/ragIndex'
 import {
   Sparkles, Loader2, Save, FileText, X, Pencil, ShieldCheck, Send,
   History, AlertTriangle, Award, Calendar, Target, ExternalLink, CheckCircle2
@@ -190,10 +191,16 @@ Devuelve SOLO JSON, sin markdown:
     }
     payload.change_log = [...(policy?.change_log || []), { at: new Date().toISOString(), changes }]
 
-    const { error } = policy
-      ? await supabase.from('quality_policy').update(payload).eq('id', policy.id)
-      : await supabase.from('quality_policy').insert([payload])
-    if (error) return toast.error(error.message)
+    let savedId = policy?.id || null
+    if (policy) {
+      const { error } = await supabase.from('quality_policy').update(payload).eq('id', policy.id)
+      if (error) return toast.error(error.message)
+    } else {
+      const { data: inserted, error } = await supabase.from('quality_policy').insert([payload]).select('id').single()
+      if (error) return toast.error(error.message)
+      savedId = inserted?.id
+    }
+    if (savedId) indexRow('quality_policy', savedId)
     setEditing(false); fetchAll()
   }
 

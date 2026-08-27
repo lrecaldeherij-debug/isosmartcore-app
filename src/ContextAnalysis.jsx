@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { supabase } from './supabaseClient'
 import { consultarIA } from './aiClient'
+import { indexRow, deindexRow } from './lib/ragIndex'
 import {
   Sparkles, Loader2, FileText, X, Pencil, Trash2, Eye, Target, BarChart3,
   Search, Filter, Plus, AlertTriangle, CheckCircle2, Calendar, Grid3x3,
@@ -169,7 +170,10 @@ export default function ContextAnalysis() {
   const handleDelete = async (id) => {
     if (!await confirm('¿Eliminar este factor?', { tone: 'danger', confirmText: 'Eliminar' })) return
     const { error } = await supabase.from('context_analysis').delete().eq('id', id)
-    if (error) toast.error(error.message); else { toast.success('Factor eliminado'); setDetailItem(null); fetchAll() }
+    if (error) toast.error(error.message); else {
+      deindexRow('context_analysis', id)
+      toast.success('Factor eliminado'); setDetailItem(null); fetchAll()
+    }
   }
 
   const handleReview = async (id) => {
@@ -205,10 +209,12 @@ export default function ContextAnalysis() {
       payload.change_log = [...(prev?.change_log || []), { at: new Date().toISOString(), changes }]
       const { error } = await supabase.from('context_analysis').update(payload).eq('id', editingId)
       if (error) return toast.error(error.message)
+      indexRow('context_analysis', editingId)
     } else {
       payload.change_log = [{ at: new Date().toISOString(), changes: [{ field: 'created', from: null, to: payload.factor }] }]
-      const { error } = await supabase.from('context_analysis').insert([payload])
+      const { data: inserted, error } = await supabase.from('context_analysis').insert([payload]).select('id').single()
       if (error) return toast.error(error.message)
+      if (inserted?.id) indexRow('context_analysis', inserted.id)
     }
     setShowForm(false); resetForm(); fetchAll()
   }

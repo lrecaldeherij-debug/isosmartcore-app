@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { supabase } from './supabaseClient'
 import { consultarIA } from './aiClient'
+import { indexRow, deindexRow } from './lib/ragIndex'
 import {
   Sparkles, Loader2, Map as MapIcon, Trash2, X, ExternalLink, FileText, Pencil,
   Search, Filter, Plus, Eye, AlertTriangle, ListChecks, Workflow, Users, Calendar,
@@ -334,10 +335,12 @@ FORMATO EXACTO (ejemplo):
       payload.change_log = [...(prev?.change_log || []), { at: new Date().toISOString(), changes }]
       const { error } = await supabase.from('processes').update(payload).eq('id', editingId)
       if (error) return toast.error(humanizeDbError(error, { table: 'processes' }))
+      indexRow('processes', editingId)
     } else {
       payload.change_log = [{ at: new Date().toISOString(), changes: [{ field: 'created', from: null, to: payload.name }] }]
-      const { error } = await supabase.from('processes').insert([payload])
+      const { data: inserted, error } = await supabase.from('processes').insert([payload]).select('id').single()
       if (error) return toast.error(humanizeDbError(error, { table: 'processes' }))
+      if (inserted?.id) indexRow('processes', inserted.id)
     }
     setShowForm(false); resetForm(); fetchAll()
   }
@@ -363,7 +366,10 @@ FORMATO EXACTO (ejemplo):
     if (!await confirm('¿Eliminar esta ficha?', { tone: 'danger', confirmText: 'Eliminar' })) return
     const { error } = await supabase.from('processes').delete().eq('id', id)
     if (error) toast.error(humanizeDbError(error, { table: 'processes' }))
-    else { toast.success('Proceso eliminado'); setDetailItem(null); fetchAll() }
+    else {
+      deindexRow('processes', id)
+      toast.success('Proceso eliminado'); setDetailItem(null); fetchAll()
+    }
   }
 
   // ──────────── Filtros + stats ────────────

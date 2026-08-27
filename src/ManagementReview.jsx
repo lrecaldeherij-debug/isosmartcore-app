@@ -7,6 +7,7 @@ import {
 } from 'lucide-react'
 import { supabase } from './supabaseClient'
 import { consultarIA } from './aiClient'
+import { indexRow, deindexRow } from './lib/ragIndex'
 import IsoInfoCard from './IsoInfoCard'
 import { CLAUSE_GUIDES } from './clauseGuides'
 import { toast } from './lib/toast'
@@ -239,7 +240,10 @@ export default function ManagementReview({ alReportar }) {
   const handleDelete = async (id) => {
     if (!await confirm('¿Eliminar esta revisión y sus acciones derivadas?', { tone: 'danger', confirmText: 'Eliminar' })) return
     const { error } = await supabase.from('management_review').delete().eq('id', id)
-    if (error) toast.error(error.message); else { toast.success('Revisión eliminada'); fetchAll() }
+    if (error) toast.error(error.message); else {
+      deindexRow('management_review', id)
+      toast.success('Revisión eliminada'); fetchAll()
+    }
   }
 
   const handleSubmit = async (e) => {
@@ -269,10 +273,12 @@ export default function ManagementReview({ alReportar }) {
       payload.change_log = [...(prev?.change_log || []), { at: new Date().toISOString(), changes }]
       const { error } = await supabase.from('management_review').update(payload).eq('id', editingId)
       if (error) return toast.error(error.message)
+      indexRow('management_review', editingId)
     } else {
       payload.change_log = [{ at: new Date().toISOString(), changes: [{ field: 'created', from: null, to: payload.review_type }] }]
-      const { error } = await supabase.from('management_review').insert([payload])
+      const { data: inserted, error } = await supabase.from('management_review').insert([payload]).select('id').single()
       if (error) return toast.error(error.message)
+      if (inserted?.id) indexRow('management_review', inserted.id)
     }
     setShowForm(false); resetForm(); fetchAll()
   }

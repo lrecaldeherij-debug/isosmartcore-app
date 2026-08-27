@@ -186,29 +186,46 @@ Deno.serve(async (req: Request) => {
     return json({ error: `Embedding falló: ${(e as Error).message}` }, 502);
   }
 
-  // 2. Retrieval — service_role bypassa RLS pero pasamos org_id explícito
+  // 2. Retrieval + snapshot en paralelo. El snapshot es un resumen ejecutivo
+  //    del SGC (% por cláusula + counts operativos) que le permite al modelo
+  //    detectar inconsistencias entre la pregunta y los datos reales
+  //    ("me preguntás por 4.4 al 50% pero 4.4 está al 100%, ¿quisiste decir 4.1?").
   const admin = createClient(supabaseUrl, serviceRole);
-  const { data: chunks, error: searchErr } = await admin.rpc("rag_search", {
-    p_org_id: effectiveOrgId,
-    p_query_embedding: "[" + queryEmbedding.join(",") + "]",
-    p_top_k: TOP_K,
-  });
-  if (searchErr) {
-    console.error("copilot-chat: rag_search falló", searchErr);
-    return json({ error: `Búsqueda RAG falló: ${searchErr.message}` }, 500);
+  const [searchRes, snapshotRes] = await Promise.all([
+    admin.rpc("rag_search", {
+      p_org_id: effectiveOrgId,
+      p_query_embedding: "[" + queryEmbedding.join(",") + "]",
+      p_top_k: TOP_K,
+    }),
+    admin.rpc("get_sgc_snapshot", { p_org_id: effectiveOrgId }),
+  ]);
+
+  if (searchRes.error) {
+    console.error("copilot-chat: rag_search falló", searchRes.error);
+    return json({ error: `Búsqueda RAG falló: ${searchRes.error.message}` }, 500);
+  }
+  if (snapshotRes.error) {
+    // Snapshot es best-effort — si falla, seguimos sin él. El copilot va a
+    // ser menos preciso pero no rompe la respuesta.
+    console.warn("copilot-chat: get_sgc_snapshot falló, sigo sin snapshot", snapshotRes.error);
   }
 
-  const contextChunks = (chunks || []) as Array<{
+  const contextChunks = (searchRes.data || []) as Array<{
     id: string; source_table: string; source_id: string;
     title: string; content: string; similarity: number;
   }>;
+  const snapshot = snapshotRes.data || null;
 
   // 3. Armar prompt
   const contextBlock = contextChunks.length === 0
-    ? "(No hay información indexada aún en esta organización sobre el tema. Respondé honestamente que no tenés datos y sugerí al user cargar la información en el módulo correspondiente.)"
+    ? "(No hay información indexada aún en esta organización sobre el tema específico. Usá el ESTADO ACTUAL DEL SGC de arriba si aplica.)"
     : contextChunks.map((c, i) =>
         `[${i + 1}] ${c.title}\n${c.content}`
       ).join("\n\n---\n\n");
+
+  const snapshotBlock = snapshot
+    ? `\n\nESTADO ACTUAL DEL SGC (resumen ejecutivo — usalo para chequear consistencia con la pregunta):\n${JSON.stringify(snapshot.clauses, null, 2)}`
+    : "";
 
   const historyBlock = history.length === 0 ? "" :
     "\n\nCONVERSACIÓN PREVIA:\n" +
@@ -217,12 +234,15 @@ Deno.serve(async (req: Request) => {
   const fullPrompt = `Sos el Copiloto ISO 9001:2015 de IsoSmartCore. Ayudás a gerentes de calidad y auditores a entender el estado de su Sistema de Gestión de Calidad respondiendo preguntas con base en los datos reales de su organización.
 
 REGLAS:
-1. Respondé SOLO con base en el CONTEXTO abajo. Si no está en el contexto, decilo honestamente — no inventes.
-2. Cuando cites información específica, referí al chunk con [1], [2], etc. — el frontend renderizará el link al registro original.
-3. Tono profesional, conciso, orientado a acción. Sos consultor, no charlatán.
-4. Si detectás un problema (riesgos altos sin tratar, NCs vencidas, docs obsoletos), sugerí acción concreta según ISO 9001.
-5. Respondé en español rioplatense.
-6. Si la pregunta no es sobre calidad/SGC, redirigí amablemente al scope.
+1. Respondé con base en el ESTADO ACTUAL DEL SGC (resumen ejecutivo) + el CONTEXTO específico. Si algo no está en ninguno, decilo honestamente — no inventes.
+2. **VERIFICÁ CONSISTENCIA**: si el usuario menciona un número específico (cláusula, código, porcentaje, cantidad), chequeá contra el ESTADO ACTUAL DEL SGC antes de responder. Si detectás una inconsistencia (ej: "el usuario dice 4.4 al 50%" pero el estado dice "4.4 al 100%"), **aclará amablemente y sugerí la alternativa correcta**: "La cláusula 4.4 está al 100%. Quizás quisiste consultar la 4.1 que sí está al 50% — ¿te interesa esa?".
+3. Ofrecé proactivamente contexto relacionado cuando ayude al usuario a corregir el rumbo o completar la información.
+4. Cuando cites información específica de un registro, referí al chunk con [1], [2], etc. — el frontend renderiza cada número como link al registro. Solo usá [N] para los chunks del CONTEXTO — el snapshot NO se cita.
+5. Tono profesional, conciso, orientado a acción. Sos consultor senior, no charlatán.
+6. Si detectás un problema en el estado (riesgos altos sin tratar, NCs vencidas, docs obsoletos, cláusulas pendientes), sugerí acción concreta con la cláusula ISO relevante.
+7. Respondé en español rioplatense.
+8. Si la pregunta no es sobre calidad/SGC, redirigí amablemente al scope.
+${snapshotBlock}
 
 CONTEXTO (top-${TOP_K} chunks más relevantes de la organización):
 ${contextBlock}
