@@ -300,7 +300,10 @@ function AppShell() {
   const { org, loading: orgLoading, error: orgError, can, refresh, role } = useOrg()
   const isSuperAdmin = useSuperAdmin()
   const operator = isOperator(role)
-  const [vistaActual, setVistaActual] = useState(() => initialViewForRole(role))
+  // NOTA: no usar useState(() => initialViewForRole(role)) porque el rol
+  // llega async y en el primer render es undefined → cae a 'inicio' y no se
+  // re-ejecuta. El useEffect de abajo redirige cuando el rol llega.
+  const [vistaActual, setVistaActual] = useState('inicio')
   const [onboardingForceCompleted, setOnboardingForceCompleted] = useState(false)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [expandedSections, setExpandedSections] = useState({
@@ -313,6 +316,15 @@ function AppShell() {
     mejora: false,
     sistema: false
   })
+
+  // Cuando llega el rol (o cambia), si es operator y esta en una vista fuera
+  // de su whitelist, redirigimos a su bandeja. Cubre: primer render con rol
+  // que llega async, promocion de rol en vivo, y bookmark a URL prohibida.
+  useEffect(() => {
+    if (operator && !OPERATOR_ALLOWED_VIEWS.has(vistaActual)) {
+      setVistaActual('bandeja_operativa')
+    }
+  }, [operator, vistaActual])
 
   // Solo mostrar loading si todavía no tenemos org cargado. Si refresh() se dispara
   // con un org ya presente (post-onboarding, cambio de plan, etc.) NO desmontamos
