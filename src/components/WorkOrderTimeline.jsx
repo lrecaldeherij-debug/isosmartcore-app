@@ -16,11 +16,12 @@ import { toast } from '../lib/toast'
 import { confirm } from '../lib/confirm'
 import {
   Clock, User, Paperclip, ExternalLink, Trash2, Plus, Upload, Link as LinkIcon,
-  Loader2, X, MessageSquare, FileText, Download,
+  Loader2, X, MessageSquare, FileText, Download, ShieldAlert,
 } from 'lucide-react'
 import {
   fetchTimeline, addEvent, deleteEvent, uploadAttachment, addLink,
   deleteAttachment, signedUrlFor, eventTypesForTable, EVENT_TYPES,
+  checkSegregation, DECISION_EVENT_TYPES,
   fmtSize, fmtDateTime,
 } from '../lib/workOrderEvents'
 
@@ -195,6 +196,20 @@ function EventRow({ event, canDelete, onDelete, onAttachmentChange, orgId }) {
             <span style={{ fontSize: '12px', color: '#94a3b8' }}>
               {fmtDateTime(event.created_at)}
             </span>
+            {event.same_person && (
+              <span
+                title="Segregación de funciones (ISO 5.3 / 7.1.2): la misma persona hizo otro evento de decisión sobre este registro"
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: '3px',
+                  background: '#fef3c7', color: '#b45309',
+                  border: '1px solid #fde68a',
+                  fontSize: '10px', fontWeight: 700,
+                  padding: '2px 6px', borderRadius: '4px',
+                }}
+              >
+                <ShieldAlert size={10} /> conflicto
+              </span>
+            )}
           </div>
           {event.notes && (
             <div style={{
@@ -351,28 +366,56 @@ function NewEventForm({ sourceTable, sourceId, orgId, onDone, onCancel }) {
   const [saving, setSaving] = useState(false)
   const [file, setFile] = useState(null)
   const [url, setUrl] = useState('')
+  // Segregacion: si el pre-check detecta conflicto, muestro banner con boton
+  // "Confirmar de todos modos". Reseteo cuando cambia el tipo.
+  const [segWarning, setSegWarning] = useState(null)  // { previousEvent }
+  const [pendingConfirm, setPendingConfirm] = useState(false)
   const options = eventTypesForTable(sourceTable)
 
-  const handleSubmit = async () => {
-    if (saving) return
+  const doSave = async () => {
     setSaving(true)
     try {
       const eventId = await addEvent({ sourceTable, sourceId, eventType, notes: notes || null })
-      // Adjuntar archivo si hay
-      if (file) {
-        await uploadAttachment({ orgId, eventId, file })
-      }
-      // Adjuntar link si hay
-      if (url.trim()) {
-        await addLink({ eventId, url: url.trim() })
-      }
+      if (file) await uploadAttachment({ orgId, eventId, file })
+      if (url.trim()) await addLink({ eventId, url: url.trim() })
       toast.success('Evento registrado')
       onDone()
     } catch (e) {
       toast.error('Error: ' + e.message)
     } finally {
       setSaving(false)
+      setPendingConfirm(false)
+      setSegWarning(null)
     }
+  }
+
+  const handleSubmit = async () => {
+    if (saving) return
+    // Si ya el user confirmo el warning, ir directo. Sino, pre-check.
+    if (pendingConfirm) return doSave()
+    // Pre-check de segregacion de funciones (ISO 5.3 / 7.1.2).
+    // Solo aplica a eventos de decision (approved/released/etc.).
+    if (DECISION_EVENT_TYPES.has(eventType)) {
+      try {
+        const { isConflict, previousEvent } = await checkSegregation({ sourceTable, sourceId, eventType })
+        if (isConflict) {
+          setSegWarning({ previousEvent })
+          setPendingConfirm(true)
+          return
+        }
+      } catch (e) {
+        // Si el check falla, seguimos igual — no bloqueamos por un check UX
+        console.warn('checkSegregation:', e.message)
+      }
+    }
+    doSave()
+  }
+
+  // Reset warning cuando el user cambia el tipo de evento
+  const handleTypeChange = (e) => {
+    setEventType(e.target.value)
+    setSegWarning(null)
+    setPendingConfirm(false)
   }
 
   return (
@@ -391,7 +434,7 @@ function NewEventForm({ sourceTable, sourceId, orgId, onDone, onCancel }) {
           <label style={fieldLabel}>Tipo de evento</label>
           <select
             value={eventType}
-            onChange={e => setEventType(e.target.value)}
+            onChange={handleTypeChange}
             style={fieldInput}
           >
             {options.map(o => (
@@ -399,6 +442,26 @@ function NewEventForm({ sourceTable, sourceId, orgId, onDone, onCancel }) {
             ))}
           </select>
         </div>
+
+        {segWarning && (
+          <div style={{
+            background: '#fef3c7',
+            border: '1px solid #f59e0b',
+            borderRadius: '6px',
+            padding: '10px 12px',
+            display: 'flex', gap: '8px', alignItems: 'flex-start',
+          }}>
+            <ShieldAlert size={16} color="#b45309" style={{ flexShrink: 0, marginTop: '1px' }} />
+            <div style={{ fontSize: '12px', color: '#78350f', lineHeight: 1.5 }}>
+              <div style={{ fontWeight: 700, marginBottom: '3px' }}>
+                Conflicto de segregación de funciones (ISO 5.3 / 7.1.2)
+              </div>
+              Vos ya hiciste <b>{EVENT_TYPES[segWarning.previousEvent.event_type]?.label || segWarning.previousEvent.event_type}</b> sobre este mismo registro
+              {segWarning.previousEvent.created_at && ` el ${fmtDateTime(segWarning.previousEvent.created_at)}`}.
+              Idealmente esta acción la debería hacer otra persona (segregación de funciones). El evento se registrará marcado como conflicto para que el auditor lo revise.
+            </div>
+          </div>
+        )}
         <div>
           <label style={fieldLabel}>Comentario / notas (opcional)</label>
           <textarea
@@ -435,10 +498,15 @@ function NewEventForm({ sourceTable, sourceId, orgId, onDone, onCancel }) {
         <button
           onClick={handleSubmit}
           disabled={saving}
-          style={{ ...btnPrimary, opacity: saving ? 0.6 : 1, cursor: saving ? 'not-allowed' : 'pointer' }}
+          style={{
+            ...btnPrimary,
+            background: pendingConfirm ? '#b45309' : '#4f46e5',
+            opacity: saving ? 0.6 : 1,
+            cursor: saving ? 'not-allowed' : 'pointer',
+          }}
         >
-          {saving ? <Loader2 size={13} className="animate-spin" /> : <Plus size={13} />}
-          {saving ? 'Guardando…' : 'Registrar evento'}
+          {saving ? <Loader2 size={13} className="animate-spin" /> : (pendingConfirm ? <ShieldAlert size={13} /> : <Plus size={13} />)}
+          {saving ? 'Guardando…' : (pendingConfirm ? 'Confirmar de todos modos' : 'Registrar evento')}
         </button>
       </div>
     </div>

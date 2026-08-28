@@ -34,12 +34,18 @@ export function eventTypesForTable(sourceTable) {
     .map(([key, meta]) => ({ key, ...meta }))
 }
 
+// Eventos "de decision" que cuentan para segregacion de funciones (ISO 5.3/7.1.2).
+// Comentarios y pausas de produccion no afectan.
+export const DECISION_EVENT_TYPES = new Set([
+  'created', 'approved', 'released', 'conditional_release', 'delivered', 'rejected',
+])
+
 // ─── Timeline: lectura ───
 
 export async function fetchTimeline({ sourceTable, sourceId }) {
   const { data, error } = await supabase
     .from('work_order_events')
-    .select('id, event_type, performed_by, performed_by_name, performed_by_role, notes, created_at')
+    .select('id, event_type, performed_by, performed_by_name, performed_by_role, notes, same_person, created_at')
     .eq('source_table', sourceTable)
     .eq('source_id', sourceId)
     .order('created_at', { ascending: true })
@@ -56,6 +62,28 @@ export async function fetchTimeline({ sourceTable, sourceId }) {
     byEvent.get(a.event_id).push(a)
   }
   return events.map(e => ({ ...e, attachments: byEvent.get(e.id) || [] }))
+}
+
+// ─── Segregacion de funciones: pre-check ───
+//
+// Devuelve { isConflict: bool, previousEvent: {...}|null } — el UI decide si
+// muestra warning modal antes de escribir. El trigger BD calcula el flag real
+// (fuente unica de verdad); esto es solo para UX.
+export async function checkSegregation({ sourceTable, sourceId, eventType }) {
+  if (!DECISION_EVENT_TYPES.has(eventType)) return { isConflict: false, previousEvent: null }
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { isConflict: false, previousEvent: null }
+  const { data } = await supabase
+    .from('work_order_events')
+    .select('event_type, performed_by_name, performed_by_role, created_at')
+    .eq('source_table', sourceTable)
+    .eq('source_id', sourceId)
+    .eq('performed_by', user.id)
+    .in('event_type', Array.from(DECISION_EVENT_TYPES))
+    .order('created_at', { ascending: true })
+    .limit(1)
+    .maybeSingle()
+  return { isConflict: !!data, previousEvent: data || null }
 }
 
 // ─── Eventos: escritura ───

@@ -54,6 +54,7 @@ const Team = lazy(() => import('./Team'))
 const HelpSupport = lazy(() => import('./HelpSupport'))
 const AdminDashboard = lazy(() => import('./AdminDashboard'))
 const BandejaOperativa = lazy(() => import('./BandejaOperativa'))
+const SegregacionPanel = lazy(() => import('./SegregacionPanel'))
 import HelpButton from './components/ui/HelpButton'
 import { isOperator, initialViewForRole, OPERATOR_ALLOWED_VIEWS } from './lib/roles'
 import Copilot from './Copilot'
@@ -456,6 +457,7 @@ function AppShell() {
           <NavGroup title="Evaluación (9)" sectionKey="evaluacion" icon={Search}>
             <NavItem id="auditorias" label="Auditorías Internas (9.2)" icon={Search} />
             <NavItem id="revision_direccion" label="Revisión Dirección (9.3)" icon={Briefcase} />
+            <NavItem id="segregacion" label="Segregación de funciones" icon={ShieldCheck} />
           </NavGroup>
 
           <NavGroup title="Mejora (10)" sectionKey="mejora" icon={AlertTriangle}>
@@ -529,6 +531,7 @@ function AppShell() {
         {vistaActual === 'proveedores' && <Suppliers />}
         {vistaActual === 'auditorias' && <InternalAudits />}
         {vistaActual === 'revision_direccion' && <ManagementReview />}
+        {vistaActual === 'segregacion' && <SegregacionPanel alCambiarVista={navegarA} />}
         {vistaActual === 'no_conformidades' && <NonConformities />}
         {vistaActual === 'mejora_continua' && <ImprovementOpportunities />}
         {vistaActual === 'aprobaciones' && <ApprovalQueue />}
