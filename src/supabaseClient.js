@@ -10,10 +10,10 @@ if (!supabaseUrl || !supabaseAnonKey) {
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey)
 
-// Debug: exponer el cliente supabase en window para permitir setear/verificar
-// user_metadata desde la consola de DevTools cuando algo del flujo no propaga
-// correctamente. No es un riesgo de seguridad porque el cliente ya está en el
-// bundle público — solo es acceso conveniente para operadores.
-if (typeof window !== 'undefined') {
+// Debug: exponer el cliente supabase en window SOLO en dev/preview. En
+// produccion no lo hacemos (finding #44 del audit) para no darle a un
+// atacante XSS un handle facil de exfiltracion. En dev el acceso es util
+// para inspeccionar sesion, setear user_metadata, testear queries, etc.
+if (typeof window !== 'undefined' && import.meta.env.DEV) {
   window.__supabase = supabase
 }

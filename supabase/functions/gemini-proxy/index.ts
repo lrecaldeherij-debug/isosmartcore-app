@@ -21,6 +21,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { logAiUsage } from "../_shared/aiUsage.ts";
+import { corsHeaders } from "../_shared/cors.ts";
 
 // gemini-2.0-flash fue retirado en 2026 (respuesta oficial de Google apunta
 // a gemini-3.6-flash). gemini-1.5-flash también deprecado. Actualizamos el
@@ -32,21 +33,18 @@ const MODELS = (Deno.env.get("GEMINI_MODELS") ?? "gemini-3.6-flash,gemini-2.5-fl
 
 const MODEL_TIMEOUT_MS = Number(Deno.env.get("GEMINI_TIMEOUT_MS") ?? "25000");
 
-const CORS_HEADERS = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-};
-
-function json(body: unknown, status = 200) {
-  return new Response(JSON.stringify(body), {
+// CORS por-request via helper compartido (respeta env ALLOWED_ORIGINS).
+function makeJson(req: Request) {
+  const cors = corsHeaders(req);
+  return (body: unknown, status = 200) => new Response(JSON.stringify(body), {
     status,
-    headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
+    headers: { ...cors, "Content-Type": "application/json" },
   });
 }
 
 Deno.serve(async (req: Request) => {
-  if (req.method === "OPTIONS") return new Response("ok", { headers: CORS_HEADERS });
+  const json = makeJson(req);
+  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders(req) });
   if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
 
   // ── 1. Env vars ──────────────────────────────────────────────────────

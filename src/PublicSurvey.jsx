@@ -83,7 +83,7 @@ export default function PublicSurvey({ token, slug }) {
   useEffect(() => {
     (async () => {
       if (mode === 'invalid') {
-        setErrorCode('invitation_not_found')
+        setErrorCode('invitation_unavailable')
         setLoading(false)
         return
       }
@@ -148,9 +148,16 @@ export default function PublicSurvey({ token, slug }) {
     if (error) return toast.error('Error: ' + error.message)
     if (data?.error) {
       // Errores terminales: bloquean re-envío y muestran la pantalla de error.
-      const terminal = ['already_completed', 'invitation_not_found', 'expired',
-                        'campaign_not_found', 'campaign_closed', 'campaign_expired',
-                        'already_responded']
+      // Post-audit #45: los codigos generados en BD se unificaron para no
+      // filtrar existencia de slugs (anti-enum). Los viejos siguen aca por
+      // backward-compat con BD sin la migracion 20260904160000 aplicada.
+      const terminal = [
+        'already_completed', 'already_responded', 'rate_limited',
+        'invitation_unavailable', 'campaign_unavailable',
+        // Legacy (BD pre-20260904160000)
+        'invitation_not_found', 'expired',
+        'campaign_not_found', 'campaign_closed', 'campaign_expired',
+      ]
       if (terminal.includes(data.error)) {
         setErrorCode(data.error)
         return
@@ -177,17 +184,23 @@ export default function PublicSurvey({ token, slug }) {
 
   if (errorCode) {
     const messages = {
-      invitation_not_found: { title: 'Invitación no encontrada', msg: 'El link que abriste no existe o ya fue eliminado.' },
-      campaign_not_found:   { title: 'Encuesta no encontrada', msg: 'El código QR o link que abriste no corresponde a una encuesta activa.' },
+      // Codigos nuevos (post-audit #45): unificados anti-enum
+      invitation_unavailable: { title: 'Link no disponible', msg: 'Este link ya no está disponible. Puede haber vencido o el link no es válido. Contactá a tu responsable si necesitás un nuevo acceso.' },
+      campaign_unavailable:   { title: 'Encuesta no disponible', msg: 'Esta encuesta ya no está disponible. Puede estar cerrada, vencida o el link no es válido. Contactá a tu responsable si necesitás más info.' },
+      // Codigos que se mantienen (no filtran enum)
       already_completed:    { title: 'Ya respondiste', msg: 'Esta encuesta ya fue completada. ¡Gracias por tu participación!' },
       already_responded:    { title: 'Ya respondiste', msg: 'Ya respondiste esta encuesta desde este dispositivo. Gracias por tu participación.' },
-      expired:              { title: 'Invitación expirada', msg: 'El plazo para responder ya venció. Contacta a tu responsable si necesitas un nuevo link.' },
-      campaign_closed:      { title: 'Encuesta cerrada', msg: 'La encuesta fue cerrada por el administrador. Contactá a tu responsable si necesitás más info.' },
-      campaign_expired:     { title: 'Encuesta vencida', msg: 'El plazo para responder ya venció.' },
-      rate_limit_exceeded:  { title: 'Demasiadas respuestas', msg: 'Estamos recibiendo un volumen inusual. Intentá de nuevo en unos minutos. Si el problema persiste, avisá a tu responsable.' },
+      rate_limited:         { title: 'Demasiadas respuestas', msg: 'Estamos recibiendo un volumen inusual. Intentá de nuevo en unos minutos.' },
       rpc_error:            { title: 'Error de conexión', msg: 'No pudimos validar el link. Volvé a intentar en unos minutos.' },
+      // Legacy (BD pre-migracion) — mismos textos genericos que los unificados
+      invitation_not_found: { title: 'Link no disponible', msg: 'Este link ya no está disponible. Contactá a tu responsable si necesitás un nuevo acceso.' },
+      campaign_not_found:   { title: 'Encuesta no disponible', msg: 'Esta encuesta ya no está disponible. Contactá a tu responsable.' },
+      expired:              { title: 'Link no disponible', msg: 'Este link ya no está disponible.' },
+      campaign_closed:      { title: 'Encuesta no disponible', msg: 'Esta encuesta ya no está disponible.' },
+      campaign_expired:     { title: 'Encuesta no disponible', msg: 'Esta encuesta ya no está disponible.' },
+      rate_limit_exceeded:  { title: 'Demasiadas respuestas', msg: 'Estamos recibiendo un volumen inusual. Intentá de nuevo en unos minutos.' },
     }
-    const m = messages[errorCode] || messages.invitation_not_found
+    const m = messages[errorCode] || messages.invitation_unavailable
     return (
       <CenteredCard>
         <AlertTriangle size={48} style={{ color: '#f59e0b' }} />

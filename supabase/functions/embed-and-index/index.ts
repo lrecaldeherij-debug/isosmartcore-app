@@ -25,6 +25,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { logAiUsage } from "../_shared/aiUsage.ts";
+import { corsHeaders } from "../_shared/cors.ts";
 
 // Modelos con fallback. text-embedding-004 dio 404 en producción (Google
 // deprecó el path v1beta/models/text-embedding-004 durante 2026); el modelo
@@ -34,16 +35,12 @@ const EMBEDDING_MODELS = (Deno.env.get("GEMINI_EMBEDDING_MODELS") ?? "gemini-emb
   .split(",").map(s => s.trim()).filter(Boolean);
 const EMBEDDING_DIMS = 768;
 
-const CORS = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-};
-
-function json(body: unknown, status = 200) {
-  return new Response(JSON.stringify(body), {
+// CORS por-request via helper compartido (respeta env ALLOWED_ORIGINS).
+function makeJson(req: Request) {
+  const cors = corsHeaders(req);
+  return (body: unknown, status = 200) => new Response(JSON.stringify(body), {
     status,
-    headers: { ...CORS, "Content-Type": "application/json" },
+    headers: { ...cors, "Content-Type": "application/json" },
   });
 }
 
@@ -286,7 +283,8 @@ const ALLOWED_TABLES = new Set([
 ]);
 
 Deno.serve(async (req: Request) => {
-  if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
+  const json = makeJson(req);
+  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders(req) });
   if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
 
   // 1. Env

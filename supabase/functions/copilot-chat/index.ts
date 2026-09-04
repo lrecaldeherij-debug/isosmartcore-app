@@ -19,6 +19,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { logAiUsage } from "../_shared/aiUsage.ts";
+import { corsHeaders } from "../_shared/cors.ts";
 
 const EMBEDDING_MODELS = (Deno.env.get("GEMINI_EMBEDDING_MODELS") ?? "gemini-embedding-001,text-embedding-004,embedding-001")
   .split(",").map(s => s.trim()).filter(Boolean);
@@ -31,16 +32,13 @@ const CHAT_MODELS = (Deno.env.get("COPILOT_MODELS") ?? "gemini-3.6-flash,gemini-
 const CHAT_TIMEOUT_MS = 25000;
 const TOP_K = 5;
 
-const CORS = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-};
-
-function json(body: unknown, status = 200) {
-  return new Response(JSON.stringify(body), {
+// CORS por-request via helper compartido (respeta env ALLOWED_ORIGINS).
+// Uso dentro del handler: const json = makeJson(req); json({...}).
+function makeJson(req: Request) {
+  const cors = corsHeaders(req);
+  return (body: unknown, status = 200) => new Response(JSON.stringify(body), {
     status,
-    headers: { ...CORS, "Content-Type": "application/json" },
+    headers: { ...cors, "Content-Type": "application/json" },
   });
 }
 
@@ -104,7 +102,8 @@ async function embedQuery(apiKey: string, text: string): Promise<number[]> {
 }
 
 Deno.serve(async (req: Request) => {
-  if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
+  const json = makeJson(req);
+  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders(req) });
   if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
 
   const apiKey = Deno.env.get("GEMINI_API_KEY");
@@ -256,30 +255,47 @@ Deno.serve(async (req: Request) => {
         : `\n\nESTADO ACTUAL DEL SGC:\n${JSON.stringify(snapshot.clauses || snapshot, null, 2)}`)
     : "";
 
-  const historyBlock = history.length === 0 ? "" :
-    "\n\nCONVERSACIÓN PREVIA:\n" +
-    history.map(m => `${m.role === "user" ? "Usuario" : "Copiloto"}: ${m.text}`).join("\n");
-
-  const fullPrompt = `Sos el Copiloto ISO 9001:2015 de IsoSmartCore. Ayudás a gerentes de calidad y auditores a entender el estado de su Sistema de Gestión de Calidad respondiendo preguntas con base en los datos reales de su organización.
+  // Refactor finding #43 del audit: antes serializabamos todo (reglas +
+  // snapshot + contexto + historial + pregunta) en UN solo string y lo
+  // mandabamos como el unico turno. Gemini trata eso peor que multi-turn
+  // real — el modelo no distingue "Usuario:" / "Copiloto:" del historial
+  // pasado con la pregunta actual, y se le va la mano con adherencia.
+  //
+  // Ahora:
+  //   - system_instruction: las reglas fijas (persona + como citar).
+  //   - contents: array de turnos [user, model, user, model, ..., user],
+  //     con el ULTIMO turn user llevando snapshot + contexto + pregunta
+  //     (el snapshot no aplica a turnos previos porque los % pueden haber
+  //     cambiado entre mensajes).
+  const systemInstruction = `Sos el Copiloto ISO 9001:2015 de IsoSmartCore. Ayudás a gerentes de calidad y auditores a entender el estado de su Sistema de Gestión de Calidad respondiendo preguntas con base en los datos reales de su organización.
 
 REGLAS:
-1. Respondé con base en el ESTADO ACTUAL DEL SGC (resumen ejecutivo) + el CONTEXTO específico. Si algo no está en ninguno, decilo honestamente — no inventes.
+1. Respondé con base en el ESTADO ACTUAL DEL SGC (resumen ejecutivo) + el CONTEXTO específico que te llega con cada pregunta. Si algo no está en ninguno, decilo honestamente — no inventes.
 2. **VERIFICÁ CONSISTENCIA**: si el usuario menciona un número específico (cláusula, código, porcentaje, cantidad), chequeá contra el ESTADO ACTUAL DEL SGC antes de responder. Si detectás una inconsistencia (ej: "el usuario dice 4.4 al 50%" pero el estado dice "4.4 al 100%"), **aclará amablemente y sugerí la alternativa correcta**: "La cláusula 4.4 está al 100%. Quizás quisiste consultar la 4.1 que sí está al 50% — ¿te interesa esa?".
 3. Ofrecé proactivamente contexto relacionado cuando ayude al usuario a corregir el rumbo o completar la información.
 4. Cuando cites información específica de un registro, referí al chunk con [1], [2], etc. — el frontend renderiza cada número como link al registro. Solo usá [N] para los chunks del CONTEXTO — el snapshot NO se cita.
 5. Tono profesional, conciso, orientado a acción. Sos consultor senior, no charlatán.
 6. Si detectás un problema en el estado (riesgos altos sin tratar, NCs vencidas, docs obsoletos, cláusulas pendientes), sugerí acción concreta con la cláusula ISO relevante.
 7. Respondé en español rioplatense.
-8. Si la pregunta no es sobre calidad/SGC, redirigí amablemente al scope.
-${snapshotBlock}
+8. Si la pregunta no es sobre calidad/SGC, redirigí amablemente al scope.`;
+
+  // Ultimo turno del user: contexto especifico de esta pregunta + la pregunta.
+  const lastUserMessage = `${snapshotBlock}
 
 CONTEXTO (top-${TOP_K} chunks más relevantes de la organización):
 ${contextBlock}
-${historyBlock}
 
-PREGUNTA DEL USUARIO: ${question}
+PREGUNTA: ${question}`;
 
-Respondé ahora:`;
+  // Construir contents multi-turn: history previa + ultimo turno con contexto.
+  const contents: Array<{ role: string; parts: Array<{ text: string }> }> = [];
+  for (const h of history) {
+    contents.push({
+      role: h.role === "user" ? "user" : "model",
+      parts: [{ text: h.text }],
+    });
+  }
+  contents.push({ role: "user", parts: [{ text: lastUserMessage }] });
 
   // 4. Generación con fallback multi-modelo + auto-parseo del reemplazo.
   //    Google retira modelos con frecuencia (gemini-2.0-flash desapareció
@@ -308,7 +324,13 @@ Respondé ahora:`;
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          contents: [{ parts: [{ text: fullPrompt }] }],
+          system_instruction: { parts: [{ text: systemInstruction }] },
+          contents,
+          generationConfig: {
+            temperature: 0.3,
+            maxOutputTokens: 4096,
+            topP: 0.95,
+          },
         }),
         signal: ctl.signal,
       });
