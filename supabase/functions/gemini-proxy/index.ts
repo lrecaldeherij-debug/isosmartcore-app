@@ -20,6 +20,7 @@
 // deno-lint-ignore-file no-explicit-any
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { logAiUsage } from "../_shared/aiUsage.ts";
 
 // gemini-2.0-flash fue retirado en 2026 (respuesta oficial de Google apunta
 // a gemini-3.6-flash). gemini-1.5-flash también deprecado. Actualizamos el
@@ -52,8 +53,12 @@ Deno.serve(async (req: Request) => {
   const apiKey = Deno.env.get("GEMINI_API_KEY");
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
   const supabaseAnon = Deno.env.get("SUPABASE_ANON_KEY");
+  const serviceRole = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
   if (!apiKey) return json({ error: "GEMINI_API_KEY no configurada" }, 500);
   if (!supabaseUrl || !supabaseAnon) return json({ error: "Supabase env vars faltantes" }, 500);
+  // service_role es opcional aca — si falta, el logAiUsage no se puede
+  // escribir (RLS bloquea) pero el proxy sigue funcionando. Aviso en log.
+  if (!serviceRole) console.warn("gemini-proxy: SUPABASE_SERVICE_ROLE_KEY falta — ai_usage_log no se registrara");
 
   // ── 2. Auth: JWT + user_profile ──────────────────────────────────────
   const authHeader = req.headers.get("Authorization");
@@ -167,6 +172,9 @@ Deno.serve(async (req: Request) => {
   const queue = [...MODELS];
   const attempted = new Set<string>();
 
+  // Admin client para escribir en ai_usage_log (RLS lo bloquea al invoker).
+  const admin = serviceRole ? createClient(supabaseUrl, serviceRole) : null;
+
   while (queue.length > 0) {
     const model = queue.shift()!;
     if (attempted.has(model)) continue;
@@ -175,6 +183,7 @@ Deno.serve(async (req: Request) => {
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
     const ctl = new AbortController();
     const timeoutId = setTimeout(() => ctl.abort(), MODEL_TIMEOUT_MS);
+    const t0 = Date.now();
     try {
       const resp = await fetch(url, {
         method: "POST",
@@ -217,6 +226,19 @@ Deno.serve(async (req: Request) => {
       }
       if (!cleanText.endsWith("}") && cleanText.includes("}")) {
         cleanText = cleanText.substring(0, cleanText.lastIndexOf("}") + 1);
+      }
+
+      // Fire-and-forget: log de consumo con tokens reales de Gemini.
+      if (admin) {
+        logAiUsage(admin, {
+          orgId: profile.org_id,
+          userId: user.id,
+          functionName: "gemini-proxy",
+          model,
+          usageMetadata: data?.usageMetadata,
+          latencyMs: Date.now() - t0,
+          metadata: { internal_account: org.is_internal_account },
+        });
       }
 
       return json({ text: cleanText, model, ai_prompts_used_month: newUsage });

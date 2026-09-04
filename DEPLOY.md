@@ -18,20 +18,37 @@ Guía para llevar IsoSmartCore a producción con la postura de seguridad correct
 
 ## Paso 1: Base de datos (Supabase)
 
-En el **SQL Editor**, ejecutar las migraciones **en orden**:
+**Proyecto existente en producción (`rokudpywehgopfqpdwnj`)**: todas las
+migraciones históricas (v1-v67) ya están aplicadas. Solo correr las nuevas
+del CLI con `supabase db push` (ver Paso 1.b abajo).
 
-1. `iso_migration_v1.sql`
-2. `iso_migration_v2_audit_triggers.sql`
-3. `iso_migration_v3_stakeholders_update.sql`
-4. `iso_migration_v4_stakeholders_policies.sql`
-5. `iso_migration_v5_stakeholders_docs.sql`
-6. `iso_migration_v6_stakeholders_status.sql`
-7. `iso_migration_v7_company_profile.sql`
-8. `iso_migration_v8_company_logo_web.sql`
-9. **`iso_migration_v9_audit_trigger_fix.sql`** ← arregla bug del trigger en DELETE
-10. **`iso_migration_v10_rls_hardening.sql`** ← habilita RLS en todas las tablas
+**Proyecto nuevo desde cero**: hay que hacer dos pasos porque el schema base
+vive en dos lugares por razones históricas (migración pre-CLI → CLI).
 
-Las migraciones v9 y v10 son idempotentes: se pueden re-ejecutar sin error.
+### 1.a — Baseline histórico (solo proyectos nuevos)
+
+En el **SQL Editor**, ejecutar **en orden numérico** todos los archivos de
+`supabase/migrations_archive/` (v1 → v67). Ver el README de esa carpeta
+para el script de bash que lo automatiza con `psql`.
+
+Es idempotente — todos usan `IF NOT EXISTS`, así que si algo se aplicó
+antes no rompe.
+
+### 1.b — Migraciones nuevas (siempre)
+
+Todo cambio de schema desde agosto 2026 vive en `supabase/migrations/` con el
+formato del CLI: `YYYYMMDDHHMMSS_descripcion.sql`. Aplicar con:
+
+```bash
+supabase link --project-ref <tu-project-ref>
+supabase db push
+```
+
+Cada push corre solo las migraciones nuevas que aún no están en la tabla
+`supabase_migrations.schema_migrations` de tu DB.
+
+**Alternativa manual** (cuando no querés instalar el CLI): copiar el contenido
+del archivo `.sql` nuevo y pegarlo en el SQL Editor → Run.
 
 ---
 

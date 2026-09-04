@@ -18,6 +18,7 @@
 // deno-lint-ignore-file no-explicit-any
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { logAiUsage } from "../_shared/aiUsage.ts";
 
 const EMBEDDING_MODELS = (Deno.env.get("GEMINI_EMBEDDING_MODELS") ?? "gemini-embedding-001,text-embedding-004,embedding-001")
   .split(",").map(s => s.trim()).filter(Boolean);
@@ -182,11 +183,26 @@ Deno.serve(async (req: Request) => {
     }
   }
 
+  // Admin client — necesario para RPCs con service_role y para el log de IA.
+  const admin = createClient(supabaseUrl, serviceRole);
+
   // 1. Embedding de la pregunta
   let queryEmbedding: number[];
+  const tEmbed0 = Date.now();
   try {
     queryEmbedding = await embedQuery(apiKey, question);
     if (queryEmbedding.length !== 768) throw new Error(`Dims incorrectas: ${queryEmbedding.length}`);
+    // Log del embed. Los edge functions de Gemini para embedContent no
+    // devuelven usageMetadata, asi que estimamos tokens = chars/4 (aprox).
+    logAiUsage(admin, {
+      orgId: effectiveOrgId,
+      userId: user.id,
+      functionName: "copilot-chat",
+      model: EMBEDDING_MODELS[0],  // el primero de la lista suele ser el que uso
+      usageMetadata: { promptTokenCount: Math.ceil(question.length / 4), candidatesTokenCount: 0 },
+      latencyMs: Date.now() - tEmbed0,
+      metadata: { phase: "query_embedding" },
+    });
   } catch (e) {
     return json({ error: `Embedding falló: ${(e as Error).message}` }, 502);
   }
@@ -194,7 +210,6 @@ Deno.serve(async (req: Request) => {
   // 2. Retrieval. El snapshot preferentemente viene del body (frontend
   //    computeImplementation — mismos números que ve el user en el Dashboard).
   //    Si no vino, fallback a la RPC get_sgc_snapshot (SQL simplificado).
-  const admin = createClient(supabaseUrl, serviceRole);
   const promises: Promise<any>[] = [
     admin.rpc("rag_search", {
       p_org_id: effectiveOrgId,
@@ -287,6 +302,7 @@ Respondé ahora:`;
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
     const ctl = new AbortController();
     const timeoutId = setTimeout(() => ctl.abort(), CHAT_TIMEOUT_MS);
+    const t0 = Date.now();
     try {
       const res = await fetch(url, {
         method: "POST",
@@ -324,6 +340,19 @@ Respondé ahora:`;
       }
       answerText = text.trim();
       usedModel = model;
+      // Log de consumo — fire-and-forget, no bloquea la respuesta.
+      logAiUsage(admin, {
+        orgId: effectiveOrgId,
+        userId: user.id,
+        functionName: "copilot-chat",
+        model,
+        usageMetadata: data?.usageMetadata,
+        latencyMs: Date.now() - t0,
+        metadata: {
+          impersonating: impersonateOrgId ? true : false,
+          chunks_retrieved: contextChunks.length,
+        },
+      });
       break;
     } catch (e) {
       clearTimeout(timeoutId);

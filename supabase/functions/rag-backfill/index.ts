@@ -25,6 +25,7 @@
 // deno-lint-ignore-file no-explicit-any
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { logAiUsage } from "../_shared/aiUsage.ts";
 
 const EMBEDDING_MODELS = (Deno.env.get("GEMINI_EMBEDDING_MODELS") ?? "gemini-embedding-001,text-embedding-004,embedding-001")
   .split(",").map(s => s.trim()).filter(Boolean);
@@ -269,7 +270,20 @@ Deno.serve(async (req: Request) => {
       if (existing?.content_hash === hash) { skipped++; continue; }
 
       try {
+        const tEmbed0 = Date.now();
         const embedding = await embedText(apiKey, chunk.content);
+        // Fire-and-forget: log de consumo por chunk indexado. En backfill
+        // masivo esto genera muchas filas, pero es exactamente lo que queremos:
+        // saber cuanto costo el backfill completo por org.
+        logAiUsage(admin, {
+          orgId: targetOrgId,
+          userId: user.id,
+          functionName: "rag-backfill",
+          model: EMBEDDING_MODELS[0],
+          usageMetadata: { promptTokenCount: Math.ceil(chunk.content.length / 4), candidatesTokenCount: 0 },
+          latencyMs: Date.now() - tEmbed0,
+          metadata: { source_table: table, source_id: row.id, batch: true },
+        });
         const { error: upErr } = await admin.from("rag_chunks").upsert({
           org_id: targetOrgId,
           source_table: table,

@@ -24,6 +24,7 @@
 // deno-lint-ignore-file no-explicit-any
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { logAiUsage } from "../_shared/aiUsage.ts";
 
 // Modelos con fallback. text-embedding-004 dio 404 en producción (Google
 // deprecó el path v1beta/models/text-embedding-004 durante 2026); el modelo
@@ -388,6 +389,7 @@ Deno.serve(async (req: Request) => {
 
   // 6. Generar embedding
   let embedding: number[];
+  const tEmbed0 = Date.now();
   try {
     embedding = await embedWithGemini(apiKey, chunk.content);
   } catch (e) {
@@ -395,6 +397,17 @@ Deno.serve(async (req: Request) => {
     console.error("embed-and-index: Gemini error", msg);
     return json({ error: `Gemini falló: ${msg}` }, 502);
   }
+  // Fire-and-forget: log de consumo. Los edge functions de embedContent no
+  // devuelven usageMetadata, asi que estimamos tokens ~= chars/4.
+  logAiUsage(admin, {
+    orgId: profile.org_id,
+    userId: user.id,
+    functionName: "embed-and-index",
+    model: EMBEDDING_MODELS[0],
+    usageMetadata: { promptTokenCount: Math.ceil(chunk.content.length / 4), candidatesTokenCount: 0 },
+    latencyMs: Date.now() - tEmbed0,
+    metadata: { source_table, source_id, content_length: chunk.content.length },
+  });
 
   // 7. UPSERT
   const { error: upErr } = await admin
