@@ -13,7 +13,35 @@
 import { supabase } from './supabaseClient'
 import { sanitizeUserPrompt } from './lib/sanitizePrompt'
 
-export async function consultarIA(prompt, systemContext = '') {
+/**
+ * Clampea un campo numérico devuelto por Gemini al rango [min, max]. Uso:
+ *   const parsed = JSON.parse(text)
+ *   parsed.probability = clampNumeric(parsed.probability, 1, 5)
+ *
+ * Cierra finding #26 del audit: la validación de la respuesta IA era
+ * shape-only (validaba que existiera el campo pero no el rango). Un usuario
+ * podía por injection hacer que Gemini devolviera probability:15 y romper
+ * la matriz de riesgo.
+ */
+export function clampNumeric(value, min, max, fallback = null) {
+  const n = Number(value)
+  if (!Number.isFinite(n)) return fallback ?? min
+  if (n < min) return min
+  if (n > max) return max
+  return Math.round(n)  // enteros para escalas ordinales (1-5)
+}
+
+/**
+ * Trunca un string a maxLen caracteres. Útil para respuestas de Gemini que
+ * a veces se pasan del cap declarado en el prompt.
+ */
+export function clampString(value, maxLen) {
+  if (typeof value !== 'string') return ''
+  if (value.length <= maxLen) return value
+  return value.slice(0, maxLen).trim()
+}
+
+export async function consultarIA(prompt, systemContext = '', options = {}) {
   const { sanitized, warnings, wasModified } = sanitizeUserPrompt(prompt)
 
   // Loguear solo cuando el sanitizer modificó algo, para no ensuciar la
@@ -23,8 +51,13 @@ export async function consultarIA(prompt, systemContext = '') {
   }
 
   try {
+    // options.expectJson=false permite recibir texto libre (default es true =
+    // Gemini fuerza JSON puro via responseMimeType). Los consumers actuales
+    // esperan JSON, asi que backward-compat con default true.
+    const body = { prompt: sanitized, systemContext }
+    if (options.expectJson === false) body.expect_json = false
     const { data, error } = await supabase.functions.invoke('gemini-proxy', {
-      body: { prompt: sanitized, systemContext },
+      body,
     })
 
     if (error) {

@@ -113,7 +113,7 @@ Deno.serve(async (req: Request) => {
   }
 
   // ── 5. Body ──────────────────────────────────────────────────────────
-  let payload: { prompt?: string; systemContext?: string };
+  let payload: { prompt?: string; systemContext?: string; expect_json?: boolean };
   try { payload = await req.json(); }
   catch { return json({ error: "Body inválido (JSON esperado)" }, 400); }
 
@@ -142,14 +142,15 @@ Deno.serve(async (req: Request) => {
     newUsage = typeof usageData === "number" ? usageData : null;
   }
 
-  // ── 7. Construir prompt (sin cambios respecto al original) ───────────
-  const fullPrompt = systemContext
-    ? `${systemContext}\n\nSolicitud del usuario: ${prompt}`
-    : `
+  // ── 7. System instruction separada del user prompt ──────────────────
+  // Refactor post-audit (finding #27): antes concatenabamos systemContext +
+  // prompt en un solo string. Ahora los mandamos por separado en el
+  // `system_instruction` de Gemini — eso reduce el riesgo de prompt injection
+  // (el user no puede reescribir su propio rol) y mejora la adherencia a
+  // formato porque Gemini prioriza la system instruction sobre el turn del user.
+  const systemInstruction = systemContext || `
     Actúa como un Consultor Experto en Normas ISO 9001:2015.
     Tu objetivo es ayudar a redactar descripciones concisas y estratégicas para el análisis de contexto (FODA).
-
-    Solicitud del usuario: ${prompt}
 
     INSTRUCCIONES CLAVE DE FORMATO:
     1. Analiza si el factor es positivo (Fortaleza/Oportunidad) o negativo (Debilidad/Amenaza) según el contexto empresarial.
@@ -162,7 +163,29 @@ Deno.serve(async (req: Request) => {
       "descripcion": "Texto breve de la descripción técnica (max 300 caracteres).",
       "estrategia": "Texto breve de la estrategia recomendada considerando si es riesgo positivo o negativo (max 300 caracteres)."
     }
-  `;
+  `.trim();
+
+  // ── 7.b generationConfig: determinismo + response_mime_type=JSON ─────
+  // finding #32: antes no habia generationConfig — temperature default=1.0
+  // (muy random). Ahora bajamos a 0.3 (respuestas consistentes) y
+  // maxOutputTokens=4096 (cap para evitar respuestas kilometricas que agotan
+  // la cuota).
+  //
+  // response_mime_type=application/json fuerza a Gemini a devolver SOLO JSON
+  // valido — sin markdown ni ```json ``` alrededor. El parser cliente puede
+  // hacer JSON.parse(text) directo. Si el consumer necesita texto libre,
+  // pasa expect_json=false en el body.
+  const wantsJson = (payload as any).expect_json !== false;
+  const temperature = Number(Deno.env.get("GEMINI_TEMPERATURE") ?? "0.3");
+  const maxTokens = Number(Deno.env.get("GEMINI_MAX_OUTPUT_TOKENS") ?? "4096");
+  const generationConfig: Record<string, unknown> = {
+    temperature,
+    maxOutputTokens: maxTokens,
+    topP: 0.95,
+  };
+  if (wantsJson) {
+    generationConfig.responseMimeType = "application/json";
+  }
 
   // ── 8. Fallback por modelo con timeout + auto-parseo del reemplazo ──
   // Cuando Google retira un modelo devuelve 404 con "Please use models/X" —
@@ -189,7 +212,9 @@ Deno.serve(async (req: Request) => {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          contents: [{ parts: [{ text: fullPrompt }] }],
+          system_instruction: { parts: [{ text: systemInstruction }] },
+          contents: [{ role: "user", parts: [{ text: prompt }] }],
+          generationConfig,
         }),
         signal: ctl.signal,
       });

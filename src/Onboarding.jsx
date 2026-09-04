@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { supabase } from './supabaseClient'
 import { useOrg } from './OrgContext'
 import { consultarIA } from './aiClient'
@@ -70,6 +70,13 @@ export default function Onboarding({ onComplete }) {
   const [completing, setCompleting] = useState(false)
   const [celebrating, setCelebrating] = useState(false)
   const [savingStep, setSavingStep] = useState(false)
+
+  // Fix finding #37 del audit: el setTimeout de 2.2s en finishOnboarding
+  // dispara onComplete() incluso si el component se desmonto en el interin
+  // (user cierra la tab, el parent hace unmount por refresh, etc.). Guardo
+  // el estado de montaje para saltar el callback si ya no estamos vivos.
+  const mountedRef = useRef(true)
+  useEffect(() => () => { mountedRef.current = false }, [])
 
   // Estado por paso
   const [company, setCompany] = useState({
@@ -153,6 +160,9 @@ export default function Onboarding({ onComplete }) {
     // 4. Llamar onComplete: parent setea onboardingForceCompleted=true Y refresca.
     //    AppShell ya NO desmonta la UI durante el refresh (org está cargado),
     //    así que la transición Onboarding → Dashboard es suave.
+    //    Guardrail: si el component se desmonto durante los 2.2s, no llamamos
+    //    onComplete (evita setState-on-unmounted warnings).
+    if (!mountedRef.current) return
     if (onComplete) onComplete()
   }
 

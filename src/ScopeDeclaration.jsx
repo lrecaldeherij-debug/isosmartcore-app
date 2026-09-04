@@ -10,7 +10,7 @@ import {
 import IsoInfoCard from './IsoInfoCard'
 import ModuleSeedBanner from './ModuleSeedBanner'
 import { toast } from './lib/toast'
-import { confirm } from './lib/confirm'
+import { confirm, promptText } from './lib/confirm'
 
 // ─────── Constantes ───────
 const STATUS_OPTIONS = ['Borrador', 'Aprobada', 'Comunicada', 'Obsoleta']
@@ -239,9 +239,13 @@ Devuelve SOLO JSON, sin markdown:
 
   const handleAprobar = async () => {
     if (!scope) return toast.warning('Guarda primero el alcance')
-    const aprobador = window.prompt('Nombre de quien aprueba:', scope.approved_by || '')
+    const aprobador = await promptText('Nombre de quien aprueba', {
+      defaultValue: scope.approved_by || '', required: true, rows: 1,
+    })
     if (!aprobador) return
-    const rol = window.prompt('Cargo:', scope.approved_role || 'Director General') || 'Director General'
+    const rol = (await promptText('Cargo del aprobador', {
+      defaultValue: scope.approved_role || 'Director General', rows: 1,
+    })) || 'Director General'
     const updates = {
       status: 'Aprobada',
       approved_by: aprobador, approved_role: rol,

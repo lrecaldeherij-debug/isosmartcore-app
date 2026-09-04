@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import { useOrg } from './OrgContext'
 import { supabase } from './supabaseClient'
 import { consultarIA } from './aiClient'
+import { toast } from './lib/toast'
 import { colors, families, tracking, weight } from './components/ui/tokens'
 import { MessageSquare, Mail, X, Send, Loader2, BookOpen, ExternalLink, Check, Sparkles } from 'lucide-react'
 
@@ -680,7 +681,7 @@ function WaitlistForm({ orgId, onDone, onCancel }) {
     try {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) {
-        alert('No pudimos identificar tu sesión. Refresca la página.')
+        toast.error('No pudimos identificar tu sesión. Refresca la página.')
         setSaving(false)
         return
       }
@@ -701,14 +702,14 @@ function WaitlistForm({ orgId, onDone, onCancel }) {
             .maybeSingle()
           if (existing) { onDone(existing); return }
         }
-        alert('No pudimos guardarte: ' + error.message)
+        toast.error('No pudimos guardarte: ' + error.message)
         setSaving(false)
         return
       }
       onDone(data)
     } catch (err) {
       console.error('Waitlist insert error:', err)
-      alert('Error al guardar. Prueba de nuevo.')
+      toast.error('Error al guardar. Prueba de nuevo.')
       setSaving(false)
     }
   }

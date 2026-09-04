@@ -64,10 +64,19 @@ export function OrgProvider({ session, children }) {
       // setearlo. Esto permite entrar en impersonate compartiendo el link
       // directo sin pasar por startImpersonation.
       const currentMeta = session.user.user_metadata?.impersonate_org_id || null
+      // Fix finding #35 del audit: updateUser() persiste el metadata en el
+      // server, pero el JWT local no se refresca hasta el proximo TTL (default
+      // 60 min). Si no llamamos refreshSession() a continuacion, las queries
+      // que siguen (org_with_plan + Dashboard + Copilot snapshot) mandan el
+      // JWT viejo — las policies _select_impersonate de tablas ISO leen del
+      // JWT via current_impersonate_org(), asi que verian metadata stale.
+      // Con refreshSession() el JWT queda alineado antes de las queries.
       if (canImpersonate && currentMeta !== impersonateOrgId) {
         await supabase.auth.updateUser({ data: { impersonate_org_id: impersonateOrgId } })
+        await supabase.auth.refreshSession()
       } else if (!canImpersonate && currentMeta) {
         await supabase.auth.updateUser({ data: { impersonate_org_id: null } })
+        await supabase.auth.refreshSession()
       }
       if (cancelled) return
 

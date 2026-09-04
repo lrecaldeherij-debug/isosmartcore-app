@@ -12,7 +12,7 @@ import { CLAUSE_GUIDES } from './clauseGuides'
 import ModuleSeedBanner from './ModuleSeedBanner'
 import DocumentImporter from './DocumentImporter'
 import { toast } from './lib/toast'
-import { confirm } from './lib/confirm'
+import { confirm, promptText } from './lib/confirm'
 
 // ─────── Constantes ───────
 const STATUS_OPTIONS = ['Borrador', 'Aprobada', 'Comunicada', 'Obsoleta']
@@ -206,9 +206,13 @@ Devuelve SOLO JSON, sin markdown:
 
   const handleAprobar = async () => {
     if (!policy) return toast.warning('Guarda primero la política')
-    const aprobador = window.prompt('Nombre de quien aprueba (Alta Dirección):', policy.approved_by || '')
+    const aprobador = await promptText('Nombre de quien aprueba (Alta Dirección)', {
+      defaultValue: policy.approved_by || '', required: true, rows: 1,
+    })
     if (!aprobador) return
-    const rol = window.prompt('Cargo:', policy.approved_role || 'Director General') || 'Director General'
+    const rol = (await promptText('Cargo del aprobador', {
+      defaultValue: policy.approved_role || 'Director General', rows: 1,
+    })) || 'Director General'
     const updates = {
       status: 'Aprobada',
       approved_by: aprobador,

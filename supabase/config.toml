@@ -13,3 +13,9 @@ verify_jwt = true
 # No expone data — solo pinguea Gemini para saber qué modelos siguen vivos.
 [functions.ai-health-check]
 verify_jwt = false
+
+# warmup corre desde un cron externo (Vercel Cron o GH Actions) para prevenir
+# el cold-start de Supabase Free tier. No expone data — solo hace un SELECT 1
+# a la DB para mantener el pool caliente. Sin JWT porque el cron no tiene sesión.
+[functions.warmup]
+verify_jwt = false
