@@ -132,7 +132,13 @@ export default function Team() {
 
       {canWrite && <AuditorTokensPanel />}
 
-      {canWrite && <InvitePlaceholder />}
+      {canWrite && (
+        <InvitePanel
+          members={members}
+          maxUsers={plan.maxUsers}
+          onInvited={fetchMembers}
+        />
+      )}
     </div>
   )
 }
@@ -268,23 +274,199 @@ function RoleLegend() {
   )
 }
 
-function InvitePlaceholder() {
+// InvitePanel — Owner invita a un nuevo miembro por email. Llama a la edge
+// function `invite-member` que crea un auth.user con metadata invited_org_id
+// + invited_role, y Supabase manda el email de bienvenida con link magico.
+// Cuando el user completa signup, un trigger BD lo une a la org con el rol.
+//
+// Respeta el limite del plan (maxUsers). Roles invitables: quality_manager,
+// auditor, operator, viewer — owner no se invita, se transfiere aparte.
+const INVITABLE_ROLES = ['quality_manager', 'auditor', 'operator', 'viewer']
+
+function InvitePanel({ members, maxUsers, onInvited }) {
+  const [open, setOpen] = useState(false)
+  const [email, setEmail] = useState('')
+  const [role, setRole] = useState('operator')
+  const [fullName, setFullName] = useState('')
+  const [sending, setSending] = useState(false)
+  const [lastInvited, setLastInvited] = useState(null)  // { email, at }
+
+  const isUnlimited = maxUsers == null
+  const atLimit = !isUnlimited && members.length >= maxUsers
+
+  const reset = () => {
+    setEmail('')
+    setRole('operator')
+    setFullName('')
+    setOpen(false)
+  }
+
+  const handleInvite = async () => {
+    const cleanEmail = email.trim().toLowerCase()
+    if (!cleanEmail || !cleanEmail.includes('@')) {
+      toast.error('Email inválido')
+      return
+    }
+    // No dejar duplicar: si ya es miembro, no tiene sentido reinvitarlo.
+    if (members.some(m => m.full_name && cleanEmail === m.full_name.toLowerCase())) {
+      // El full_name no siempre es el email — este check es aproximado. Igual
+      // el edge function y el trigger BD son idempotentes: reinvitar a alguien
+      // que ya es miembro simplemente lo re-notifica.
+    }
+
+    setSending(true)
+    try {
+      const { data, error } = await supabase.functions.invoke('invite-member', {
+        body: {
+          email: cleanEmail,
+          role,
+          full_name: fullName.trim(),
+        },
+      })
+      // El edge function devuelve { error: "..." } con 4xx, o { ok: true, user_id }.
+      // Cuando la function tira 4xx, supabase-js pone el status en `error`
+      // pero el body sigue en `data`.
+      if (error) {
+        const msg = data?.error || error.message || 'Error invitando'
+        toast.error(msg)
+        return
+      }
+      if (data?.error) {
+        toast.error(data.error)
+        return
+      }
+      toast.success(`Invitación enviada a ${cleanEmail}`)
+      setLastInvited({ email: cleanEmail, at: new Date().toISOString() })
+      reset()
+      onInvited?.()
+    } catch (e) {
+      toast.error(e.message || 'Error invitando')
+    } finally {
+      setSending(false)
+    }
+  }
+
   return (
-    <div style={{
-      marginTop: '24px', padding: '20px',
-      background: '#f3e8ff', border: '1px dashed #c084fc',
-      borderRadius: radius.xl, display: 'flex', alignItems: 'flex-start', gap: '12px',
-    }}>
-      <UserPlus size={24} color="#7c3aed" style={{ flexShrink: 0, marginTop: '2px' }} />
-      <div>
-        <strong style={{ color: '#6b21a8', display: 'block', marginBottom: '4px' }}>
-          Invitaciones por email
-        </strong>
-        <p style={{ margin: 0, color: '#581c87', fontSize: font.sm, lineHeight: 1.5 }}>
-          La invitación por email viene en la fase final del lanzamiento (junto con Stripe).
-          Por ahora cada usuario crea su cuenta y tú los promueves al rol que corresponda.
-        </p>
+    <div style={{ marginTop: '24px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px', flexWrap: 'wrap' }}>
+        <UserPlus size={20} color={colors.primary} />
+        <h3 style={{ margin: 0, fontSize: font.xl, color: colors.text, flex: 1 }}>
+          Invitar por email
+        </h3>
+        {!open && (
+          <Button
+            variant="primary"
+            size="sm"
+            icon={<Mail size={14} />}
+            onClick={() => setOpen(true)}
+            disabled={atLimit}
+            title={atLimit ? `Alcanzaste el límite del plan (${maxUsers} usuarios). Actualizá el plan para invitar más.` : ''}
+          >
+            Nueva invitación
+          </Button>
+        )}
       </div>
+
+      <p style={{ margin: '0 0 12px 0', color: colors.textMuted, fontSize: font.sm, lineHeight: 1.5 }}>
+        La persona recibe un email con link de acceso. Cuando completa el registro se une automáticamente a la organización con el rol indicado.
+      </p>
+
+      {atLimit && (
+        <div style={{
+          background: colors.warningLight, color: colors.warningText,
+          padding: '10px 12px', borderRadius: radius.md, marginBottom: '12px',
+          fontSize: font.sm, display: 'flex', gap: '8px', alignItems: 'flex-start',
+        }}>
+          <Info size={16} style={{ flexShrink: 0, marginTop: '1px' }} />
+          <span>
+            Alcanzaste el límite del plan ({maxUsers} usuarios). Para invitar más gente actualizá el plan desde <strong>Plan y facturación</strong>.
+          </span>
+        </div>
+      )}
+
+      {open && !atLimit && (
+        <div style={{
+          background: colors.bgMuted, border: `1px solid ${colors.border}`,
+          borderRadius: radius.xl, padding: '14px', marginBottom: '12px',
+          display: 'flex', flexDirection: 'column', gap: '10px',
+        }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+            <div>
+              <label style={{ fontSize: font.sm, fontWeight: 600, color: colors.textMuted, display: 'block', marginBottom: '4px' }}>
+                Email de la persona
+              </label>
+              <input
+                type="email"
+                autoComplete="off"
+                placeholder="ej. calidad@empresa.com"
+                value={email}
+                onChange={e => setEmail(e.target.value)}
+                disabled={sending}
+                style={{
+                  width: '100%', padding: '8px 10px', border: `1px solid ${colors.border}`,
+                  borderRadius: radius.lg, fontSize: font.base, boxSizing: 'border-box',
+                }}
+              />
+            </div>
+            <div>
+              <label style={{ fontSize: font.sm, fontWeight: 600, color: colors.textMuted, display: 'block', marginBottom: '4px' }}>
+                Nombre (opcional)
+              </label>
+              <input
+                type="text"
+                autoComplete="off"
+                placeholder="María González"
+                value={fullName}
+                onChange={e => setFullName(e.target.value)}
+                disabled={sending}
+                style={{
+                  width: '100%', padding: '8px 10px', border: `1px solid ${colors.border}`,
+                  borderRadius: radius.lg, fontSize: font.base, boxSizing: 'border-box',
+                }}
+              />
+            </div>
+          </div>
+
+          <div>
+            <label style={{ fontSize: font.sm, fontWeight: 600, color: colors.textMuted, display: 'block', marginBottom: '4px' }}>
+              Rol al aceptar la invitación
+            </label>
+            <select
+              value={role}
+              onChange={e => setRole(e.target.value)}
+              disabled={sending}
+              style={{
+                width: '100%', padding: '8px 10px', border: `1px solid ${colors.border}`,
+                borderRadius: radius.lg, fontSize: font.base, background: 'white',
+              }}
+            >
+              {INVITABLE_ROLES.map(r => (
+                <option key={r} value={r}>{ROLES[r].icon} {ROLES[r].label} — {ROLES[r].desc}</option>
+              ))}
+            </select>
+          </div>
+
+          <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', marginTop: '4px' }}>
+            <Button variant="ghost" size="sm" onClick={reset} disabled={sending}>Cancelar</Button>
+            <Button variant="primary" size="sm" icon={<Mail size={14} />} onClick={handleInvite} disabled={sending}>
+              {sending ? 'Enviando…' : 'Enviar invitación'}
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {lastInvited && (
+        <div style={{
+          background: colors.successLight, color: colors.successText,
+          padding: '10px 12px', borderRadius: radius.md,
+          fontSize: font.sm, display: 'flex', gap: '8px', alignItems: 'flex-start',
+        }}>
+          <Mail size={16} style={{ flexShrink: 0, marginTop: '1px' }} />
+          <span>
+            Invitación enviada a <strong>{lastInvited.email}</strong>. Aparecerá acá arriba cuando complete el registro.
+          </span>
+        </div>
+      )}
     </div>
   )
 }
