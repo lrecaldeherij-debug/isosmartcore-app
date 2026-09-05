@@ -46,8 +46,10 @@ CREATE INDEX IF NOT EXISTS idx_ai_usage_org_time
 CREATE INDEX IF NOT EXISTS idx_ai_usage_org_function
   ON ai_usage_log(org_id, function_name, created_at DESC);
 
-CREATE INDEX IF NOT EXISTS idx_ai_usage_org_month
-  ON ai_usage_log(org_id, date_trunc('month', created_at));
+-- Nota: no creamos indice sobre date_trunc('month', created_at) porque
+-- date_trunc con timestamptz no es IMMUTABLE (depende del TimeZone de la
+-- sesion). El indice idx_ai_usage_org_time ya cubre queries por rango con
+-- range scan eficiente sobre created_at.
 
 -- ─── RLS ─────────────────────────────────────────────────────────────────────
 -- SELECT: propia org + super_admin impersonate. INSERT/UPDATE/DELETE: solo
