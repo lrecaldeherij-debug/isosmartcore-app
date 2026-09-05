@@ -45,7 +45,7 @@ export const DECISION_EVENT_TYPES = new Set([
 export async function fetchTimeline({ sourceTable, sourceId }) {
   const { data, error } = await supabase
     .from('work_order_events')
-    .select('id, event_type, performed_by, performed_by_name, performed_by_role, notes, same_person, created_at')
+    .select('id, event_type, performed_by, performed_by_name, performed_by_role, notes, same_person, signature_hash, created_at')
     .eq('source_table', sourceTable)
     .eq('source_id', sourceId)
     .order('created_at', { ascending: true })
@@ -200,6 +200,18 @@ export async function deleteAttachment(attachment) {
   }
   const { error } = await supabase.from('work_order_attachments').delete().eq('id', attachment.id)
   if (error) throw error
+}
+
+// ─── Firma digital: verificacion ───
+//
+// El backend ya calculo signature_hash al hacer INSERT (BEFORE INSERT trigger).
+// Esta RPC recalcula con los datos actuales y compara. Si difiere → alguien
+// modifico el evento por fuera del flujo (SQL directo, restore, etc.).
+// Devuelve { ok, signed, valid, stored_hash, recalc_hash, ... }.
+export async function verifyEventSignature(eventId) {
+  const { data, error } = await supabase.rpc('verify_event_signature', { p_event_id: eventId })
+  if (error) throw error
+  return data
 }
 
 export async function signedUrlFor(storagePath, ttlSeconds = 60) {

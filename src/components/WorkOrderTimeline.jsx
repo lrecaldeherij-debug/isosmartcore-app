@@ -16,12 +16,12 @@ import { toast } from '../lib/toast'
 import { confirm } from '../lib/confirm'
 import {
   Clock, User, Paperclip, ExternalLink, Trash2, Plus, Upload, Link as LinkIcon,
-  Loader2, X, MessageSquare, FileText, Download, ShieldAlert,
+  Loader2, X, MessageSquare, FileText, Download, ShieldAlert, Lock, ShieldCheck,
 } from 'lucide-react'
 import {
   fetchTimeline, addEvent, deleteEvent, uploadAttachment, addLink,
   deleteAttachment, signedUrlFor, eventTypesForTable, EVENT_TYPES,
-  checkSegregation, DECISION_EVENT_TYPES,
+  checkSegregation, DECISION_EVENT_TYPES, verifyEventSignature,
   fmtSize, fmtDateTime,
 } from '../lib/workOrderEvents'
 
@@ -163,6 +163,29 @@ export default function WorkOrderTimeline({ sourceTable, sourceId, compact = fal
 function EventRow({ event, canDelete, onDelete, onAttachmentChange, orgId }) {
   const meta = EVENT_TYPES[event.event_type] || { label: event.event_type, color: '#64748b' }
   const [addingAttachment, setAddingAttachment] = useState(false)
+  const [verifying, setVerifying] = useState(false)
+
+  const handleVerify = async (e) => {
+    e.stopPropagation()
+    if (verifying) return
+    setVerifying(true)
+    try {
+      const res = await verifyEventSignature(event.id)
+      if (res.error) {
+        toast.error('No se pudo verificar: ' + res.error)
+      } else if (!res.signed) {
+        toast('Este tipo de evento no lleva firma.', { icon: 'ℹ️' })
+      } else if (res.valid) {
+        toast.success('Firma válida: el evento no fue modificado.')
+      } else {
+        toast.error('⚠️ Firma inválida: el evento fue modificado por fuera del sistema.')
+      }
+    } catch (err) {
+      toast.error('Error verificando: ' + err.message)
+    } finally {
+      setVerifying(false)
+    }
+  }
 
   return (
     <div style={{
@@ -209,6 +232,25 @@ function EventRow({ event, canDelete, onDelete, onAttachmentChange, orgId }) {
               >
                 <ShieldAlert size={10} /> conflicto
               </span>
+            )}
+            {event.signature_hash && (
+              <button
+                onClick={handleVerify}
+                title={`Firmado (SHA-256: ${event.signature_hash.substring(0, 12)}…). Click para verificar integridad.`}
+                disabled={verifying}
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: '3px',
+                  background: '#dcfce7', color: '#15803d',
+                  border: '1px solid #bbf7d0',
+                  fontSize: '10px', fontWeight: 700,
+                  padding: '2px 6px', borderRadius: '4px',
+                  cursor: verifying ? 'wait' : 'pointer',
+                  fontFamily: 'inherit',
+                }}
+              >
+                {verifying ? <Loader2 size={10} className="animate-spin" /> : <Lock size={10} />}
+                firmado
+              </button>
             )}
           </div>
           {event.notes && (

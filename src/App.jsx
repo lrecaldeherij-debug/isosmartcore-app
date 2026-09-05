@@ -59,6 +59,7 @@ import HelpButton from './components/ui/HelpButton'
 import { isOperator, initialViewForRole, OPERATOR_ALLOWED_VIEWS } from './lib/roles'
 import Copilot from './Copilot'
 import ImpersonateBanner from './components/ImpersonateBanner'
+import NotificationBell from './components/NotificationBell'
 import { 
   Home, 
   Target, 
@@ -390,6 +391,9 @@ function AppShell() {
           <div style={{ display: 'flex', alignItems: 'center', width: '100%' }}>
             <div style={{ width: '32px', height: '32px', background: 'var(--primary-color)', borderRadius: '6px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontWeight: 'bold' }}>ISO</div>
             <h2 className="sidebar-title" style={{ marginLeft: '10px' }}>SmartCore</h2>
+            <div style={{ marginLeft: 'auto' }}>
+              <NotificationBell onNavigate={(view) => { navegarA(view); setMobileMenuOpen(false) }} />
+            </div>
           </div>
           {org && (
             <div style={{ marginTop: '0.75rem', fontSize: '0.75rem', color: 'var(--text-tertiary)', width: '100%' }}>
