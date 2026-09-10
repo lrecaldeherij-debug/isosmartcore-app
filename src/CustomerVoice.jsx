@@ -23,6 +23,10 @@ import { toast } from './lib/toast'
 import { confirm } from './lib/confirm'
 import IsoInfoCard from './IsoInfoCard'
 import { CLAUSE_GUIDES } from './clauseGuides'
+import PublicCampaignPanel from './PublicCampaignPanel'
+import {
+  DIMENSIONS, SATISFACTION_SURVEY_TYPE, calcNps, avgOf, trendOf, npsCategory,
+} from './lib/customerSatisfaction'
 import {
   Button, Modal, Field, Row, Input, Select, Textarea, Badge, Kpi,
   EmptyState, Spinner, Grid, PageHeader, colors, radius, font,
@@ -30,16 +34,8 @@ import {
 
 // ─── Catálogos ───────────────────────────────────────────────────────────────
 
-// Las 6 dimensiones que se puntúan 1-5. El `key` matchea la columna en BD
-// (score_<key>) y la clave que espera la RPC pública.
-const DIMENSIONS = [
-  { key: 'quality',        label: 'Calidad del producto/servicio', hint: '¿Cumplió las especificaciones acordadas?' },
-  { key: 'delivery',       label: 'Cumplimiento de plazos',        hint: '¿Se entregó en la fecha comprometida?' },
-  { key: 'communication',  label: 'Comunicación y atención',       hint: '¿Fue clara, oportuna y accesible?' },
-  { key: 'value',          label: 'Relación precio / valor',       hint: '¿El precio se corresponde con lo recibido?' },
-  { key: 'responsiveness', label: 'Respuesta ante problemas',      hint: '¿Reaccionamos rápido cuando algo falló?' },
-  { key: 'technical',      label: 'Competencia técnica',           hint: '¿El equipo demostró dominio técnico?' },
-]
+// DIMENSIONS, calcNps, avgOf y trendOf viven en lib/customerSatisfaction.js
+// porque PublicSurvey.jsx (página sin sesión) también los necesita.
 
 const FEEDBACK_TYPES = {
   complaint:  { label: 'Queja / Reclamo', variant: 'danger',  icon: ThumbsDown },
@@ -107,23 +103,6 @@ const EMPTY_FEEDBACK = {
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-// NPS = %promotores − %detractores. Promotor 9-10, pasivo 7-8, detractor 0-6.
-// Se recalcula en el cliente además de la vista SQL para que el número se
-// actualice al instante cuando cargás una respuesta nueva.
-function calcNps(rows) {
-  const withNps = rows.filter(r => r.nps_score !== null && r.nps_score !== undefined)
-  if (withNps.length === 0) return null
-  const promoters = withNps.filter(r => r.nps_score >= 9).length
-  const detractors = withNps.filter(r => r.nps_score <= 6).length
-  return Math.round(((promoters - detractors) / withNps.length) * 1000) / 10
-}
-
-function avgOf(rows, field) {
-  const vals = rows.map(r => r[field]).filter(v => v !== null && v !== undefined)
-  if (!vals.length) return null
-  return Math.round((vals.reduce((a, b) => a + Number(b), 0) / vals.length) * 100) / 100
-}
-
 function scoreColor(score) {
   if (score === null || score === undefined) return colors.textGhost
   if (score >= 4.2) return colors.success
@@ -136,22 +115,6 @@ function npsColor(nps) {
   if (nps >= 50) return colors.success
   if (nps >= 0) return colors.warning
   return colors.danger
-}
-
-// Divide las respuestas en dos mitades temporales para comparar tendencia.
-// El auditor no pregunta "¿cuánto sacaron?", pregunta "¿mejoró o empeoró?".
-function trendOf(rows) {
-  const scored = rows
-    .filter(r => r.overall_score !== null)
-    .sort((a, b) => new Date(a.survey_date) - new Date(b.survey_date))
-  if (scored.length < 4) return null
-  const mid = Math.floor(scored.length / 2)
-  const older = scored.slice(0, mid)
-  const newer = scored.slice(mid)
-  const a = avgOf(older, 'overall_score')
-  const b = avgOf(newer, 'overall_score')
-  if (a === null || b === null) return null
-  return Math.round((b - a) * 100) / 100
 }
 
 function fmtDate(d) {
@@ -365,6 +328,14 @@ function SatisfactionTab({ orgId, canWrite }) {
       </Grid></div>
 
       {rows.length > 0 && <DimensionBars rows={rows} />}
+
+      {/* Link + QR para que el cliente responda sin cuenta. Cada respuesta que
+          entra por acá cae en esta misma lista con origen "link público". */}
+      {canWrite && (
+        <div style={{ marginTop: '18px' }}>
+          <PublicCampaignPanel surveyType={SATISFACTION_SURVEY_TYPE} />
+        </div>
+      )}
 
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '18px 0 10px' }}>
         <h3 style={{ margin: 0, fontSize: font.xl, color: colors.text }}>Evaluaciones registradas</h3>
@@ -618,10 +589,11 @@ function NpsPicker({ value, onChange }) {
 }
 
 function SurveyRow({ row, isLast, canWrite, onEdit, onDelete }) {
-  const npsLabel = row.nps_score === null || row.nps_score === undefined ? null
-    : row.nps_score >= 9 ? { t: 'Promotor', v: 'success' }
-    : row.nps_score >= 7 ? { t: 'Pasivo', v: 'warning' }
-    : { t: 'Detractor', v: 'danger' }
+  // La clasificación vive en el lib para que el módulo y la página pública
+  // usen exactamente el mismo criterio de promotor/pasivo/detractor.
+  const cat = npsCategory(row.nps_score)
+  const npsVariant = cat?.key === 'promoter' ? 'success'
+    : cat?.key === 'passive' ? 'warning' : 'danger'
 
   return (
     <div style={{
@@ -643,7 +615,7 @@ function SurveyRow({ row, isLast, canWrite, onEdit, onDelete }) {
           <strong style={{ color: colors.text, fontSize: font.lg }}>
             {row.customer_name || <em style={{ color: colors.textGhost }}>Anónimo</em>}
           </strong>
-          {npsLabel && <Badge variant={npsLabel.v}>NPS {row.nps_score} · {npsLabel.t}</Badge>}
+          {cat && <Badge variant={npsVariant}>NPS {row.nps_score} · {cat.label}</Badge>}
           {row.source === 'public_link' && <Badge variant="neutral">link público</Badge>}
           {row.triggered_action && <Badge variant="info">acción abierta</Badge>}
         </div>

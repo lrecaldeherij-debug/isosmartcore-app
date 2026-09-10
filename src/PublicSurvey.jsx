@@ -2,6 +2,9 @@ import { useEffect, useState } from 'react'
 import { supabase } from './supabaseClient'
 import { Loader2, Send, CheckCircle, AlertTriangle } from 'lucide-react'
 import { toast } from './lib/toast'
+import {
+  DIMENSIONS, SCALE_LABELS, isSatisfactionSurvey,
+} from './lib/customerSatisfaction'
 
 // Mismas 4 categorías que ClimateSurveys.jsx — mantenidas aquí para que la
 // página pública sea autocontenida y no dependa del módulo logueado.
@@ -80,6 +83,17 @@ export default function PublicSurvey({ token, slug }) {
   const [submitting, setSubmitting] = useState(false)
   const [done, setDone] = useState(false)
 
+  // Estado propio de la encuesta de satisfacción de cliente (9.1.2). Arranca
+  // vacío a propósito: un default de 4 sesgaría el resultado hacia arriba si
+  // el cliente envía sin tocar nada.
+  const [satScores, setSatScores] = useState({})
+  const [npsScore, setNpsScore] = useState(null)
+  const [customerName, setCustomerName] = useState('')
+
+  // Qué formulario mostrar. La campaña lo declara en survey_type; las de clima
+  // (default histórico) siguen con el cuestionario de 4 categorías.
+  const isSatisfaction = isSatisfactionSurvey(invitation?.survey_type)
+
   useEffect(() => {
     (async () => {
       if (mode === 'invalid') {
@@ -124,10 +138,42 @@ export default function PublicSurvey({ token, slug }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault()
+
+    // En satisfacción todo es opcional campo por campo, pero enviar el
+    // formulario entero vacío solo ensucia el indicador con una fila nula.
+    if (isSatisfaction) {
+      const answered = Object.values(satScores).filter(v => v != null).length
+      if (answered === 0 && npsScore == null) {
+        toast.error('Respondé al menos una pregunta antes de enviar.')
+        return
+      }
+    }
+
     setSubmitting(true)
 
     let data, error
-    if (mode === 'token') {
+    if (isSatisfaction && mode !== 'slug') {
+      // Las encuestas de satisfacción solo se responden por link público: no
+      // hay flujo de invitación individual todavía. Sin este guard, la RPC
+      // recibiría p_slug undefined y devolvería un error opaco.
+      setSubmitting(false)
+      toast.error('Esta encuesta solo puede responderse desde su link público.')
+      return
+    }
+    if (isSatisfaction) {
+      // Encuesta de satisfacción de cliente: RPC propia, que escribe en
+      // customer_satisfaction_surveys y no en climate_surveys.
+      // Solo existe en modo link público — no hay invitación por token todavía.
+      const fp = getDeviceFingerprint()
+      ;({ data, error } = await supabase.rpc('submit_customer_satisfaction', {
+        p_slug: slug,
+        p_scores: satScores,
+        p_nps: npsScore,
+        p_comments: notes || null,
+        p_customer: customerName.trim() || null,
+        p_fingerprint: fp,
+      }))
+    } else if (mode === 'token') {
       ({ data, error } = await supabase.rpc('submit_survey_response', {
         p_token: token,
         p_responses: responses,
@@ -234,9 +280,15 @@ export default function PublicSurvey({ token, slug }) {
           background: 'linear-gradient(135deg, #4f46e5, #7c3aed)',
           padding: '2rem', borderRadius: '12px 12px 0 0', color: '#fff'
         }}>
-          <h1 style={{ margin: 0, fontSize: '1.5rem' }}>📊 {invitation.campaign_name}</h1>
+          <h1 style={{ margin: 0, fontSize: '1.5rem' }}>
+            {isSatisfaction ? '⭐' : '📊'} {invitation.campaign_name}
+          </h1>
           <p style={{ margin: '0.4rem 0 0 0', opacity: 0.9, fontSize: '0.95rem' }}>
-            {mode === 'token' ? (
+            {isSatisfaction ? (
+              // En satisfacción el nombre es opcional y lo decide el cliente,
+              // así que no prometemos anonimato total como en clima laboral.
+              <>Tu opinión nos ayuda a mejorar. Toma menos de 2 minutos.</>
+            ) : mode === 'token' ? (
               <>Hola <strong>{invitation.person_name}</strong> — tus respuestas son confidenciales.</>
             ) : (
               <>🔒 Tu respuesta es <strong>100% anónima</strong>. No guardamos tu nombre, teléfono ni datos personales.</>
@@ -250,11 +302,24 @@ export default function PublicSurvey({ token, slug }) {
         </div>
 
         <form onSubmit={handleSubmit} style={{ background: '#fff', padding: '2rem', borderRadius: '0 0 12px 12px', boxShadow: '0 4px 24px rgba(15,23,42,0.06)' }}>
-          <p style={{ margin: '0 0 1.5rem 0', padding: '0.75rem 1rem', background: '#eef2ff', borderRadius: '8px', fontSize: '0.9rem', color: '#3730a3' }}>
-            Indicá tu nivel de acuerdo con cada afirmación. Escala: <strong>5 = Totalmente de acuerdo</strong> · 4 = De acuerdo · 3 = Neutral · 2 = En desacuerdo · <strong>1 = Totalmente en desacuerdo</strong>.
-          </p>
+          {!isSatisfaction && (
+            <p style={{ margin: '0 0 1.5rem 0', padding: '0.75rem 1rem', background: '#eef2ff', borderRadius: '8px', fontSize: '0.9rem', color: '#3730a3' }}>
+              Indicá tu nivel de acuerdo con cada afirmación. Escala: <strong>5 = Totalmente de acuerdo</strong> · 4 = De acuerdo · 3 = Neutral · 2 = En desacuerdo · <strong>1 = Totalmente en desacuerdo</strong>.
+            </p>
+          )}
 
-          {CATEGORIES.map(cat => (
+          {isSatisfaction && (
+            <SatisfactionForm
+              scores={satScores}
+              onScore={(k, v) => setSatScores(s => ({ ...s, [k]: v }))}
+              nps={npsScore}
+              onNps={setNpsScore}
+              customerName={customerName}
+              onCustomerName={setCustomerName}
+            />
+          )}
+
+          {!isSatisfaction && CATEGORIES.map(cat => (
             <div key={cat.id} style={{ marginBottom: '2rem' }}>
               <h3 style={{
                 background: '#f8fafc', padding: '12px 16px', borderRadius: '6px',
@@ -336,6 +401,130 @@ export default function PublicSurvey({ token, slug }) {
       </div>
     </div>
   )
+}
+
+// ─── Formulario de satisfacción del cliente (9.1.2) ─────────────────────────
+//
+// Botonera en vez de radios de tabla: el cliente casi siempre abre esto desde
+// el celular escaneando un QR, y una tabla de 6 columnas es inusable ahí.
+function SatisfactionForm({
+  scores, onScore, nps, onNps, customerName, onCustomerName,
+}) {
+  return (
+    <>
+      <p style={{
+        margin: '0 0 1.25rem 0', padding: '0.75rem 1rem', background: '#eef2ff',
+        borderRadius: '8px', fontSize: '0.9rem', color: '#3730a3',
+      }}>
+        Calificá cada aspecto del 1 al 5, donde <strong>5 = Totalmente de acuerdo</strong> y
+        <strong> 1 = Totalmente en desacuerdo</strong>. Podés dejar en blanco lo que no aplique.
+      </p>
+
+      {DIMENSIONS.map(d => (
+        <div key={d.key} style={{ marginBottom: '1.4rem' }}>
+          <label style={{
+            display: 'block', fontSize: '0.92rem', color: '#1e293b',
+            fontWeight: 600, marginBottom: '0.5rem',
+          }}>
+            {d.publicQuestion}
+          </label>
+          <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+            {[1, 2, 3, 4, 5].map(n => {
+              const active = scores[d.key] === n
+              return (
+                <button
+                  key={n}
+                  type="button"
+                  onClick={() => onScore(d.key, active ? undefined : n)}
+                  title={SCALE_LABELS[n]}
+                  style={{
+                    flex: '1 1 52px', minWidth: '52px', minHeight: '46px',
+                    borderRadius: '8px', cursor: 'pointer',
+                    border: `1px solid ${active ? scoreTone(n) : '#cbd5e1'}`,
+                    background: active ? scoreTone(n) : '#fff',
+                    color: active ? '#fff' : '#475569',
+                    fontSize: '1rem', fontWeight: 700, fontFamily: 'inherit',
+                    transition: 'all 0.12s',
+                  }}
+                >
+                  {n}
+                </button>
+              )
+            })}
+          </div>
+          {scores[d.key] && (
+            <div style={{ fontSize: '0.78rem', color: '#64748b', marginTop: '4px' }}>
+              {SCALE_LABELS[scores[d.key]]}
+            </div>
+          )}
+        </div>
+      ))}
+
+      <div style={{
+        margin: '1.75rem 0 1.5rem 0', padding: '1rem',
+        background: '#f8fafc', borderRadius: '10px', border: '1px solid #e2e8f0',
+      }}>
+        <label style={{
+          display: 'block', fontSize: '0.95rem', color: '#1e293b',
+          fontWeight: 700, marginBottom: '0.3rem',
+        }}>
+          ¿Qué tan probable es que nos recomiendes a un colega?
+        </label>
+        <div style={{ fontSize: '0.8rem', color: '#64748b', marginBottom: '0.7rem' }}>
+          0 = nada probable · 10 = muy probable
+        </div>
+        <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
+          {Array.from({ length: 11 }, (_, n) => {
+            const active = nps === n
+            const tone = n >= 9 ? '#16a34a' : n >= 7 ? '#f59e0b' : '#dc2626'
+            return (
+              <button
+                key={n}
+                type="button"
+                onClick={() => onNps(active ? null : n)}
+                style={{
+                  flex: '1 1 40px', minWidth: '40px', minHeight: '44px',
+                  borderRadius: '8px', cursor: 'pointer',
+                  border: `1px solid ${active ? tone : '#cbd5e1'}`,
+                  background: active ? tone : '#fff',
+                  color: active ? '#fff' : '#475569',
+                  fontSize: '0.95rem', fontWeight: 700, fontFamily: 'inherit',
+                }}
+              >
+                {n}
+              </button>
+            )
+          })}
+        </div>
+      </div>
+
+      <div style={{ marginBottom: '1.5rem' }}>
+        <label style={{
+          display: 'block', marginBottom: '0.4rem',
+          fontSize: '0.9rem', color: '#334155',
+        }}>
+          Tu nombre o empresa <span style={{ color: '#94a3b8' }}>(opcional)</span>
+        </label>
+        <input
+          type="text"
+          value={customerName}
+          onChange={e => onCustomerName(e.target.value)}
+          placeholder="Dejalo en blanco si preferís responder de forma anónima"
+          style={{
+            width: '100%', padding: '0.75rem', borderRadius: '6px',
+            border: '1px solid #cbd5e1', fontSize: '0.9rem',
+            fontFamily: 'inherit', boxSizing: 'border-box',
+          }}
+        />
+      </div>
+    </>
+  )
+}
+
+function scoreTone(n) {
+  if (n >= 4) return '#16a34a'
+  if (n === 3) return '#f59e0b'
+  return '#dc2626'
 }
 
 function CenteredCard({ children }) {

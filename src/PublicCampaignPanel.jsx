@@ -50,8 +50,40 @@ function randomSuffix() {
   return Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('')
 }
 
-export default function PublicCampaignPanel() {
+// Textos que cambian según a quién va dirigida la campaña. El panel es el
+// mismo (crear campaña → QR → link → WhatsApp → PDF), pero una encuesta de
+// clima va al equipo interno y una de satisfacción va al cliente: el tono y
+// la promesa de anonimato no pueden ser iguales.
+const COPY = {
+  climate: {
+    heading: 'Encuestas públicas por QR',
+    intro: 'Generá un link y un QR para que tu equipo responda la encuesta de clima laboral de forma anónima, sin necesidad de crear cuenta.',
+    emptyState: 'Sin campañas públicas activas. Creá una para generar el QR y compartirlo con tu equipo.',
+    namePlaceholder: 'Ej: Clima Laboral Q3 2026',
+    createdToast: 'Campaña creada. Compartí el QR o el link con tu equipo.',
+    pdfTitle: 'Encuesta de Clima Laboral',
+    waEmoji: '📊',
+    waFallbackDesc: 'Encuesta anónima de clima laboral.',
+    waPromise: '🔒 Tu respuesta es 100% anónima. Toma 3 minutos.',
+    waToast: 'Mensaje copiado. Pegalo en el grupo de WhatsApp.',
+  },
+  customer_satisfaction: {
+    heading: 'Encuestas de satisfacción por QR',
+    intro: 'Generá un link y un QR para que tus clientes califiquen el servicio recibido. Es la evidencia que pide la cláusula 9.1.2 de medición activa de la percepción del cliente.',
+    emptyState: 'Sin campañas de satisfacción activas. Creá una para enviarle el link a tus clientes al cerrar cada trabajo.',
+    namePlaceholder: 'Ej: Satisfacción de clientes 2026',
+    createdToast: 'Campaña creada. Enviá el link a tus clientes al terminar cada trabajo.',
+    pdfTitle: 'Encuesta de Satisfacción',
+    waEmoji: '⭐',
+    waFallbackDesc: 'Nos gustaría conocer tu opinión sobre el trabajo realizado.',
+    waPromise: 'Toma menos de 2 minutos y nos ayuda a mejorar.',
+    waToast: 'Mensaje copiado. Enviáselo a tu cliente.',
+  },
+}
+
+export default function PublicCampaignPanel({ surveyType = 'climate' }) {
   const { org } = useOrg()
+  const copy = COPY[surveyType] || COPY.climate
   const [campaigns, setCampaigns] = useState([])
   const [loading, setLoading] = useState(true)
   const [showCreate, setShowCreate] = useState(false)
@@ -65,14 +97,17 @@ export default function PublicCampaignPanel() {
     expires_at: '',
   })
 
-  useEffect(() => { fetchCampaigns() }, [])
+  useEffect(() => { fetchCampaigns() }, [surveyType])
 
   const fetchCampaigns = async () => {
     setLoading(true)
+    // Filtrar por tipo: si no, el panel de satisfacción listaría también las
+    // campañas de clima laboral y el owner las mezclaría al compartir el link.
     const { data, error } = await supabase
       .from('survey_campaigns')
       .select('*')
       .eq('is_public', true)
+      .eq('survey_type', surveyType)
       .order('created_at', { ascending: false })
     if (error) toast.error('Error cargando campañas: ' + error.message)
     else setCampaigns(data || [])
@@ -91,7 +126,7 @@ export default function PublicCampaignPanel() {
     const payload = {
       name: form.name.trim(),
       description: form.description.trim() || null,
-      survey_type: 'climate',
+      survey_type: surveyType,
       status: 'active',
       is_public: true,
       public_slug: publicSlug,
@@ -105,7 +140,7 @@ export default function PublicCampaignPanel() {
     setCreating(false)
 
     if (error) return toast.error('No se pudo crear: ' + error.message)
-    toast.success('Campaña creada. Compartí el QR o el link con tu equipo.')
+    toast.success(copy.createdToast)
     setShowCreate(false)
     setForm({ name: '', description: '', expires_at: '' })
     fetchCampaigns()
@@ -142,10 +177,10 @@ export default function PublicCampaignPanel() {
             display: 'flex', alignItems: 'center', gap: '8px',
           }}>
             <QrCode size={18} />
-            Campañas públicas por QR (respuestas anónimas)
+            {copy.heading}
           </h3>
           <p style={{ margin: '4px 0 0 0', fontSize: '12px', color: '#854d0e' }}>
-            Un QR + link único para todos los empleados. Sin login, sin email, sin nombre. Ideal para taller/fábrica.
+            {copy.intro}
           </p>
         </div>
         <button onClick={() => setShowCreate(true)} style={btn('#ca8a04')}>
@@ -157,7 +192,7 @@ export default function PublicCampaignPanel() {
         <p style={{ margin: 0, fontSize: '13px', color: '#78716c' }}>Cargando…</p>
       ) : campaigns.length === 0 ? (
         <p style={{ margin: 0, fontSize: '13px', color: '#78716c', fontStyle: 'italic' }}>
-          Sin campañas públicas activas. Creá una para generar el QR y compartirlo con tu equipo.
+          {copy.emptyState}
         </p>
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '10px' }}>
@@ -179,6 +214,7 @@ export default function PublicCampaignPanel() {
           onSubmit={handleCreate}
           onCancel={() => setShowCreate(false)}
           creating={creating}
+          copy={copy}
         />
       )}
 
@@ -188,6 +224,7 @@ export default function PublicCampaignPanel() {
           orgName={org?.name}
           onClose={() => setDetail(null)}
           onReloadCounts={fetchCampaigns}
+          copy={copy}
         />
       )}
     </div>
@@ -250,7 +287,7 @@ function CampaignCard({ campaign, onOpenDetail, onClose }) {
   )
 }
 
-function CreateModal({ form, setForm, onSubmit, onCancel, creating }) {
+function CreateModal({ form, setForm, onSubmit, onCancel, creating, copy }) {
   const set = (patch) => setForm(prev => ({ ...prev, ...patch }))
   return createPortal(
     <Backdrop onClose={onCancel}>
@@ -261,7 +298,7 @@ function CreateModal({ form, setForm, onSubmit, onCancel, creating }) {
             <input
               required autoFocus value={form.name}
               onChange={e => set({ name: e.target.value })}
-              placeholder="Ej: Clima Laboral Q3 2026"
+              placeholder={copy.namePlaceholder}
               style={inp}
             />
           </Field>
@@ -297,7 +334,7 @@ function CreateModal({ form, setForm, onSubmit, onCancel, creating }) {
   )
 }
 
-function DetailModal({ campaign, orgName, onClose, onReloadCounts }) {
+function DetailModal({ campaign, orgName, onClose, onReloadCounts, copy }) {
   const publicUrl = `${APP_BASE_URL}/e/${campaign.public_slug}`
   const [copied, setCopied] = useState(false)
   const [liveCount, setLiveCount] = useState(campaign.anonymous_count || 0)
@@ -329,10 +366,10 @@ function DetailModal({ campaign, orgName, onClose, onReloadCounts }) {
   }
 
   const copyForWhatsApp = async () => {
-    const msg = `📊 *${campaign.name}*\n\n${campaign.description || 'Encuesta anónima de clima laboral.'}\n\n🔒 Tu respuesta es 100% anónima. Toma 3 minutos.\n\n👉 ${publicUrl}`
+    const msg = `${copy.waEmoji} *${campaign.name}*\n\n${campaign.description || copy.waFallbackDesc}\n\n${copy.waPromise}\n\n👉 ${publicUrl}`
     try {
       await navigator.clipboard.writeText(msg)
-      toast.success('Mensaje copiado. Pegalo en el grupo de WhatsApp.')
+      toast.success(copy.waToast)
     } catch {
       toast.error('No se pudo copiar.')
     }
@@ -353,7 +390,7 @@ function DetailModal({ campaign, orgName, onClose, onReloadCounts }) {
 
       doc.setFontSize(28)
       doc.setTextColor(30, 41, 59)
-      doc.text('Encuesta de Clima Laboral', 20, 45, { maxWidth: 170 })
+      doc.text(copy.pdfTitle, 20, 45, { maxWidth: 170 })
 
       doc.setFontSize(16)
       doc.setTextColor(100, 116, 139)
