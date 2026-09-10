@@ -44,3 +44,8 @@ scripts/
 revision-*.txt
 estructura-*.txt
 busqueda-*.txt
+
+# Normas ISO con copyright — solo referencia local, nunca al repo
+iso 17020/
+*.pdf
+!screenshots/*.pdf

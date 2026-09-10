@@ -55,6 +55,11 @@ const HelpSupport = lazy(() => import('./HelpSupport'))
 const AdminDashboard = lazy(() => import('./AdminDashboard'))
 const BandejaOperativa = lazy(() => import('./BandejaOperativa'))
 const SegregacionPanel = lazy(() => import('./SegregacionPanel'))
+// Cierre de gaps ISO 9001 — cláusulas que no tenían módulo hasta ahora
+const CustomerVoice = lazy(() => import('./CustomerVoice'))            // 9.1.2 + 8.2.1
+const Infrastructure = lazy(() => import('./Infrastructure'))          // 7.1.3
+const KnowledgeAwareness = lazy(() => import('./KnowledgeAwareness'))  // 7.1.6 + 7.3
+const DataAnalysis = lazy(() => import('./DataAnalysis'))              // 9.1.3
 import HelpButton from './components/ui/HelpButton'
 import { isOperator, initialViewForRole, OPERATOR_ALLOWED_VIEWS } from './lib/roles'
 import Copilot from './Copilot'
@@ -94,7 +99,9 @@ import {
   Settings,
   ShieldCheck,
   CreditCard,
-  HelpCircle
+  HelpCircle,
+  Heart,     // Voz del cliente (8.2.1 / 9.1.2)
+  Brain      // Conocimiento y conciencia (7.1.6 / 7.3)
 } from 'lucide-react'
 
 // Red de seguridad: cualquier excepción en render que escape de los módulos
@@ -417,6 +424,7 @@ function AppShell() {
             <NavItem id="produccion" label="Producción (8.5)" icon={Factory} />
             <NavItem id="liberacion" label="Liberación (8.6)" icon={CheckCircle} />
             <NavItem id="incidentes" label="Cambios e Incidentes" icon={AlertOctagon} />
+            <NavItem id="voz_cliente" label="Quejas del cliente" icon={Heart} />
             <div style={{ margin: '10px 0', borderTop: '1px solid var(--sidebar-border)' }}></div>
             <NavItem id="ayuda" label="Ayuda y Soporte" icon={HelpCircle} />
             <button onClick={handleSignOut} className="nav-btn logout">
@@ -459,11 +467,14 @@ function AppShell() {
             <NavItem id="clima" label="Clima Laboral (7.1.4)" icon={BarChart3} />
             <NavItem id="comunicaciones" label="Comunicaciones (7.4)" icon={Share2} />
             <NavItem id="calibracion" label="Calibración (7.1.5)" icon={Ruler} />
+            <NavItem id="infraestructura" label="Infraestructura (7.1.3)" icon={Building2} />
+            <NavItem id="conocimiento" label="Conocimiento y Conciencia (7.1.6/7.3)" icon={Brain} />
             <NavItem id="documentos" label="Documentación (7.5)" icon={FolderOpen} />
           </NavGroup>
 
           <NavGroup title="Operación (8)" sectionKey="operacion" icon={Briefcase}>
             <NavItem id="ventas" label="Pedidos (8.2)" icon={ShoppingCart} />
+            <NavItem id="voz_cliente" label="Voz del Cliente (8.2.1/9.1.2)" icon={Heart} />
             <NavItem id="produccion" label="Producción (8.5)" icon={Factory} />
             <NavItem id="liberacion" label="Liberación (8.6)" icon={CheckCircle} />
             <NavItem id="incidentes" label="Cambios e Incidentes (8.5.3/8.5.6)" icon={AlertOctagon} />
@@ -471,6 +482,7 @@ function AppShell() {
           </NavGroup>
 
           <NavGroup title="Evaluación (9)" sectionKey="evaluacion" icon={Search}>
+            <NavItem id="analisis_datos" label="Análisis de Datos (9.1.3)" icon={BarChart3} />
             <NavItem id="auditorias" label="Auditorías Internas (9.2)" icon={Search} />
             <NavItem id="revision_direccion" label="Revisión Dirección (9.3)" icon={Briefcase} />
             <NavItem id="segregacion" label="Segregación de funciones" icon={ShieldCheck} />
@@ -539,13 +551,17 @@ function AppShell() {
         {vistaActual === 'clima' && <ClimateSurveys />}
         {vistaActual === 'comunicaciones' && <CommunicationMatrix />}
         {vistaActual === 'calibracion' && <Calibration />}
+        {vistaActual === 'infraestructura' && <Infrastructure />}
+        {vistaActual === 'conocimiento' && <KnowledgeAwareness />}
         {vistaActual === 'documentos' && <Documents />}
         {vistaActual === 'ventas' && <CustomerRequirements />}
+        {vistaActual === 'voz_cliente' && <CustomerVoice />}
         {vistaActual === 'produccion' && <ProductionControl />}
         {vistaActual === 'liberacion' && <QCRelease />}
         {vistaActual === 'incidentes' && <OperationalIncidents />}
         {vistaActual === 'proveedores' && <Suppliers />}
         {vistaActual === 'auditorias' && <InternalAudits />}
+        {vistaActual === 'analisis_datos' && <DataAnalysis />}
         {vistaActual === 'revision_direccion' && <ManagementReview />}
         {vistaActual === 'segregacion' && <SegregacionPanel alCambiarVista={navegarA} />}
         {vistaActual === 'no_conformidades' && <NonConformities />}

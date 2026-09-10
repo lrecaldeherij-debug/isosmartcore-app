@@ -245,4 +245,64 @@ export const CLAUSE_GUIDES = {
       'Verifica la eficacia después de implementar: ¿el beneficio esperado se materializó?',
     ],
   },
+  '7.1.3': {
+    clause: '7.1.3',
+    title: 'Infraestructura',
+    tips: [
+      'Incluye edificios, equipos (hardware y software), transporte y servicios de apoyo (TIC, energía, aire comprimido).',
+      'No confundir con 7.1.5: los equipos de medición van en Calibración; acá va el resto de la infraestructura.',
+      'Para cada activo crítico definí frecuencia de mantenimiento preventivo — el auditor pide el historial, no solo el plan.',
+      'Conectá cada activo con el proceso del SGC que depende de él: eso justifica su criticidad.',
+    ],
+  },
+  '7.1.6': {
+    clause: '7.1.6',
+    title: 'Conocimientos de la Organización',
+    tips: [
+      'Requisito nuevo de la versión 2015: el know-how necesario para operar los procesos debe estar identificado y disponible.',
+      'El riesgo real que cubre: conocimiento que vive solo en la cabeza de una persona. Si se va, el proceso se cae.',
+      'Distinguí fuente interna (experiencia propia, lecciones aprendidas) de externa (normas, cursos, consultores).',
+      'Para cada conocimiento crítico definí un plan de respaldo: documentarlo, formar a un backup o ambas.',
+    ],
+  },
+  '7.3': {
+    clause: '7.3',
+    title: 'Toma de Conciencia',
+    tips: [
+      'No es lo mismo que competencia (7.2). Competencia = sabe hacer el trabajo. Conciencia = entiende por qué existe el SGC y su rol.',
+      'La norma exige cubrir 4 puntos: política de calidad, objetivos pertinentes, su contribución al SGC e implicaciones de no cumplir.',
+      'El auditor lo verifica entrevistando personal al azar: si no saben la política, se abre no conformidad aunque tengas el acta firmada.',
+      'Registrá la verificación de comprensión, no solo la asistencia: entrevista, cuestionario u observación.',
+    ],
+  },
+  '8.2.1': {
+    clause: '8.2.1',
+    title: 'Comunicación con el Cliente',
+    tips: [
+      'Cubre: información del producto, consultas y pedidos, retroalimentación INCLUYENDO QUEJAS, propiedad del cliente y contingencias.',
+      'El registro de quejas es lo primero que pide el auditor en esta cláusula. Sin evidencia de cómo se cierran, es no conformidad casi segura.',
+      'Registrá el canal por el que llegó cada comunicación: demuestra que hay múltiples vías abiertas al cliente.',
+      'Una queja crítica debería escalar a no conformidad formal (10.2) con análisis de causa raíz.',
+    ],
+  },
+  '9.1.2': {
+    clause: '9.1.2',
+    title: 'Satisfacción del Cliente',
+    tips: [
+      'La norma exige hacer seguimiento de las percepciones del cliente. No basta con "no tenemos quejas": hay que medir activamente.',
+      'Métodos válidos: encuestas, retroalimentación sobre productos entregados, reuniones con clientes, análisis de cuotas de mercado, felicitaciones.',
+      'Lo que el auditor busca es la TENDENCIA: ¿mejoró o empeoró respecto al período anterior? y qué hiciste al respecto.',
+      'Un resultado bajo debe disparar acción: oportunidad de mejora (10.3) o no conformidad (10.2) según la gravedad.',
+    ],
+  },
+  '9.1.3': {
+    clause: '9.1.3',
+    title: 'Análisis y Evaluación',
+    tips: [
+      'El tablero muestra números; esta cláusula pide el ANÁLISIS: qué conclusión saca la organización de esos números.',
+      'La norma lista 6 ejes: conformidad de productos, satisfacción del cliente, desempeño del SGC, eficacia de lo planificado, eficacia frente a riesgos y desempeño de proveedores.',
+      'El resultado es un registro fechado que alimenta la revisión por la dirección (9.3) — no un gráfico en vivo.',
+      'Congelá los indicadores del período en el informe: si los datos cambian después, el análisis sigue siendo verificable.',
+    ],
+  },
 }

@@ -61,6 +61,24 @@ export const PERMISSIONS = {
   work_order_events:       { read: READ_ALL, write: OPERATIONAL_WRITE, delete: new Set(['owner', 'quality_manager']) },
   work_order_attachments:  { read: READ_ALL, write: OPERATIONAL_WRITE, delete: new Set(['owner', 'quality_manager']) },
 
+  // Voz del cliente (9.1.2 + 8.2.1) — el operativo registra la queja que
+  // recibe en campo; el análisis y el cierre quedan en QM/owner.
+  customer_satisfaction:   { read: READ_ALL, write: OPERATIONAL_WRITE, delete: new Set(['owner', 'quality_manager']) },
+  customer_feedback:       { read: READ_ALL, write: OPERATIONAL_WRITE, delete: new Set(['owner', 'quality_manager']) },
+
+  // Infraestructura (7.1.3) — el operativo puede registrar un mantenimiento
+  // ejecutado, pero no dar de alta ni de baja activos.
+  infrastructure_assets:   { read: READ_ALL, write: FULL_WRITE, delete: new Set(['owner', 'quality_manager']) },
+  maintenance_records:     { read: READ_ALL, write: OPERATIONAL_WRITE, delete: new Set(['owner', 'quality_manager']) },
+
+  // Conocimiento y conciencia (7.1.6 + 7.3) — gestión pura del SGC.
+  organizational_knowledge: { read: READ_ALL, write: FULL_WRITE, delete: new Set(['owner', 'quality_manager']) },
+  awareness_records:       { read: READ_ALL, write: FULL_WRITE, delete: new Set(['owner', 'quality_manager']) },
+
+  // Análisis de datos (9.1.3) — el auditor lo lee y puede aportar, igual que
+  // en auditorías internas.
+  data_analysis:           { read: READ_ALL, write: AUDIT_WRITE, delete: new Set(['owner', 'quality_manager']) },
+
   // Mejora y auditoría — auditor puede ESCRIBIR
   non_conformities:        { read: READ_ALL, write: AUDIT_WRITE, delete: new Set(['owner', 'quality_manager']) },
   internal_audits:         { read: READ_ALL, write: AUDIT_WRITE, delete: new Set(['owner', 'quality_manager']) },
@@ -113,6 +131,7 @@ export const OPERATOR_ALLOWED_VIEWS = new Set([
   'produccion',          // Produccion 8.5
   'liberacion',          // QC 8.6
   'incidentes',          // Cambios e incidentes 8.5.3/8.5.6
+  'voz_cliente',         // Quejas del cliente 8.2.1 — el operativo las recibe en campo
   'ayuda',               // Ayuda y soporte
 ])
 
