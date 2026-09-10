@@ -50,6 +50,17 @@ const FEEDBACK_TYPES = {
   return:     { label: 'Devolución',      variant: 'danger',  icon: TrendingDown },
 }
 
+// Prefijo del correlativo según el tipo, para que el código hable por sí solo
+// en el registro de auditoría.
+const CODE_PREFIXES = {
+  complaint: 'QJ',   // queja
+  claim:     'RC',   // reclamo formal
+  inquiry:   'CO',   // consulta
+  suggestion:'SG',   // sugerencia
+  compliment:'FE',   // felicitación
+  return:    'DV',   // devolución
+}
+
 const CHANNELS = {
   email:        'Email',
   phone:        'Teléfono',
@@ -155,7 +166,10 @@ function fmtDate(d) {
 export default function CustomerVoice() {
   const { org, role } = useOrg()
   const [tab, setTab] = useState('satisfaction')
-  const canWrite = can(role, 'customer_satisfaction', 'write')
+  // Permiso por entidad, no compartido: hoy ambas son OPERATIONAL_WRITE, pero
+  // si mañana se restringe una, la otra no debe arrastrarse.
+  const canWriteSat = can(role, 'customer_satisfaction', 'write')
+  const canWriteFb = can(role, 'customer_feedback', 'write')
 
   return (
     <div style={{ padding: '20px', maxWidth: '1200px', margin: '0 auto' }}>
@@ -176,8 +190,8 @@ export default function CustomerVoice() {
       </div>
 
       {tab === 'satisfaction'
-        ? <SatisfactionTab orgId={org?.id} canWrite={canWrite} />
-        : <FeedbackTab orgId={org?.id} canWrite={canWrite} />}
+        ? <SatisfactionTab orgId={org?.id} canWrite={canWriteSat} />
+        : <FeedbackTab orgId={org?.id} canWrite={canWriteFb} />}
     </div>
   )
 }
@@ -254,6 +268,12 @@ function SatisfactionTab({ orgId, canWrite }) {
       customer_name: row.customer_name || '',
       customer_contact: row.customer_contact || '',
       triggered_action: row.triggered_action || '',
+      // Normalizar los nulos de BD a '' — sin esto, guardar una respuesta sin
+      // NPS lo convertía en 0, o sea el peor detractor posible.
+      nps_score: row.nps_score ?? '',
+      ...DIMENSIONS.reduce((acc, d) => ({
+        ...acc, [`score_${d.key}`]: row[`score_${d.key}`] ?? '',
+      }), {}),
     })
     setModalOpen(true)
   }
@@ -270,7 +290,8 @@ function SatisfactionTab({ orgId, canWrite }) {
       source: form.source || 'manual',
       comments: form.comments?.trim() || null,
       triggered_action: form.triggered_action?.trim() || null,
-      nps_score: form.nps_score === '' ? null : Number(form.nps_score),
+      nps_score: form.nps_score === '' || form.nps_score == null
+        ? null : Number(form.nps_score),
     }
     for (const d of DIMENSIONS) {
       const v = form[`score_${d.key}`]
@@ -716,11 +737,12 @@ function FeedbackTab({ orgId, canWrite }) {
     })
   }, [rows, filterStatus, filterType, search])
 
-  // Sugiere el siguiente código correlativo del año en curso mirando los que
-  // ya existen. Evita que el usuario tenga que acordarse en qué número iba.
-  const suggestCode = () => {
+  // Sugiere el siguiente correlativo del año mirando los que ya existen.
+  // El prefijo va por tipo para que el código sea legible en auditoría: una
+  // felicitación numerada "QJ-" (queja) confunde al revisar el registro.
+  const suggestCode = (type) => {
     const year = new Date().getFullYear()
-    const prefix = `QJ-${year}-`
+    const prefix = `${CODE_PREFIXES[type] || 'VC'}-${year}-`
     const nums = rows
       .map(r => r.code)
       .filter(c => c && c.startsWith(prefix))
@@ -732,8 +754,18 @@ function FeedbackTab({ orgId, canWrite }) {
 
   const openNew = () => {
     setEditing(null)
-    setForm({ ...EMPTY_FEEDBACK, code: suggestCode() })
+    setForm({ ...EMPTY_FEEDBACK, code: suggestCode(EMPTY_FEEDBACK.feedback_type) })
     setModalOpen(true)
+  }
+
+  // Al cambiar el tipo en un registro nuevo, resugerimos el código. En uno ya
+  // guardado no se toca: el código emitido es parte de la evidencia.
+  const changeType = (type) => {
+    setForm(f => ({
+      ...f,
+      feedback_type: type,
+      code: editing ? f.code : suggestCode(type),
+    }))
   }
 
   const openEdit = (row) => {
@@ -909,7 +941,7 @@ function FeedbackTab({ orgId, canWrite }) {
               <Input value={form.code} onChange={e => setForm({ ...form, code: e.target.value })} />
             </Field>
             <Field label="Tipo" required>
-              <Select value={form.feedback_type} onChange={e => setForm({ ...form, feedback_type: e.target.value })}>
+              <Select value={form.feedback_type} onChange={e => changeType(e.target.value)}>
                 {Object.entries(FEEDBACK_TYPES).map(([k, v]) => (
                   <option key={k} value={k}>{v.label}</option>
                 ))}

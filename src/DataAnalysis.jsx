@@ -128,15 +128,25 @@ async function collectMetrics(orgId, from, to) {
     return query
   }
 
+  // Nombres de columna verificados contra el schema real. Ojo al tocarlos:
+  // si una columna no existe, Supabase no lanza excepción — devuelve
+  // { data: null, error }, allSettled lo marca como cumplido y el bloque queda
+  // en cero. El informe saldría diciendo "sin datos en el período" con datos
+  // reales en la base, y la IA redactaría un análisis falso sobre esos ceros.
   const results = await Promise.allSettled([
     q('customer_satisfaction_surveys', 'overall_score, nps_score', { dateField: 'survey_date' }),
     q('customer_feedback', 'feedback_type, status, severity, received_date, closed_date', { dateField: 'received_date' }),
-    q('non_conformities', 'id, status', {}),
-    q('internal_audits', 'id, status', {}),
-    q('quality_objectives', 'id, name, target_value, current_value, status', {}),
-    q('suppliers', 'id, name, status, criticality', {}),
-    q('risk_matrix', 'id, status, risk_level', {}),
-    q('qc_inspections', 'id, result', {}),
+    q('non_conformities', 'id, status', { dateField: 'created_at' }),
+    q('internal_audits', 'id, status', { dateField: 'created_at' }),
+    // quality_objectives usa target/current, NO target_value/current_value.
+    q('quality_objectives', 'id, objective, target, current, status', {}),
+    // suppliers usa supplier_name, NO name.
+    q('suppliers', 'id, supplier_name, status, criticality', {}),
+    // risk_matrix no tiene risk_level: el nivel se deriva de score_initial,
+    // con 15 como umbral de "alto" (mismo criterio que RisksOpportunities).
+    q('risk_matrix', 'id, status, type, score_initial, score_residual, control_measure', {}),
+    // qc_inspections usa decision, NO result.
+    q('qc_inspections', 'id, decision', { dateField: 'inspection_date' }),
     q('improvement_opportunities', 'id, status', {}),
     q('infrastructure_assets', 'id, status, next_maintenance_date', {}),
     q('awareness_records', 'id, covered_policy, covered_objectives, covered_contribution, covered_implications, comprehension_verified', {}),
@@ -146,6 +156,20 @@ async function collectMetrics(orgId, from, to) {
 
   const [sat, feedback, ncs, audits, objectives, suppliers, risks, qc, oms, infra, awareness] =
     results.map((_, i) => val(i))
+
+  // Qué consultas no trajeron datos y por qué. Sin esto, una columna renombrada
+  // deja el bloque en cero sin avisar y el informe sale con datos falsos.
+  const TABLE_NAMES = [
+    'customer_satisfaction_surveys', 'customer_feedback', 'non_conformities',
+    'internal_audits', 'quality_objectives', 'suppliers', 'risk_matrix',
+    'qc_inspections', 'improvement_opportunities', 'infrastructure_assets',
+    'awareness_records',
+  ]
+  const failures = []
+  results.forEach((r, i) => {
+    const err = r.status === 'rejected' ? r.reason : r.value?.error
+    if (err) failures.push({ table: TABLE_NAMES[i], message: err.message || String(err) })
+  })
 
   // Satisfacción
   const satRows = sat.data || []
@@ -158,11 +182,20 @@ async function collectMetrics(orgId, from, to) {
   const fbRows = feedback.data || []
   const closedFb = fbRows.filter(r => r.closed_date)
 
-  // Objetivos: cumplido si current >= target
+  // Objetivos: cumplido si el valor actual alcanzó la meta.
   const objRows = objectives.data || []
-  const objMet = objRows.filter(o =>
-    o.target_value != null && o.current_value != null &&
-    Number(o.current_value) >= Number(o.target_value)).length
+  const objMeasurable = objRows.filter(o => o.target != null && o.current != null)
+  const objMet = objMeasurable.filter(o => Number(o.current) >= Number(o.target)).length
+
+  // Riesgos vs oportunidades: risk_matrix guarda ambos y los distingue por `type`.
+  const riskRows = risks.data || []
+  const onlyRisks = riskRows.filter(r => r.type !== 'Oportunidad')
+  const riskHigh = onlyRisks.filter(r => Number(r.score_initial || 0) >= 15)
+  const riskUntreated = onlyRisks.filter(r =>
+    !r.control_measure && Number(r.score_initial || 0) >= 8)
+
+  // Liberaciones de QC en el período.
+  const qcRows = qc.data || []
 
   // Toma de conciencia completa
   const awRows = awareness.data || []
@@ -173,6 +206,9 @@ async function collectMetrics(orgId, from, to) {
   return {
     period: { from, to },
     generated_at: new Date().toISOString(),
+    // Vacío en condiciones normales. Si trae algo, los bloques correspondientes
+    // están en cero por un fallo de consulta, no porque no haya datos.
+    _failures: failures,
     satisfaction: {
       responses: satRows.length,
       avg_score: satScores.length
@@ -199,8 +235,12 @@ async function collectMetrics(orgId, from, to) {
     internal_audits: { total: audits.count ?? (audits.data || []).length },
     objectives: {
       total: objRows.length,
+      measurable: objMeasurable.length,
       met: objMet,
-      compliance_pct: objRows.length ? Math.round((objMet / objRows.length) * 100) : null,
+      // El porcentaje se calcula sobre los medibles, no sobre el total: un
+      // objetivo sin meta cargada no puede contar como incumplido.
+      compliance_pct: objMeasurable.length
+        ? Math.round((objMet / objMeasurable.length) * 100) : null,
     },
     suppliers: {
       total: suppliers.count ?? (suppliers.data || []).length,
@@ -210,12 +250,16 @@ async function collectMetrics(orgId, from, to) {
       critical: (suppliers.data || []).filter(s => s.criticality === 'Crítico').length,
     },
     risks: {
-      total: risks.count ?? (risks.data || []).length,
-      high: (risks.data || []).filter(r =>
-        ['Alto', 'Crítico', 'alto', 'critico'].includes(r.risk_level)).length,
+      total: onlyRisks.length,
+      high: riskHigh.length,
+      untreated: riskUntreated.length,
+      opportunities: riskRows.filter(r => r.type === 'Oportunidad').length,
     },
     qc_inspections: {
-      total: qc.count ?? (qc.data || []).length,
+      total: qcRows.length,
+      released: qcRows.filter(r => r.decision === 'Liberado').length,
+      conditional: qcRows.filter(r => r.decision === 'Liberación condicional').length,
+      rejected: qcRows.filter(r => r.decision === 'Rechazado').length,
     },
     improvement_opportunities: {
       total: oms.count ?? (oms.data || []).length,
@@ -298,7 +342,12 @@ export default function DataAnalysis() {
     try {
       const snap = await collectMetrics(orgId, form.period_start, form.period_end)
       setForm(f => ({ ...f, metrics_snapshot: snap }))
-      toast.success('Indicadores recolectados del período')
+      const failed = snap._failures?.length || 0
+      if (failed > 0) {
+        toast.error(`Indicadores recolectados, pero ${failed} consulta${failed === 1 ? '' : 's'} falló. Revisá el detalle antes de redactar el análisis.`)
+      } else {
+        toast.success('Indicadores recolectados del período')
+      }
     } catch (e) {
       toast.error('No se pudieron recolectar los indicadores: ' + e.message)
     } finally {
@@ -673,6 +722,16 @@ function SnapshotView({ snap }) {
       items: [
         ['Identificados', snap.risks?.total],
         ['Nivel alto', snap.risks?.high],
+        ['Sin tratamiento', snap.risks?.untreated],
+      ],
+    },
+    {
+      title: 'Liberaciones QC',
+      items: [
+        ['Inspecciones', snap.qc_inspections?.total],
+        ['Liberadas', snap.qc_inspections?.released],
+        ['Condicionales', snap.qc_inspections?.conditional],
+        ['Rechazadas', snap.qc_inspections?.rejected],
       ],
     },
     {
@@ -692,12 +751,39 @@ function SnapshotView({ snap }) {
     },
   ]
 
+  const failures = snap._failures || []
+
   return (
     <div>
       <div style={{ fontSize: font.xs, color: colors.textFaint, marginBottom: '8px' }}>
         Congelado el {new Date(snap.generated_at).toLocaleString('es-EC')} ·
         período {snap.period?.from} a {snap.period?.to}
       </div>
+
+      {failures.length > 0 && (
+        <div style={{
+          padding: '10px 12px', background: colors.dangerLight, color: colors.dangerText,
+          borderRadius: radius.md, marginBottom: '10px', fontSize: font.sm,
+          display: 'flex', gap: '8px', alignItems: 'flex-start',
+        }}>
+          <AlertTriangle size={16} style={{ flexShrink: 0, marginTop: '1px' }} />
+          <div>
+            <strong>
+              {failures.length} consulta{failures.length === 1 ? '' : 's'} falló
+              {failures.length === 1 ? '' : 'aron'}.
+            </strong>{' '}
+            Los bloques correspondientes muestran cero por el error, no porque no haya
+            datos. No redactes el análisis hasta resolverlo o el informe va a ser falso.
+            <ul style={{ margin: '6px 0 0 0', paddingLeft: '18px' }}>
+              {failures.map(f => (
+                <li key={f.table} style={{ fontSize: font.xs }}>
+                  <code>{f.table}</code>: {f.message}
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      )}
       <Grid min="180px" gap="8px">
         {blocks.map(b => (
           <div key={b.title} style={{

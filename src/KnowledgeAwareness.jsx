@@ -548,7 +548,10 @@ function AwarenessTab({ orgId, canWrite }) {
         .eq('org_id', orgId).order('session_date', { ascending: false }),
       // El listado de personal es opcional: si la tabla no está poblada el
       // usuario igual puede tipear el nombre a mano.
-      supabase.from('personnel').select('id, full_name, position')
+      // personnel no tiene columna de cargo — el puesto vive en
+      // job_descriptions y se enlaza por job_id, así que lo traemos anidado.
+      supabase.from('personnel')
+        .select('id, full_name, job:job_id (title)')
         .eq('org_id', orgId).order('full_name'),
     ])
     if (error) toast.error(error.message)
@@ -614,7 +617,9 @@ function AwarenessTab({ orgId, canWrite }) {
       ...f,
       person_id: id || '',
       person_name: p ? p.full_name : f.person_name,
-      person_position: p ? (p.position || '') : f.person_position,
+      // El cargo viene del perfil de puesto enlazado; si la persona no tiene
+      // job_id asignado, dejamos lo que el usuario haya escrito.
+      person_position: p ? (p.job?.title || f.person_position) : f.person_position,
     }))
   }
 
