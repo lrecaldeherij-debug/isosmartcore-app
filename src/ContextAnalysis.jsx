@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { supabase } from './supabaseClient'
-import { consultarIA } from './aiClient'
+import { consultarIA, parseAiJson, clampString } from './aiClient'
 import { indexRow, deindexRow } from './lib/ragIndex'
 import {
   Sparkles, Loader2, FileText, X, Pencil, Trash2, Eye, Target, BarChart3,
@@ -46,28 +46,11 @@ const EMPTY_FORM = {
 }
 
 // ─────── Helpers IA ───────
-function extractFirstJson(text) {
-  if (!text) return null
-  const i0 = text.indexOf('{'), i1 = text.indexOf('[')
-  const start = i0 === -1 ? i1 : (i1 === -1 ? i0 : Math.min(i0, i1))
-  if (start === -1) return null
-  let depth = 0, inStr = false, esc = false
-  const open = text[start], close = open === '[' ? ']' : '}'
-  for (let i = start; i < text.length; i++) {
-    const c = text[i]
-    if (esc) { esc = false; continue }
-    if (c === '\\') { esc = true; continue }
-    if (c === '"') { inStr = !inStr; continue }
-    if (inStr) continue
-    if (c === open) depth++
-    else if (c === close) { depth--; if (depth === 0) { try { return JSON.parse(text.slice(start, i + 1)) } catch { return null } } }
-  }
-  return null
-}
-
 function parseAiArray(raw) {
   if (!raw) return []
-  const parsed = extractFirstJson(raw)
+  // parseAiJson lanza si la IA devolvió un error, así el usuario ve la causa
+  // real en vez de "no devolvió FODA parseable".
+  const parsed = parseAiJson(raw)
   if (Array.isArray(parsed)) return parsed
   if (parsed && Array.isArray(parsed.factors)) return parsed.factors
   if (parsed && Array.isArray(parsed.items)) return parsed.items
@@ -236,9 +219,16 @@ Devuelve SOLO JSON sin markdown:
   "estrategia": "máx 300 caracteres, cómo potenciar (si F/O) o mitigar (si D/A)"
 }`
       const raw = await consultarIA(prompt, 'Devuelve únicamente JSON válido.')
-      const data = extractFirstJson(raw)
-      if (!data) throw new Error('IA no devolvió JSON')
-      setIaSuggestion(data)
+      const data = parseAiJson(raw)
+      if (!data) throw new Error('La IA no devolvió una respuesta legible. Probá de nuevo.')
+      // Tolerar variaciones de clave (con tilde o en inglés) que el modelo a
+      // veces usa aunque el prompt pida "descripcion"/"estrategia".
+      const descripcion = clampString(data.descripcion ?? data['descripción'] ?? data.description ?? '', 300)
+      const estrategia = clampString(data.estrategia ?? data.strategy ?? '', 300)
+      if (!descripcion && !estrategia) {
+        throw new Error('La IA respondió sin descripción ni estrategia. Probá de nuevo.')
+      }
+      setIaSuggestion({ descripcion, estrategia })
     } catch (e) {
       toast.error('Error IA: ' + e.message)
     }
@@ -256,7 +246,9 @@ Devuelve SOLO JSON sin markdown:
     setLoadingIAFull(true); setIaFullSuggestions(null)
     try {
       const ctx = companyProfile
-        ? `Empresa: ${companyProfile.company_name || 'N/D'} | Sector: ${companyProfile.industry || 'N/D'} | Tamaño: ${companyProfile.size || 'N/D'} | Productos: ${companyProfile.main_products || 'N/D'} | Propósito: ${companyProfile.purpose || 'N/D'}`
+        // Columnas reales de company_profile: name, industry, employees_count,
+        // main_products, strategic_direction (company_name/size/purpose no existen).
+        ? `Empresa: ${companyProfile.name || 'N/D'} | Sector: ${companyProfile.industry || 'N/D'} | Empleados: ${companyProfile.employees_count || 'N/D'} | Productos: ${companyProfile.main_products || 'N/D'} | Dirección estratégica: ${companyProfile.strategic_direction || companyProfile.description || 'N/D'}`
         : 'Sin perfil de empresa cargado.'
       const procesos = (await supabase.from('processes').select('name, process_type').limit(20)).data || []
 
@@ -347,8 +339,10 @@ Devuelve SOLO JSON, sin markdown:
   "DA": "Estrategia de supervivencia: minimizar Debilidades evitando Amenazas"
 }`
       const raw = await consultarIA(prompt, 'Devuelve únicamente JSON válido.')
-      const data = extractFirstJson(raw)
-      if (!data) throw new Error('IA no devolvió estrategias')
+      const data = parseAiJson(raw)
+      if (!data || !['FO', 'FA', 'DO', 'DA'].some(k => typeof data[k] === 'string' && data[k].trim())) {
+        throw new Error('La IA no devolvió estrategias. Probá de nuevo.')
+      }
       setIaCrossResult(data)
     } catch (e) {
       toast.error('Error IA: ' + e.message)
