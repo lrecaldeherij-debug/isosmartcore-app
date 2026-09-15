@@ -6,6 +6,7 @@ import { ROLES, ROLE_ORDER, roleLabel, roleIcon, roleColor, can } from './lib/ro
 import { usePlan } from './lib/usePlan'
 import { toast } from './lib/toast'
 import { confirm } from './lib/confirm'
+import { readFunctionError } from './lib/functionError'
 import { colors, radius, font, shadow } from './components/ui/tokens'
 import Button from './components/ui/Button'
 import Badge from './components/ui/Badge'
@@ -284,15 +285,47 @@ function RoleLegend() {
 const INVITABLE_ROLES = ['quality_manager', 'auditor', 'operator', 'viewer']
 
 function InvitePanel({ members, maxUsers, onInvited }) {
+  const { org } = useOrg()
   const [open, setOpen] = useState(false)
   const [email, setEmail] = useState('')
   const [role, setRole] = useState('operator')
   const [fullName, setFullName] = useState('')
   const [sending, setSending] = useState(false)
-  const [lastInvited, setLastInvited] = useState(null)  // { email, at }
+  const [lastInvited, setLastInvited] = useState(null)  // { email, existing, emailed }
+  const [pending, setPending] = useState([])
 
   const isUnlimited = maxUsers == null
   const atLimit = !isUnlimited && members.length >= maxUsers
+
+  const fetchPending = async () => {
+    if (!org?.id) return
+    const { data, error } = await supabase
+      .from('org_invitations')
+      .select('id, email, role, full_name, created_at, expires_at')
+      .eq('org_id', org.id)
+      .eq('status', 'pending')
+      .order('created_at', { ascending: false })
+    // Si la migración no está aplicada la tabla no existe: se omite la lista.
+    if (!error) setPending(data || [])
+  }
+
+  useEffect(() => { fetchPending() }, [members.length])
+
+  const revoke = async (inv) => {
+    const ok = await confirm({
+      title: 'Cancelar invitación',
+      message: `¿Cancelar la invitación a ${inv.email}? El link o aviso que recibió deja de servir.`,
+      danger: true,
+    })
+    if (!ok) return
+    const { error } = await supabase
+      .from('org_invitations')
+      .update({ status: 'revoked', responded_at: new Date().toISOString() })
+      .eq('id', inv.id)
+    if (error) { toast.error(error.message); return }
+    toast.success('Invitación cancelada')
+    fetchPending()
+  }
 
   const reset = () => {
     setEmail('')
@@ -323,21 +356,22 @@ function InvitePanel({ members, maxUsers, onInvited }) {
           full_name: fullName.trim(),
         },
       })
-      // El edge function devuelve { error: "..." } con 4xx, o { ok: true, user_id }.
-      // Cuando la function tira 4xx, supabase-js pone el status en `error`
-      // pero el body sigue en `data`.
+      // Con 4xx supabase-js deja el cuerpo real en error.context, no en data.
       if (error) {
-        const msg = data?.error || error.message || 'Error invitando'
-        toast.error(msg)
+        toast.error(await readFunctionError(error, 'Error invitando'))
         return
       }
       if (data?.error) {
         toast.error(data.error)
         return
       }
-      toast.success(`Invitación enviada a ${cleanEmail}`)
-      setLastInvited({ email: cleanEmail, at: new Date().toISOString() })
+      const invited = { email: cleanEmail, existing: !!data?.existing_user, emailed: !!data?.emailed }
+      toast.success(invited.existing
+        ? `${cleanEmail} ya tenía cuenta: la invitación queda pendiente hasta que la acepte`
+        : `Invitación enviada a ${cleanEmail}`)
+      setLastInvited(invited)
       reset()
+      fetchPending()
       onInvited?.()
     } catch (e) {
       toast.error(e.message || 'Error invitando')
@@ -463,8 +497,39 @@ function InvitePanel({ members, maxUsers, onInvited }) {
         }}>
           <Mail size={16} style={{ flexShrink: 0, marginTop: '1px' }} />
           <span>
-            Invitación enviada a <strong>{lastInvited.email}</strong>. Aparecerá acá arriba cuando complete el registro.
+            {lastInvited.existing ? (
+              <>
+                <strong>{lastInvited.email}</strong> ya tenía una cuenta en IsoSmartCore.{' '}
+                {lastInvited.emailed ? 'Le enviamos un aviso por email. ' : 'Avisale por tu cuenta. '}
+                Cuando entre a la app con su usuario de siempre verá la invitación para unirse; al aceptarla aparece en la lista del equipo.
+              </>
+            ) : (
+              <>Invitación enviada a <strong>{lastInvited.email}</strong>. Aparecerá en la lista del equipo cuando complete el registro.</>
+            )}
           </span>
+        </div>
+      )}
+
+      {pending.length > 0 && (
+        <div style={{ marginTop: '12px', border: `1px solid ${colors.border}`, borderRadius: radius.xl, background: 'white' }}>
+          <div style={{ padding: '10px 14px', fontSize: font.sm, fontWeight: 600, color: colors.textMuted, borderBottom: `1px solid ${colors.border}`, display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <Clock size={14} /> Invitaciones pendientes ({pending.length})
+          </div>
+          {pending.map(inv => (
+            <div key={inv.id} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 14px', borderBottom: `1px solid ${colors.border}`, flexWrap: 'wrap' }}>
+              <div style={{ flex: '1 1 220px', minWidth: 0 }}>
+                <div style={{ fontSize: font.base, color: colors.text, overflowWrap: 'anywhere' }}>
+                  {inv.full_name ? <>{inv.full_name} · </> : null}{inv.email}
+                </div>
+                <div style={{ fontSize: font.xs, color: colors.textMuted }}>
+                  {roleLabel(inv.role)} · enviada {new Date(inv.created_at).toLocaleDateString()} · vence {new Date(inv.expires_at).toLocaleDateString()}
+                </div>
+              </div>
+              <Button variant="ghost" size="sm" icon={<Trash2 size={14} />} onClick={() => revoke(inv)}>
+                Cancelar
+              </Button>
+            </div>
+          ))}
         </div>
       )}
     </div>

@@ -65,6 +65,7 @@ import { isOperator, initialViewForRole, OPERATOR_ALLOWED_VIEWS } from './lib/ro
 import Copilot from './Copilot'
 import ImpersonateBanner from './components/ImpersonateBanner'
 import NotificationBell from './components/NotificationBell'
+import PendingInvitationBanner from './components/PendingInvitationBanner'
 import { 
   Home, 
   Target, 
@@ -351,6 +352,7 @@ function AppShell() {
   if (needsOnboarding) {
     return (
       <Suspense fallback={<LoadingScreen label="Iniciando wizard…" />}>
+        <PendingInvitationBanner />
         <Onboarding onComplete={() => { setOnboardingForceCompleted(true); if (typeof refresh === 'function') refresh() }} />
       </Suspense>
     )
@@ -378,6 +380,7 @@ function AppShell() {
   return (
     <>
       <ImpersonateBanner />
+      <PendingInvitationBanner />
       <TrialBanner onUpgrade={() => navegarA('billing')} />
     <div className="app-container">
       {/* BOTÓN MENÚ MOBILE */}

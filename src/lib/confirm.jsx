@@ -28,6 +28,13 @@ let listeners = new Set()
 let queue = []
 
 export function confirm(message, opts = {}) {
+  // También acepta la forma objeto: confirm({ title, message, danger, confirmText }).
+  // Sin esto, el objeto terminaba renderizado como hijo de React y rompía la vista.
+  if (message && typeof message === 'object') {
+    const { message: msg, danger, ...rest } = message
+    opts = { ...(danger ? { tone: 'danger' } : {}), ...rest, ...opts }
+    message = msg
+  }
   return new Promise(resolve => {
     const item = {
       id: Math.random().toString(36).slice(2),
