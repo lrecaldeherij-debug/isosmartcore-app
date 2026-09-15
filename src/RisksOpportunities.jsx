@@ -1,7 +1,10 @@
 import { useEffect, useMemo, useState, Fragment } from 'react'
 import { createPortal } from 'react-dom'
 import { supabase } from './supabaseClient'
-import { consultarIA } from './aiClient'
+import { consultarIA, parseAiJson } from './aiClient'
+import { companyContextLine } from './lib/companyContext'
+import { normalizeSwotCategory } from './lib/swot'
+import { riskLevel, isHighRisk, needsControl, RISK_LEGEND } from './lib/riskLevel'
 import { indexRow, deindexRow } from './lib/ragIndex'
 import {
   ShieldAlert, Sparkles, Loader2, Plus, Search, Filter, Eye, Pencil, Trash2,
@@ -75,30 +78,14 @@ const EMPTY_FORM = {
   responsible: '', owner: '',
   approved_by: '', approved_at: '',
   due_date: '', review_date: '', execution_date: '',
-  treatment_cost: '', currency: 'PYG',
+  treatment_cost: '', currency: 'USD',
   status: 'Identificado',
   identification_date: new Date().toISOString().slice(0, 10),
 }
 
 // ───────────────────── Helpers IA ──────────────────────
-function extractFirstJson(text) {
-  if (!text) return null
-  const i0 = text.indexOf('{'), i1 = text.indexOf('[')
-  const start = i0 === -1 ? i1 : (i1 === -1 ? i0 : Math.min(i0, i1))
-  if (start === -1) return null
-  let depth = 0, inStr = false, esc = false
-  const open = text[start], close = open === '[' ? ']' : '}'
-  for (let i = start; i < text.length; i++) {
-    const c = text[i]
-    if (esc) { esc = false; continue }
-    if (c === '\\') { esc = true; continue }
-    if (c === '"') { inStr = !inStr; continue }
-    if (inStr) continue
-    if (c === open) depth++
-    else if (c === close) { depth--; if (depth === 0) { try { return JSON.parse(text.slice(start, i + 1)) } catch { return null } } }
-  }
-  return null
-}
+// parseAiJson lanza si consultarIA devolvió un error (cuota, red, Gemini caído)
+const extractFirstJson = parseAiJson
 function parseAiObject(raw) {
   const p = extractFirstJson(raw)
   if (p && typeof p === 'object' && !Array.isArray(p)) return p
@@ -111,6 +98,13 @@ function parseAiArray(raw) {
   if (p && Array.isArray(p.risks)) return p.risks
   if (p && Array.isArray(p.opportunities)) return p.opportunities
   return []
+}
+
+// Probabilidad / impacto en escala 1-10 (IA e importación a veces traen 0, 15 o texto)
+function clampScale(v, fallback = 5) {
+  const n = Math.round(Number(v))
+  if (!Number.isFinite(n) || n < 1) return fallback
+  return Math.min(10, n)
 }
 
 // ─────────────────────────────────────────────────────
@@ -157,19 +151,22 @@ export default function RisksOpportunities() {
     setLoading(true)
     const [rm, pr, jb, st, ct, ob, nc, cp] = await Promise.all([
       supabase.from('risk_matrix').select('*').order('score_initial', { ascending: false }),
-      supabase.from('processes').select('id, name, type').order('name'),
+      supabase.from('processes').select('id, name, process_type').order('name'),
       supabase.from('job_descriptions').select('id, title').order('title'),
       supabase.from('stakeholders').select('id, name, type').order('name'),
-      supabase.from('context_analysis').select('id, type, factor, impact_level').order('type'),
+      supabase.from('context_analysis').select('id, type, category, factor, impact_level').order('type'),
       supabase.from('quality_objectives').select('id, name').order('created_at', { ascending: false }),
       supabase.from('non_conformities').select('id, description, risk_id, created_at').order('created_at', { ascending: false }),
       supabase.from('company_profile').select('*').maybeSingle(),
     ])
-    setItems(rm.data || [])
+    if (rm.error) toast.error('No se pudo cargar la matriz de riesgos: ' + rm.error.message)
+    // Las plantillas sembradas usan status 'En proceso', que no está en la lista
+    setItems((rm.data || []).map(x => x.status === 'En proceso' ? { ...x, status: 'En Tratamiento' } : x))
     setProcesses(pr.data || [])
     setJobs(jb.data || [])
     setStakeholders(st.data || [])
-    setContextFactors(ct.data || [])
+    // La categoría FODA (Fortaleza/Debilidad/...) vive en `category`; `type` es Interno/Externo
+    setContextFactors((ct.data || []).map(c => ({ ...c, swot: normalizeSwotCategory(c.category) })))
     setObjectives(ob.data || [])
     setNcs(nc.data || [])
     setOrgProfile(cp.data || null)
@@ -190,12 +187,12 @@ export default function RisksOpportunities() {
     const total = items.length
     const riesgos = items.filter(x => x.type === 'Riesgo').length
     const oportunidades = items.filter(x => x.type === 'Oportunidad').length
-    const altos = items.filter(x => (x.score_initial || 0) >= 15).length
+    const altos = items.filter(x => x.type !== 'Oportunidad' && isHighRisk(x.score_initial)).length
     const tratados = items.filter(x => x.status === 'Tratado' || x.status === 'Cerrado').length
     const materializados = items.filter(x => x.status === 'Materializado').length
     const today = new Date().toISOString().slice(0, 10)
     const vencidos = items.filter(x => x.review_date && x.review_date < today).length
-    const sinTratamiento = items.filter(x => x.type === 'Riesgo' && !x.control_measure && (x.score_initial || 0) >= 8).length
+    const sinTratamiento = items.filter(x => x.type === 'Riesgo' && !x.control_measure && needsControl(x.score_initial)).length
     const costoTotal = items.reduce((a, b) => a + (Number(b.treatment_cost) || 0), 0)
     return { total, riesgos, oportunidades, altos, tratados, materializados, vencidos, sinTratamiento, costoTotal }
   }, [items])
@@ -217,21 +214,10 @@ export default function RisksOpportunities() {
 
   // ───── Helpers ─────
   const calcScore = (p, i) => (Number(p) || 0) * (Number(i) || 0)
-  const getRiskColor = (score) => {
-    if (!score) return '#f1f5f9'
-    if (score >= 20) return '#991b1b'
-    if (score >= 15) return '#dc2626'
-    if (score >= 10) return '#f59e0b'
-    if (score >= 5) return '#fbbf24'
-    return '#86efac'
-  }
-  const getRiskLabel = (score) => {
-    if (!score) return '—'
-    if (score >= 15) return 'Alto'
-    if (score >= 8) return 'Medio'
-    return 'Bajo'
-  }
-  const formatCurrency = (n, c = 'PYG') => n ? new Intl.NumberFormat('es-PY').format(n) + ' ' + (c || 'PYG') : '—'
+  // Escala 1-10 × 1-10 (score 1-100): ver lib/riskLevel.js
+  const getRiskColor = (score) => riskLevel(score).color
+  const getRiskLabel = (score) => riskLevel(score).label
+  const formatCurrency = (n, c = 'USD') => n ? new Intl.NumberFormat('es-EC').format(n) + ' ' + (c || 'USD') : '—'
 
   const diffChanges = (orig, curr) => {
     const changes = []
@@ -348,6 +334,7 @@ DESCRIPCIÓN: "${form.risk_description}"
 TIPO: ${form.type}
 CATEGORÍA: ${form.category}
 PROCESO: ${procName || 'no especificado'}
+EMPRESA: ${companyContextLine(orgProfile)}
 ${form.potential_cause ? 'CAUSA POTENCIAL: ' + form.potential_cause : ''}
 ${form.potential_consequence ? 'CONSECUENCIA POTENCIAL: ' + form.potential_consequence : ''}
 
@@ -362,7 +349,7 @@ Devuelve SOLO un JSON objeto, sin markdown:
 - kri_target (string, meta del indicador)
 - residual_probability (1-10, prob esperada después del control)
 - residual_impact (1-10, impacto esperado después del control)
-- estimated_cost (number en PYG, costo estimado del tratamiento)`
+- estimated_cost (number en USD, costo estimado del tratamiento, realista para el tamaño de la empresa)`
 
       const raw = await consultarIA(prompt, 'Devuelve ÚNICAMENTE JSON objeto válido.')
       console.log('[IA Plan tratamiento] raw:', raw)
@@ -380,17 +367,18 @@ Devuelve SOLO un JSON objeto, sin markdown:
     const s = iaSingleSuggestion
     setForm(prev => ({
       ...prev,
-      probability_initial: s.probability ?? prev.probability_initial,
-      impact_initial: s.impact ?? prev.impact_initial,
+      probability_initial: s.probability != null ? clampScale(s.probability) : prev.probability_initial,
+      impact_initial: s.impact != null ? clampScale(s.impact) : prev.impact_initial,
       potential_cause: prev.potential_cause || s.potential_cause || '',
       potential_consequence: prev.potential_consequence || s.potential_consequence || '',
       treatment_strategy: s.treatment_strategy || prev.treatment_strategy,
       control_measure: s.control_measure || prev.control_measure,
       kri_indicator: s.kri_indicator || prev.kri_indicator,
       kri_target: s.kri_target || prev.kri_target,
-      probability_residual: s.residual_probability ?? prev.probability_residual,
-      impact_residual: s.residual_impact ?? prev.impact_residual,
-      treatment_cost: s.estimated_cost ?? prev.treatment_cost,
+      probability_residual: s.residual_probability != null ? clampScale(s.residual_probability) : prev.probability_residual,
+      impact_residual: s.residual_impact != null ? clampScale(s.residual_impact) : prev.impact_residual,
+      treatment_cost: Number.isFinite(Number(s.estimated_cost)) ? Number(s.estimated_cost) : prev.treatment_cost,
+      currency: s.estimated_cost != null ? 'USD' : prev.currency,
     }))
     setIaSingleSuggestion(null)
   }
@@ -401,16 +389,17 @@ Devuelve SOLO un JSON objeto, sin markdown:
     setLoadingIA(true); setIaBulkSuggestions(null); setIaContext(mode === 'risks' ? 'foda_risks' : 'foda_opps')
     try {
       const factores = mode === 'risks'
-        ? contextFactors.filter(c => c.type === 'Amenaza' || c.type === 'Debilidad')
-        : contextFactors.filter(c => c.type === 'Fortaleza' || c.type === 'Oportunidad')
+        ? contextFactors.filter(c => c.swot === 'Amenaza' || c.swot === 'Debilidad')
+        : contextFactors.filter(c => c.swot === 'Fortaleza' || c.swot === 'Oportunidad')
       if (factores.length === 0) {
         throw new Error(`No hay factores ${mode === 'risks' ? 'A/D (Amenazas/Debilidades)' : 'F/O (Fortalezas/Oportunidades)'} cargados en Contexto`)
       }
-      const ctxProc = processes.slice(0, 15).map(p => ({ nombre: p.name, tipo: p.type }))
-      const ctxFOda = factores.map(f => ({ id: f.id, tipo: f.type, factor: f.factor, impacto: f.impact_level }))
+      const ctxProc = processes.slice(0, 15).map(p => ({ nombre: p.name, tipo: p.process_type }))
+      const ctxFOda = factores.map(f => ({ id: f.id, tipo: f.swot, factor: f.factor, impacto: f.impact_level }))
       const ctxObj = objectives.slice(0, 8).map(o => ({ nombre: o.name }))
-      const empresa = orgProfile?.company_name || 'la empresa'
-      const sector = orgProfile?.sector || ''
+      // Columnas reales de company_profile (company_name/sector no existen)
+      const empresa = orgProfile?.name || 'la empresa'
+      const sector = orgProfile?.industry || ''
 
       const prompt = mode === 'risks'
         ? `Eres consultor ISO 9001. Identifica RIESGOS para ${empresa}${sector ? ' (' + sector + ')' : ''} a partir del análisis FODA y procesos según cláusula 6.1.
@@ -488,8 +477,8 @@ Devuelve SOLO un JSON array (4-8 items), sin markdown. Cada oportunidad:
           process_id: proc?.id || null,
           process_area: proc?.name || s.process_name || '',
           context_id: ctx?.id || null,
-          probability_initial: Number(s.probability) || 5,
-          impact_initial: Number(s.impact) || 5,
+          probability_initial: clampScale(s.probability),
+          impact_initial: clampScale(s.impact),
           treatment_strategy: (isRisks ? TREATMENT_RISK : TREATMENT_OPP).includes(s.treatment_strategy) ? s.treatment_strategy : (isRisks ? 'Mitigar' : 'Aprovechar'),
           control_measure: s.control_measure || '',
           kri_indicator: s.kri_indicator || '',
@@ -513,8 +502,11 @@ Devuelve SOLO un JSON array (4-8 items), sin markdown. Cada oportunidad:
       title: `Tratar ${item.type.toLowerCase()}: ${(item.risk_description || '').slice(0, 80)}`,
       description: item.control_measure || item.risk_description,
       source: item.type === 'Riesgo' ? 'Riesgo' : 'Oportunidad',
-      status: 'Planificada',
-      due_date: item.due_date || null,
+      // strategic_actions no tiene due_date (es planned_end) y el tablero usa
+      // Pendiente/En curso/Completada: antes el insert fallaba siempre
+      status: 'Pendiente',
+      priority: isHighRisk(item.score_initial) ? 'Alta' : 'Media',
+      planned_end: item.due_date || null,
       responsible: item.responsible || item.owner || '',
       risk_id: item.id,
       process_id: item.process_id || null,
@@ -523,8 +515,9 @@ Devuelve SOLO un JSON array (4-8 items), sin markdown. Cada oportunidad:
     }
     const { data, error } = await supabase.from('strategic_actions').insert([row]).select('id').single()
     if (error) { toast.error(error.message); return }
-    await supabase.from('risk_matrix').update({ strategic_action_id: data.id }).eq('id', item.id)
-    toast.success('Acción estratégica creada y vinculada')
+    const { error: linkErr } = await supabase.from('risk_matrix').update({ strategic_action_id: data.id }).eq('id', item.id)
+    if (linkErr) toast.warning('Acción creada, pero no se pudo vincular al riesgo: ' + linkErr.message)
+    else toast.success('Acción estratégica creada y vinculada')
     fetchAll()
   }
 
@@ -537,7 +530,7 @@ Devuelve SOLO un JSON array (4-8 items), sin markdown. Cada oportunidad:
       source: 'Espontánea',
       area: item.process_area || '',
       expected_benefit: item.potential_consequence || '',
-      priority: (item.score_initial || 0) >= 15 ? 'Alta' : 'Media',
+      priority: isHighRisk(item.score_initial) ? 'Alta' : 'Media',
       status: 'Identificada',
       process_id: item.process_id || null,
       estimated_cost: item.treatment_cost || null,
@@ -547,8 +540,9 @@ Devuelve SOLO un JSON array (4-8 items), sin markdown. Cada oportunidad:
     }
     const { data, error } = await supabase.from('improvement_opportunities').insert([row]).select('id').single()
     if (error) { toast.error(error.message); return }
-    await supabase.from('risk_matrix').update({ improvement_opportunity_id: data.id }).eq('id', item.id)
-    toast.success('Oportunidad de mejora creada y vinculada')
+    const { error: linkErr } = await supabase.from('risk_matrix').update({ improvement_opportunity_id: data.id }).eq('id', item.id)
+    if (linkErr) toast.warning('Mejora creada, pero no se pudo vincular: ' + linkErr.message)
+    else toast.success('Oportunidad de mejora creada y vinculada')
     fetchAll()
   }
 
@@ -585,8 +579,8 @@ Devuelve SOLO un JSON array (4-8 items), sin markdown. Cada oportunidad:
                 category: CATEGORY_OPTIONS.includes(r.category) ? r.category : 'Operacional',
                 process_area: r.process_area || '',
                 risk_description: r.risk_description || '',
-                probability_initial: Number(r.probability_initial) || 5,
-                impact_initial: Number(r.impact_initial) || 5,
+                probability_initial: clampScale(r.probability_initial),
+                impact_initial: clampScale(r.impact_initial),
                 control_measure: r.control_measure || '',
                 responsible: r.responsible || '',
                 status: 'Identificado',
@@ -833,7 +827,7 @@ function RiskCard({ item, processMap, getRiskColor, getRiskLabel, ncCount, onDet
       <div style={{ display: 'flex', gap: '5px', marginTop: 'auto', flexWrap: 'wrap' }}>
         <button onClick={onDetail} style={miniBtn('#0ea5e9')}><Eye size={11} /> Detalle</button>
         <button onClick={onEdit} style={miniBtn('#6366f1')}><Pencil size={11} /></button>
-        {!item.strategic_action_id && (score >= 8 || isOpp) && (
+        {!item.strategic_action_id && (needsControl(score) || isOpp) && (
           <button onClick={onConvertStrategic} style={miniBtn('#7c3aed')} title="Convertir a acción estratégica"><Target size={11} /></button>
         )}
         {isOpp && !item.improvement_opportunity_id && (
@@ -871,8 +865,9 @@ function Heatmap({ items, onClick, getRiskColor }) {
           <Fragment key={'r' + ri}>
             <div style={{ fontSize: '10px', color: '#64748b', fontWeight: 600, alignSelf: 'center' }}>{labelsY[ri]}</div>
             {row.map((cell, ci) => {
-              const p = ci * 2 + 1
-              const imp = (4 - ri) * 2 + 1
+              // Centro de la celda (1-2 → 1.5, 3-4 → 3.5, ...)
+              const p = ci * 2 + 1.5
+              const imp = (4 - ri) * 2 + 1.5
               const score = p * imp
               return (
                 <div key={ri + '-' + ci} style={{
@@ -901,10 +896,9 @@ function Heatmap({ items, onClick, getRiskColor }) {
         ))}
       </div>
       <div style={{ marginTop: '12px', display: 'flex', gap: '12px', fontSize: '11px', color: '#64748b', justifyContent: 'center', flexWrap: 'wrap' }}>
-        <span><span style={{ display: 'inline-block', width: '12px', height: '12px', background: '#86efac', borderRadius: '2px', verticalAlign: 'middle' }} /> Bajo (1-7)</span>
-        <span><span style={{ display: 'inline-block', width: '12px', height: '12px', background: '#fbbf24', borderRadius: '2px', verticalAlign: 'middle' }} /> Medio (8-14)</span>
-        <span><span style={{ display: 'inline-block', width: '12px', height: '12px', background: '#dc2626', borderRadius: '2px', verticalAlign: 'middle' }} /> Alto (15-19)</span>
-        <span><span style={{ display: 'inline-block', width: '12px', height: '12px', background: '#991b1b', borderRadius: '2px', verticalAlign: 'middle' }} /> Crítico (≥20)</span>
+        {RISK_LEGEND.map(l => (
+          <span key={l.key}><span style={{ display: 'inline-block', width: '12px', height: '12px', background: l.color, borderRadius: '2px', verticalAlign: 'middle' }} /> {l.label} ({l.range})</span>
+        ))}
       </div>
     </div>
   )
@@ -976,7 +970,7 @@ function FormCard({ form, setForm, editing, processes, jobs, stakeholders, conte
             <Field label="Factor FODA origen">
               <select value={form.context_id} onChange={e => set({ context_id: e.target.value })} style={inputStyle}>
                 <option value="">—</option>
-                {contextFactors.map(c => <option key={c.id} value={c.id}>{c.type}: {(c.factor || '').slice(0, 50)}</option>)}
+                {contextFactors.map(c => <option key={c.id} value={c.id}>{c.swot || c.type}: {(c.factor || '').slice(0, 50)}</option>)}
               </select>
             </Field>
           </Row>
@@ -996,7 +990,7 @@ function FormCard({ form, setForm, editing, processes, jobs, stakeholders, conte
               <div><strong>Prob/Imp:</strong> {iaSuggestion.probability}/{iaSuggestion.impact} → Score {(iaSuggestion.probability || 0) * (iaSuggestion.impact || 0)}</div>
               <div><strong>Residual:</strong> {iaSuggestion.residual_probability}/{iaSuggestion.residual_impact} → Score {(iaSuggestion.residual_probability || 0) * (iaSuggestion.residual_impact || 0)}</div>
               <div><strong>Estrategia:</strong> {iaSuggestion.treatment_strategy}</div>
-              <div><strong>Costo:</strong> {iaSuggestion.estimated_cost ? new Intl.NumberFormat('es-PY').format(iaSuggestion.estimated_cost) : '—'}</div>
+              <div><strong>Costo:</strong> {iaSuggestion.estimated_cost ? new Intl.NumberFormat('es-EC').format(iaSuggestion.estimated_cost) + ' USD' : '—'}</div>
             </div>
             {iaSuggestion.control_measure && <div style={{ fontSize: '12px', color: '#334155', marginTop: '6px' }}><strong>Control:</strong> {iaSuggestion.control_measure}</div>}
             {iaSuggestion.kri_indicator && <div style={{ fontSize: '12px', color: '#334155', marginTop: '4px' }}><strong>KRI:</strong> {iaSuggestion.kri_indicator} → {iaSuggestion.kri_target}</div>}
@@ -1074,7 +1068,7 @@ function FormCard({ form, setForm, editing, processes, jobs, stakeholders, conte
             </Field>
             <Field label="Moneda">
               <select value={form.currency} onChange={e => set({ currency: e.target.value })} style={inputStyle}>
-                <option>PYG</option><option>USD</option><option>EUR</option><option>BRL</option>
+                <option>USD</option><option>EUR</option><option>COP</option><option>PEN</option><option>PYG</option>
               </select>
             </Field>
             <Field label="Aprobado por">
@@ -1150,7 +1144,7 @@ function BulkIaPanel({ data, selected, contextFactors, onToggle, onSave, onClose
                 <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>
                   ⚙ {s.process_name || 'Transversal'} · P{s.probability}×I{s.impact} = {(s.probability || 0) * (s.impact || 0)} · {s.treatment_strategy}
                 </div>
-                {ctx && <div style={{ fontSize: '11px', color: '#7c2d12', marginTop: '2px' }}>📌 Origen FODA: {ctx.type} – {(ctx.factor || '').slice(0, 60)}</div>}
+                {ctx && <div style={{ fontSize: '11px', color: '#7c2d12', marginTop: '2px' }}>📌 Origen FODA: {ctx.swot || ctx.type} – {(ctx.factor || '').slice(0, 60)}</div>}
                 {s.potential_cause && <div style={{ fontSize: '12px', color: '#334155', marginTop: '4px' }}><strong>Causa:</strong> {s.potential_cause}</div>}
                 {s.potential_consequence && <div style={{ fontSize: '12px', color: '#334155' }}><strong>Consecuencia:</strong> {s.potential_consequence}</div>}
                 {s.control_measure && <div style={{ fontSize: '12px', color: '#0e7490', marginTop: '4px' }}>🛡 {s.control_measure}</div>}
@@ -1189,7 +1183,7 @@ function DetailModal({ item, processMap, stakeholderMap, contextMap, ncs, getRis
             <D label="Categoría">{item.category || '—'}</D>
             <D label="Identificado">{item.identification_date ? new Date(item.identification_date).toLocaleDateString() : '—'}</D>
             <D label="Estrategia">{item.treatment_strategy || '—'}</D>
-            <D label="Costo">{item.treatment_cost ? new Intl.NumberFormat('es-PY').format(item.treatment_cost) + ' ' + (item.currency || '') : '—'}</D>
+            <D label="Costo">{item.treatment_cost ? new Intl.NumberFormat('es-EC').format(item.treatment_cost) + ' ' + (item.currency || '') : '—'}</D>
           </DetailGrid>
           <D label="Causa potencial" block>{item.potential_cause || '—'}</D>
           <D label="Consecuencia potencial" block>{item.potential_consequence || '—'}</D>
@@ -1199,7 +1193,7 @@ function DetailModal({ item, processMap, stakeholderMap, contextMap, ncs, getRis
           <DetailGrid>
             {proc && <D label="Proceso">{proc.name}</D>}
             {sh && <D label="Stakeholder">{sh.name}</D>}
-            {ctx && <D label="Origen FODA">{ctx.type}: {(ctx.factor || '').slice(0, 60)}</D>}
+            {ctx && <D label="Origen FODA">{ctx.swot || ctx.type}: {(ctx.factor || '').slice(0, 60)}</D>}
             {item.strategic_action_id && <D label="Acción estratégica">✅ Vinculada</D>}
             {item.improvement_opportunity_id && <D label="Oportunidad mejora">✅ Vinculada</D>}
           </DetailGrid>

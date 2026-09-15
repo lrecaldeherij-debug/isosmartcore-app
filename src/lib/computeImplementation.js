@@ -191,7 +191,7 @@ export async function loadSnapshotData(supabase, orgId) {
     supabase.from('risk_matrix').select('score_initial, score_residual, status, control_measure').eq('org_id', orgId),
     supabase.from('non_conformities').select('id, status, type, severity, due_date, effectiveness_result, closure_date, is_recurrent, created_at, root_cause, five_whys').eq('org_id', orgId).limit(500),
     supabase.from('suppliers').select('evaluation_score, status').eq('org_id', orgId),
-    supabase.from('quality_objectives').select('id, target, current, status, baseline_value').eq('org_id', orgId),
+    supabase.from('quality_objectives').select('id, name, objective, indicator, unit, target, current, status, baseline_value').eq('org_id', orgId),
     supabase.from('objective_measurements').select('objective_id, value, measured_at').eq('org_id', orgId).order('measured_at', { ascending: false }).limit(200),
     supabase.from('personnel').select('id, status, next_evaluation_date, job_id, competency_gap').eq('org_id', orgId),
     supabase.from('scope_declaration').select('next_review_date, status, scope_statement, processes_covered, last_reviewed').eq('org_id', orgId).maybeSingle(),

@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { supabase } from './supabaseClient'
-import { consultarIA } from './aiClient'
+import { consultarIA, parseAiJson } from './aiClient'
+import { companyContextLine } from './lib/companyContext'
+import { objectiveProgress } from './lib/objectiveProgress'
 import { indexRow, deindexRow } from './lib/ragIndex'
 import {
   Target, Sparkles, Loader2, Plus, Search, Filter, Eye, Pencil, Trash2, X,
@@ -84,24 +86,8 @@ const EMPTY_FORM = {
 }
 
 // ───────────────────── Helpers IA ──────────────────────
-function extractFirstJson(text) {
-  if (!text) return null
-  const i0 = text.indexOf('{'), i1 = text.indexOf('[')
-  const start = i0 === -1 ? i1 : (i1 === -1 ? i0 : Math.min(i0, i1))
-  if (start === -1) return null
-  let depth = 0, inStr = false, esc = false
-  const open = text[start], close = open === '[' ? ']' : '}'
-  for (let i = start; i < text.length; i++) {
-    const c = text[i]
-    if (esc) { esc = false; continue }
-    if (c === '\\') { esc = true; continue }
-    if (c === '"') { inStr = !inStr; continue }
-    if (inStr) continue
-    if (c === open) depth++
-    else if (c === close) { depth--; if (depth === 0) { try { return JSON.parse(text.slice(start, i + 1)) } catch { return null } } }
-  }
-  return null
-}
+// parseAiJson lanza si consultarIA devolvió un error (cuota, red, Gemini caído)
+const extractFirstJson = parseAiJson
 function parseAiObject(raw) {
   const p = extractFirstJson(raw)
   if (p && typeof p === 'object' && !Array.isArray(p)) return p
@@ -171,6 +157,7 @@ export default function QualityObjectives({ alCambiarVista }) {
       supabase.from('improvement_opportunities').select('id, title').order('created_at', { ascending: false }).limit(50),
       supabase.from('company_profile').select('*').maybeSingle(),
     ])
+    if (obj.error) toast.error('No se pudieron cargar los objetivos: ' + obj.error.message)
     setItems(obj.data || [])
     setProcesses(pr.data || [])
     // policy_text puede estar vacío si la política se redactó en el módulo 5.2
@@ -207,20 +194,11 @@ export default function QualityObjectives({ alCambiarVista }) {
     const enCurso = items.filter(i => i.status === 'En curso').length
     const cumplidos = items.filter(i => i.status === 'Cumplido').length
     const noCumplidos = items.filter(i => i.status === 'No cumplido').length
-    // Cálculo de avance ponderado real con baseline/target/current
+    // Avance según dirección del objetivo (subir o reducir): lib/objectiveProgress.js
     let sumaAvance = 0, conMedicion = 0
     for (const o of items) {
-      const baseline = Number(o.baseline_value) || 0
-      const target = Number(o.target) || 0
-      const current = Number(o.current) || 0
-      if (target > 0 && target !== baseline) {
-        const progress = ((current - baseline) / (target - baseline)) * 100
-        sumaAvance += Math.max(0, Math.min(progress, 100))
-        conMedicion++
-      } else if (target > 0) {
-        sumaAvance += Math.min((current / target) * 100, 100)
-        conMedicion++
-      }
+      const p = objectiveProgress(o)
+      if (p != null) { sumaAvance += p; conMedicion++ }
     }
     const avanceGlobal = conMedicion ? Math.round(sumaAvance / conMedicion) : 0
     const today = new Date().toISOString().slice(0, 10)
@@ -249,18 +227,7 @@ export default function QualityObjectives({ alCambiarVista }) {
   }, [items, filterCategory, filterStatus, filterYear, search])
 
   // ───── Helpers ─────
-  const calcProgress = (item) => {
-    const baseline = Number(item.baseline_value) || 0
-    const target = Number(item.target) || 0
-    const current = Number(item.current) || 0
-    if (target > 0 && target !== baseline) {
-      const p = ((current - baseline) / (target - baseline)) * 100
-      return Math.max(0, Math.min(Math.round(p), 100))
-    } else if (target > 0) {
-      return Math.min(Math.round((current / target) * 100), 100)
-    }
-    return 0
-  }
+  const calcProgress = (item) => objectiveProgress(item) ?? 0
 
   const progressColor = (pct) => pct >= 100 ? '#16a34a' : pct >= 70 ? '#f59e0b' : '#dc2626'
 
@@ -415,6 +382,7 @@ IDEA: "${form.objective || form.name}"
 ${form.category ? 'CATEGORÍA: ' + form.category : ''}
 ${form.indicator ? 'INDICADOR ACTUAL: ' + form.indicator : ''}
 PROCESOS DE LA EMPRESA: ${ctxProc}
+EMPRESA: ${companyContextLine(orgProfile)}
 
 Devuelve SOLO un JSON objeto sin markdown:
 - name (string corto, máx 80 chars, título del objetivo)
@@ -441,8 +409,8 @@ Devuelve SOLO un JSON objeto sin markdown:
         name: obj.name || prev.name,
         objective: obj.objective_smart || prev.objective,
         indicator: obj.indicator || prev.indicator,
-        baseline_value: obj.baseline_value ?? prev.baseline_value,
-        target: obj.target ?? prev.target,
+        baseline_value: Number.isFinite(Number(obj.baseline_value)) && obj.baseline_value !== null ? Number(obj.baseline_value) : prev.baseline_value,
+        target: Number.isFinite(Number(obj.target)) && obj.target !== null ? Number(obj.target) : prev.target,
         unit: UNIT_OPTIONS.includes(obj.unit) ? obj.unit : prev.unit,
         frequency: FREQ_OPTIONS.includes(obj.frequency) ? obj.frequency : prev.frequency,
         responsible: prev.responsible || obj.responsible_role || '',
@@ -466,7 +434,7 @@ Devuelve SOLO un JSON objeto sin markdown:
       if (!policy?.policy_text) throw new Error('No hay una política de calidad cargada. Definila primero.')
       const ctxProc = processes.slice(0, 15).map(p => ({ nombre: p.name, tipo: p.process_type }))
       const existentes = items.slice(0, 15).map(o => o.name || o.objective?.slice(0, 80)).filter(Boolean)
-      const empresa = orgProfile?.company_name || 'la empresa'
+      const empresa = orgProfile?.name || 'la empresa'
       const year = new Date().getFullYear()
 
       const prompt = `Eres consultor ISO 9001 experto en planificación. Genera 5-8 objetivos SMART para ${empresa} para el año ${year}, derivados de la política de calidad y los procesos según ISO 6.2.
@@ -509,9 +477,11 @@ Cubrí distintas categorías. Sé realista con baseline y target.`
     if (!iaBulk) return
     const year = new Date().getFullYear()
     const policy = policies.find(p => p.status === 'Aprobada' || p.status === 'Comunicada') || policies[0]
-    const rows = iaBulk
-      .map((s, i) => ({ s, i }))
-      .filter(({ i }) => iaSelected.has(i))
+    // target es NOT NULL: un solo objetivo sin meta hacía fallar el lote entero
+    const selected = iaBulk.filter((_, i) => iaSelected.has(i))
+    const conMeta = selected.filter(s => s.target !== null && s.target !== '' && Number.isFinite(Number(s.target)))
+    const rows = conMeta
+      .map(s => ({ s }))
       .map(({ s }) => {
         const procIds = (s.relevant_processes || []).map(n => {
           const p = processes.find(p => p.name?.toLowerCase().trim() === String(n).toLowerCase().trim())
@@ -522,8 +492,8 @@ Cubrí distintas categorías. Sé realista con baseline y target.`
           objective: s.objective_smart || '',
           category: CATEGORY_OPTIONS.includes(s.category) ? s.category : 'Otra',
           indicator: s.indicator || '',
-          baseline_value: s.baseline_value ?? null,
-          target: s.target ?? null,
+          baseline_value: Number.isFinite(Number(s.baseline_value)) && s.baseline_value !== null && s.baseline_value !== '' ? Number(s.baseline_value) : null,
+          target: Number(s.target),
           unit: UNIT_OPTIONS.includes(s.unit) ? s.unit : '%',
           frequency: FREQ_OPTIONS.includes(s.frequency) ? s.frequency : 'Mensual',
           responsible: s.responsible_role || '',
@@ -536,10 +506,12 @@ Cubrí distintas categorías. Sé realista con baseline y target.`
           change_log: [{ at: new Date().toISOString(), changes: [{ field: 'created', from: null, to: 'IA desde política' }] }]
         }
       })
-    if (!rows.length) return toast.warning('No hay objetivos seleccionados')
-    const { error } = await supabase.from('quality_objectives').insert(rows)
+    if (!rows.length) return toast.warning(selected.length ? 'Los objetivos seleccionados no tienen meta numérica' : 'No hay objetivos seleccionados')
+    const { data: inserted, error } = await supabase.from('quality_objectives').insert(rows).select('id')
     if (error) { toast.error(error.message); return }
-    toast.success(`${rows.length} objetivos creados para ${year}`)
+    ;(inserted || []).forEach(r => indexRow('quality_objectives', r.id))
+    const sinMeta = selected.length - rows.length
+    toast.success(`${rows.length} objetivos creados para ${year}${sinMeta ? ` · ${sinMeta} omitidos por no tener meta numérica` : ''}`)
     setIaBulk(null); setIaSelected(new Set()); setIaContext(null)
     fetchAll()
   }
@@ -591,17 +563,21 @@ Devuelve SOLO un JSON objeto, sin markdown:
     const row = {
       title: `Alcanzar: ${item.name || (item.objective || '').slice(0, 80)}`,
       description: item.objective || '',
-      source: 'Objetivo de Calidad',
-      status: 'Planificada',
-      due_date: item.target_date || null,
+      // strategic_actions no tiene due_date (es planned_end); el tablero usa
+      // Pendiente/En curso/Completada y la fuente 'Objetivo'. Antes fallaba siempre.
+      source: 'Objetivo',
+      status: 'Pendiente',
+      priority: 'Media',
+      planned_end: item.target_date || null,
       responsible: item.responsible || '',
       objective_id: item.id,
       change_log: [{ at: new Date().toISOString(), changes: [{ field: 'created', from: 'Objetivo', to: item.id }] }]
     }
     const { data, error } = await supabase.from('strategic_actions').insert([row]).select('id').single()
     if (error) { toast.error(error.message); return }
-    await supabase.from('quality_objectives').update({ strategic_action_id: data.id }).eq('id', item.id)
-    toast.success('Acción estratégica creada y vinculada')
+    const { error: linkErr } = await supabase.from('quality_objectives').update({ strategic_action_id: data.id }).eq('id', item.id)
+    if (linkErr) toast.warning('Acción creada, pero no se pudo vincular al objetivo: ' + linkErr.message)
+    else toast.success('Acción estratégica creada y vinculada')
     fetchAll()
   }
 

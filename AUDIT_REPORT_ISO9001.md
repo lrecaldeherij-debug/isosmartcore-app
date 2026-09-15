@@ -30,8 +30,15 @@ Cobertura técnica del software frente a los requisitos de la norma.
 ## 6. Planificación
 
 - [x] **6.1 Acciones para abordar riesgos y oportunidades** — `RisksOpportunities.jsx`
-- [x] **6.2 Objetivos de calidad** — `QualityObjectives.jsx`, metodología SMART
-- [x] **6.3 Planificación de cambios** — `StrategicActionPlan.jsx`
+      *(revisado 2026-09-15: umbrales de nivel corregidos para la escala 1-10,
+      "Riesgos desde FODA", conversión a acción y PDF de la matriz reparados)*
+- [x] **6.2 Objetivos de calidad** — `QualityObjectives.jsx`, metodología SMART;
+      acciones para lograrlos (6.2.2) en `StrategicActionPlan.jsx`
+      *(revisado 2026-09-15: avance correcto para objetivos de reducción)*
+- [ ] **6.3 Planificación de los cambios** — **no cubierto.** `StrategicActionPlan.jsx`
+      es un plan de acciones (6.1.2 / 6.2.2), no registra cambios al SGC con
+      propósito, consecuencias, integridad del sistema, recursos y
+      responsabilidades. Pendiente de construir.
 
 ## 7. Apoyo
 

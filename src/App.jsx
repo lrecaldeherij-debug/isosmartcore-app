@@ -461,7 +461,7 @@ function AppShell() {
           <NavGroup title="Planificación (6)" sectionKey="planificacion" icon={TrendingUp}>
             <NavItem id="riesgos" label="Riesgos (6.1)" icon={ShieldAlert} />
             <NavItem id="objetivos" label="Objetivos (6.2)" icon={Target} />
-            <NavItem id="plan_estrategico" label="Plan Estratégico (6.3)" icon={Map} />
+            <NavItem id="plan_estrategico" label="Plan de Acción (6.1-6.2)" icon={Map} />
           </NavGroup>
 
           <NavGroup title="Soporte (7)" sectionKey="soporte" icon={Users}>

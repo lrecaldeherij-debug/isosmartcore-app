@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { supabase } from './supabaseClient'
-import { consultarIA } from './aiClient'
+import { isHighRisk, RISK_THRESHOLDS } from './lib/riskLevel'
+import { consultarIA, parseAiJson } from './aiClient'
+import { objectiveMet } from './lib/objectiveProgress'
 import {
   Target, Plus, Search, Filter, Eye, Pencil, Trash2, X, AlertTriangle,
   Sparkles, Loader2, ExternalLink, ListChecks, Columns, BarChart3,
@@ -56,24 +58,10 @@ const EMPTY_FORM = {
 }
 
 // ───────────────────── Helpers IA ──────────────────────
-function extractFirstJson(text) {
-  if (!text) return null
-  const i0 = text.indexOf('{'), i1 = text.indexOf('[')
-  const start = i0 === -1 ? i1 : (i1 === -1 ? i0 : Math.min(i0, i1))
-  if (start === -1) return null
-  let depth = 0, inStr = false, esc = false
-  const open = text[start], close = open === '[' ? ']' : '}'
-  for (let i = start; i < text.length; i++) {
-    const c = text[i]
-    if (esc) { esc = false; continue }
-    if (c === '\\') { esc = true; continue }
-    if (c === '"') { inStr = !inStr; continue }
-    if (inStr) continue
-    if (c === open) depth++
-    else if (c === close) { depth--; if (depth === 0) { try { return JSON.parse(text.slice(start, i + 1)) } catch { return null } } }
-  }
-  return null
-}
+// parseAiJson lanza si consultarIA devolvió un error (cuota, red, Gemini caído)
+const extractFirstJson = parseAiJson
+
+const isIsoDate = (v) => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v) && !Number.isNaN(Date.parse(v))
 
 function parseAiArray(raw) {
   if (!raw) return []
@@ -166,7 +154,9 @@ export default function StrategicActionPlan() {
     const [main, rk, ob, rv, pr] = await Promise.all([
       supabase.from('strategic_actions').select('*').order('planned_end', { ascending: true, nullsFirst: false }),
       supabase.from('risk_matrix').select('id, risk_description, process_area, probability_initial, impact_initial, status').limit(200),
-      supabase.from('quality_objectives').select('id, objective, target_value, current_value, status').limit(200),
+      // Columnas reales: target/current (target_value/current_value no existen y
+      // hacían fallar la consulta: sin objetivos en el selector ni en la IA)
+      supabase.from('quality_objectives').select('id, name, objective, indicator, unit, baseline_value, target, current, status').limit(200),
       supabase.from('management_review').select('id, review_date, review_type').limit(50),
       supabase.from('processes').select('id, name, process_type').order('name')
     ])
@@ -225,6 +215,7 @@ export default function StrategicActionPlan() {
       const { error } = await supabase.from('strategic_actions').insert([payload])
       if (error) return toast.error(error.message)
     }
+    toast.success(editingId ? 'Acción actualizada' : 'Acción creada')
     setShowForm(false); resetForm(); fetchAll()
   }
 
@@ -247,9 +238,13 @@ export default function StrategicActionPlan() {
   // ───── IA: sugerir desde riesgos críticos ─────
   const sugerirDesdeRiesgos = async () => {
     const criticos = risks
-      .filter(r => Number(r.probability_initial) * Number(r.impact_initial) >= 25 && r.status !== 'Terminado')
+      // Alto o crítico (lib/riskLevel.js) y todavía abierto. Antes filtraba
+      // status 'Terminado', que no existe en riesgos (Tratado/Cerrado/Aceptado).
+      .filter(r => isHighRisk(Number(r.probability_initial) * Number(r.impact_initial))
+        && !['Tratado', 'Cerrado', 'Aceptado'].includes(r.status))
+      .sort((a, b) => b.probability_initial * b.impact_initial - a.probability_initial * a.impact_initial)
       .slice(0, 8)
-    if (!criticos.length) return toast.info('No hay riesgos críticos sin tratar (P×I ≥ 25)')
+    if (!criticos.length) return toast.info(`No hay riesgos altos o críticos abiertos (P×I ≥ ${RISK_THRESHOLDS.high})`)
     setLoadingIA(true); setIaSuggestions(null); setIaContext('risks')
     try {
       const prompt = `Eres consultor ISO 9001. Propón acciones preventivas/mitigación para tratar estos RIESGOS críticos según ISO 6.1.2.
@@ -286,9 +281,9 @@ Devuelve SOLO un JSON array, sin markdown. Cada acción:
   // ───── IA: sugerir desde objetivos no cumplidos ─────
   const sugerirDesdeObjetivos = async () => {
     const noCumplidos = objectives
-      .filter(o => o.target_value && o.current_value !== null && Number(o.current_value) < Number(o.target_value))
+      .filter(o => o.target != null && o.current != null && !objectiveMet(o))
       .slice(0, 8)
-    if (!noCumplidos.length) return toast.info('No hay objetivos sin cumplir (current_value < target_value)')
+    if (!noCumplidos.length) return toast.info('No hay objetivos medidos que estén por debajo de su meta')
     setLoadingIA(true); setIaSuggestions(null); setIaContext('objectives')
     try {
       const prompt = `Eres consultor ISO 9001. Propón acciones de MEJORA para cerrar la brecha entre meta y valor actual de estos objetivos de calidad.
@@ -296,10 +291,11 @@ Devuelve SOLO un JSON array, sin markdown. Cada acción:
 OBJETIVOS NO CUMPLIDOS:
 ${JSON.stringify(noCumplidos.map(o => ({
   id: o.id,
-  objetivo: o.objective,
-  meta: o.target_value,
-  actual: o.current_value,
-  brecha: Number(o.target_value) - Number(o.current_value)
+  objetivo: o.name || o.objective,
+  indicador: o.indicator,
+  meta: `${o.target} ${o.unit || ''}`.trim(),
+  actual: `${o.current} ${o.unit || ''}`.trim(),
+  brecha: Math.abs(Number(o.target) - Number(o.current))
 })), null, 2)}
 
 Devuelve SOLO un JSON array, sin markdown. Cada acción:
@@ -336,7 +332,7 @@ Devuelve SOLO un JSON array, sin markdown. Cada acción:
         priority: PRIORITY_OPTIONS.includes(s.priority) ? s.priority : 'Media',
         status: 'Pendiente',
         responsible: s.responsible || 'Por asignar',
-        planned_end: s.planned_end || null,
+        planned_end: isIsoDate(s.planned_end) ? s.planned_end : null,
         risk_id: (iaContext === 'risks' && risks.find(r => r.id === s.risk_id)) ? s.risk_id : null,
         objective_id: (iaContext === 'objectives' && objectives.find(o => o.id === s.objective_id)) ? s.objective_id : null,
         effectiveness_evaluation: s.effectiveness_evaluation || '',
@@ -345,6 +341,7 @@ Devuelve SOLO un JSON array, sin markdown. Cada acción:
     if (!rows.length) return setIaSuggestions(null)
     const { error } = await supabase.from('strategic_actions').insert(rows)
     if (error) return toast.error(error.message)
+    toast.success(`${rows.length} acciones agregadas al plan`)
     setIaSuggestions(null); fetchAll()
   }
 
@@ -487,7 +484,7 @@ Devuelve SOLO un JSON array, sin markdown. Cada acción:
                 <LinkSelect label="Riesgo de origen" value={form.risk_id} onChange={v => setForm({ ...form, risk_id: v })}
                   options={[{ id: '', label: '— ninguno —' }, ...risks.map(r => ({ id: r.id, label: `${r.risk_description?.slice(0, 60) || 'Sin descripción'} (${r.process_area || '—'})` }))]} />
                 <LinkSelect label="Objetivo de calidad" value={form.objective_id} onChange={v => setForm({ ...form, objective_id: v })}
-                  options={[{ id: '', label: '— ninguno —' }, ...objectives.map(o => ({ id: o.id, label: o.objective?.slice(0, 80) || 'Sin nombre' }))]} />
+                  options={[{ id: '', label: '— ninguno —' }, ...objectives.map(o => ({ id: o.id, label: (o.name || o.objective || 'Sin nombre').slice(0, 80) }))]} />
                 <LinkSelect label="Revisión por la Dirección" value={form.review_id} onChange={v => setForm({ ...form, review_id: v })}
                   options={[{ id: '', label: '— ninguno —' }, ...reviews.map(r => ({ id: r.id, label: `${r.review_type} — ${r.review_date}` }))]} />
                 <LinkSelect label="Proceso afectado" value={form.process_id} onChange={v => setForm({ ...form, process_id: v })}
@@ -702,7 +699,7 @@ Devuelve SOLO un JSON array, sin markdown. Cada acción:
                 <CrossLinkCard icon={ShieldAlert} color="#dc2626" label="Riesgo origen" text={riskById[detailItem.risk_id].risk_description} />
               )}
               {detailItem.objective_id && objById[detailItem.objective_id] && (
-                <CrossLinkCard icon={Target} color="#0ea5e9" label="Objetivo" text={objById[detailItem.objective_id].objective} />
+                <CrossLinkCard icon={Target} color="#0ea5e9" label="Objetivo" text={objById[detailItem.objective_id].name || objById[detailItem.objective_id].objective} />
               )}
               {detailItem.review_id && reviewById[detailItem.review_id] && (
                 <CrossLinkCard icon={BarChart3} color="#7c3aed" label="Revisión Dirección" text={`${reviewById[detailItem.review_id].review_type} — ${reviewById[detailItem.review_id].review_date}`} />

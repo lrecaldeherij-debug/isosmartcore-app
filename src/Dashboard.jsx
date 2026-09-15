@@ -1,5 +1,7 @@
 import { useEffect, useState, useMemo } from 'react'
 import { supabase } from './supabaseClient'
+import { objectiveProgress } from './lib/objectiveProgress'
+import { riskLevel, isHighRisk } from './lib/riskLevel'
 import { useOrg } from './OrgContext'
 import { computeImplementation } from './lib/computeImplementation'
 import {
@@ -41,7 +43,7 @@ export default function Dashboard({ alCambiarVista }) {
         supabase.from('risk_matrix').select('score_initial, score_residual, status, control_measure').eq('org_id', orgId),
         supabase.from('non_conformities').select('id, status, type, severity, due_date, effectiveness_result, closure_date, is_recurrent, created_at, root_cause, five_whys').eq('org_id', orgId).limit(500),
         supabase.from('suppliers').select('evaluation_score, status').eq('org_id', orgId),
-        supabase.from('quality_objectives').select('id, target, current, status, baseline_value').eq('org_id', orgId),
+        supabase.from('quality_objectives').select('id, name, objective, indicator, unit, target, current, status, baseline_value').eq('org_id', orgId),
         supabase.from('objective_measurements').select('objective_id, value, measured_at').eq('org_id', orgId).order('measured_at', { ascending: false }).limit(200),
         supabase.from('personnel').select('id, status, next_evaluation_date, job_id, competency_gap').eq('org_id', orgId),
         supabase.from('scope_declaration').select('next_review_date, status, scope_statement, processes_covered, last_reviewed').eq('org_id', orgId).maybeSingle(),
@@ -284,11 +286,13 @@ function computeOperationalMetrics(r) {
   }
 
   // ─── Riesgos ───
-  const riesgosAltos = r.risks.filter(x => (x.score_initial || 0) >= 15).length
+  // Escala 1-10 × 1-10: umbrales centralizados en lib/riskLevel.js
+  const riesgosAltos = r.risks.filter(x => isHighRisk(x.score_initial)).length
+  const countLevel = (field, keys) => r.risks.filter(x => keys.includes(riskLevel(x[field]).key)).length
   const riskLevels = [
-    { label: 'Alto', initial: r.risks.filter(x => (x.score_initial || 0) >= 15).length, residual: r.risks.filter(x => (x.score_residual || 0) >= 15).length, color: '#dc2626' },
-    { label: 'Medio', initial: r.risks.filter(x => (x.score_initial || 0) >= 8 && (x.score_initial || 0) < 15).length, residual: r.risks.filter(x => (x.score_residual || 0) >= 8 && (x.score_residual || 0) < 15).length, color: '#f59e0b' },
-    { label: 'Bajo', initial: r.risks.filter(x => (x.score_initial || 0) > 0 && (x.score_initial || 0) < 8).length, residual: r.risks.filter(x => (x.score_residual || 0) > 0 && (x.score_residual || 0) < 8).length, color: '#10b981' },
+    { label: 'Alto', initial: countLevel('score_initial', ['high', 'critical']), residual: countLevel('score_residual', ['high', 'critical']), color: '#dc2626' },
+    { label: 'Medio', initial: countLevel('score_initial', ['medium']), residual: countLevel('score_residual', ['medium']), color: '#f59e0b' },
+    { label: 'Bajo', initial: countLevel('score_initial', ['low']), residual: countLevel('score_residual', ['low']), color: '#10b981' },
   ]
 
   // ─── Objetivos ───
@@ -298,11 +302,9 @@ function computeOperationalMetrics(r) {
   }
   let sumaAvance = 0, conMedicion = 0
   for (const obj of r.objectives) {
-    const cur = lastByObj[obj.id] ?? obj.current
-    if (obj.target && obj.target > 0) {
-      sumaAvance += Math.min((Number(cur) || 0) / Number(obj.target) * 100, 100)
-      conMedicion++
-    }
+    // Misma lógica que el módulo 6.2 (objetivos de reducir incluidos)
+    const p = objectiveProgress(obj, lastByObj[obj.id] ?? obj.current)
+    if (p != null) { sumaAvance += p; conMedicion++ }
   }
   const objetivosAvance = conMedicion ? Math.round(sumaAvance / conMedicion) : 0
 

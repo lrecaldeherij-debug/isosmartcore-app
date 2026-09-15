@@ -26,6 +26,8 @@ import {
   Trash2, Pencil, TrendingUp, AlertTriangle, Archive, RefreshCw,
 } from 'lucide-react'
 import { supabase } from './supabaseClient'
+import { objectiveMet } from './lib/objectiveProgress'
+import { isHighRisk, needsControl } from './lib/riskLevel'
 import { useOrg } from './OrgContext'
 import { can } from './lib/roles'
 import { consultarIA } from './aiClient'
@@ -139,11 +141,11 @@ async function collectMetrics(orgId, from, to) {
     q('non_conformities', 'id, status', { dateField: 'created_at' }),
     q('internal_audits', 'id, status', { dateField: 'created_at' }),
     // quality_objectives usa target/current, NO target_value/current_value.
-    q('quality_objectives', 'id, objective, target, current, status', {}),
+    q('quality_objectives', 'id, name, objective, indicator, unit, baseline_value, target, current, status', {}),
     // suppliers usa supplier_name, NO name.
     q('suppliers', 'id, supplier_name, status, criticality', {}),
-    // risk_matrix no tiene risk_level: el nivel se deriva de score_initial,
-    // con 15 como umbral de "alto" (mismo criterio que RisksOpportunities).
+    // risk_matrix no tiene risk_level: el nivel se deriva de score_initial
+    // con el criterio único de lib/riskLevel.js (escala 1-10 × 1-10).
     q('risk_matrix', 'id, status, type, score_initial, score_residual, control_measure', {}),
     // qc_inspections usa decision, NO result.
     q('qc_inspections', 'id, decision', { dateField: 'inspection_date' }),
@@ -185,14 +187,15 @@ async function collectMetrics(orgId, from, to) {
   // Objetivos: cumplido si el valor actual alcanzó la meta.
   const objRows = objectives.data || []
   const objMeasurable = objRows.filter(o => o.target != null && o.current != null)
-  const objMet = objMeasurable.filter(o => Number(o.current) >= Number(o.target)).length
+  // Cumplido según dirección: "reducir reclamos a 5" se cumple con current <= target
+  const objMet = objMeasurable.filter(o => objectiveMet(o)).length
 
   // Riesgos vs oportunidades: risk_matrix guarda ambos y los distingue por `type`.
   const riskRows = risks.data || []
   const onlyRisks = riskRows.filter(r => r.type !== 'Oportunidad')
-  const riskHigh = onlyRisks.filter(r => Number(r.score_initial || 0) >= 15)
+  const riskHigh = onlyRisks.filter(r => isHighRisk(r.score_initial))
   const riskUntreated = onlyRisks.filter(r =>
-    !r.control_measure && Number(r.score_initial || 0) >= 8)
+    !r.control_measure && needsControl(r.score_initial))
 
   // Liberaciones de QC en el período.
   const qcRows = qc.data || []

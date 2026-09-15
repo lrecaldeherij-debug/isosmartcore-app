@@ -1,22 +1,36 @@
 // Export PDF: Matriz de Riesgos y Oportunidades (ISO 9001 — 6.1)
 // Tabla con criticidad inicial vs. residual y semáforo según prob × impacto.
+//
+// Columnas reales de risk_matrix: process_area, probability_initial,
+// probability_residual. Antes pedía process_name / prob_initial: la consulta
+// fallaba (orden por columna inexistente) y el PDF salía sin filas.
 
 import { supabase } from '../supabaseClient'
 import { newDoc, drawHeader, drawFooter, sectionTitle, table, COLORS } from './pdfHelpers'
+import { riskLevel } from '../lib/riskLevel'
+
+const LEVEL_COLORS = {
+  critical: COLORS.danger,
+  high: COLORS.danger,
+  medium: [217, 119, 6],
+  low: COLORS.success,
+  none: COLORS.muted,
+}
 
 const sev = (p, i) => {
-  const v = (Number(p) || 0) * (Number(i) || 0)
-  if (v >= 56) return { label: 'Alto', color: COLORS.danger }
-  if (v >= 21) return { label: 'Medio', color: [217, 119, 6] }
-  if (v > 0)   return { label: 'Bajo', color: COLORS.success }
-  return { label: '—', color: COLORS.muted }
+  const level = riskLevel((Number(p) || 0) * (Number(i) || 0))
+  return { label: level.label, color: LEVEL_COLORS[level.key] }
 }
 
 export async function exportRisksMatrix(org) {
-  const { data: risks } = await supabase
+  let query = supabase
     .from('risk_matrix')
     .select('*')
-    .order('process_name', { ascending: true })
+    .order('process_area', { ascending: true })
+    .order('score_initial', { ascending: false })
+  if (org?.id) query = query.eq('org_id', org.id)
+  const { data: risks, error } = await query
+  if (error) throw new Error('No se pudo leer la matriz de riesgos: ' + error.message)
 
   const doc = newDoc({ orientation: 'landscape' })
   drawHeader(doc, {
@@ -25,47 +39,49 @@ export async function exportRisksMatrix(org) {
     subtitle: 'ISO 9001:2015 — Cláusula 6.1',
   })
 
-  let y = sectionTitle(doc, 'Riesgos identificados', 30)
+  let y = sectionTitle(doc, 'Riesgos y oportunidades identificados', 30)
 
   table(doc, {
     startY: y,
     head: [[
-      'Proceso', 'Riesgo / Oportunidad', 'P', 'I', 'Inicial',
-      'Control', 'Responsable', 'P res.', 'I res.', 'Residual', 'Estado'
+      'Proceso', 'Tipo', 'Riesgo / Oportunidad', 'P', 'I', 'Inicial',
+      'Control / Tratamiento', 'Responsable', 'P res.', 'I res.', 'Residual', 'Estado'
     ]],
     body: (risks || []).map(r => {
-      const ini = sev(r.prob_initial, r.impact_initial)
-      const res = sev(r.prob_residual, r.impact_residual)
+      const ini = sev(r.probability_initial, r.impact_initial)
+      const res = sev(r.probability_residual, r.impact_residual)
       return [
-        r.process_name || '',
+        r.process_area || '',
+        r.type || 'Riesgo',
         r.risk_description || '',
-        r.prob_initial ?? '',
+        r.probability_initial ?? '',
         r.impact_initial ?? '',
         ini.label,
-        r.control_measure || '',
-        r.responsible || '',
-        r.prob_residual ?? '',
-        r.impact_residual ?? '',
-        res.label,
+        [r.treatment_strategy, r.control_measure].filter(Boolean).join(': '),
+        r.responsible || r.owner || '',
+        r.probability_residual || '',
+        r.impact_residual || '',
+        r.probability_residual && r.impact_residual ? res.label : '—',
         r.status || '',
       ]
     }),
     columnStyles: {
-      0: { cellWidth: 28 },
-      1: { cellWidth: 50 },
-      2: { cellWidth: 8, halign: 'center' },
+      0: { cellWidth: 26 },
+      1: { cellWidth: 16 },
+      2: { cellWidth: 48 },
       3: { cellWidth: 8, halign: 'center' },
-      4: { cellWidth: 15, halign: 'center' },
-      5: { cellWidth: 50 },
-      6: { cellWidth: 25 },
-      7: { cellWidth: 12, halign: 'center' },
-      8: { cellWidth: 12, halign: 'center' },
-      9: { cellWidth: 15, halign: 'center' },
-      10: { cellWidth: 18 },
+      4: { cellWidth: 8, halign: 'center' },
+      5: { cellWidth: 14, halign: 'center' },
+      6: { cellWidth: 48 },
+      7: { cellWidth: 24 },
+      8: { cellWidth: 11, halign: 'center' },
+      9: { cellWidth: 11, halign: 'center' },
+      10: { cellWidth: 14, halign: 'center' },
+      11: { cellWidth: 18 },
     },
   })
 
-  drawFooter(doc, { context: `Matriz de Riesgos — ${org?.name || ''}` })
+  drawFooter(doc, { context: `Matriz de Riesgos — ${org?.name || ''} · Escala P e I 1-10 · Bajo <16 · Medio 16-35 · Alto 36-63 · Crítico ≥64` })
   doc.save(`matriz-riesgos-${slug(org?.name)}-${stamp()}.pdf`)
 }
 

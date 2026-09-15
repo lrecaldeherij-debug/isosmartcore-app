@@ -22,8 +22,8 @@ export async function exportQualityManual(org) {
     { data: manualDoc },
     { data: members },
   ] = await Promise.all([
-    supabase.from('quality_policy').select('*').limit(1).maybeSingle(),
-    supabase.from('scope_declaration').select('*').limit(1).maybeSingle(),
+    supabase.from('quality_policy').select('*').order('created_at', { ascending: false }).limit(1).maybeSingle(),
+    supabase.from('scope_declaration').select('*').order('created_at', { ascending: false }).limit(1).maybeSingle(),
     supabase.from('processes').select('*').order('name'),
     supabase.from('quality_objectives').select('*').order('created_at'),
     supabase.from('context_analysis').select('*').order('category'),
@@ -91,7 +91,11 @@ export async function exportQualityManual(org) {
     y = paragraph(doc, scope.geographic_location || '—', y)
     y += 3
     y = sectionTitle(doc, 'Exclusiones justificadas', y)
-    y = paragraph(doc, scope.exclusions_83_etc || '—', y)
+    // Las exclusiones estructuradas (cláusula + justificación) tienen prioridad
+    const excl = Array.isArray(scope.iso_exclusions) && scope.iso_exclusions.length
+      ? scope.iso_exclusions.map(e => `${e.clause}: ${e.justification}`).join('\n')
+      : scope.exclusions_83_etc
+    y = paragraph(doc, excl || 'Sin exclusiones: se aplican todos los requisitos de la norma.', y)
   } else {
     y = paragraph(doc, 'No se ha registrado la declaración de alcance.', y, { color: COLORS.danger })
   }
@@ -102,7 +106,8 @@ export async function exportQualityManual(org) {
   y = sectionTitle(doc, '5.2 Política de Calidad', 30)
 
   if (policy) {
-    y = paragraph(doc, policy.final_policy_statement || '—', y, { fontSize: 11 })
+    // La política del onboarding puede estar solo en policy_text
+    y = paragraph(doc, policy.final_policy_statement || policy.policy_text || '—', y, { fontSize: 11 })
   } else {
     y = paragraph(doc, 'No se ha registrado la política de calidad.', y, { color: COLORS.danger })
   }
