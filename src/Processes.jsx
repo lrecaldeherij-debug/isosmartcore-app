@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { supabase } from './supabaseClient'
-import { consultarIA } from './aiClient'
+import { consultarIA, parseAiJson } from './aiClient'
+import { companyContextLine } from './lib/companyContext'
+import { normalizeProcessType } from './lib/processType'
 import { indexRow, deindexRow } from './lib/ragIndex'
 import {
   Sparkles, Loader2, Map as MapIcon, Trash2, X, ExternalLink, FileText, Pencil,
@@ -51,23 +53,15 @@ const EMPTY_FORM = {
 }
 
 // ──────────────── Helpers IA ────────────────
-function extractFirstJson(text) {
-  if (!text) return null
-  const i0 = text.indexOf('{'), i1 = text.indexOf('[')
-  const start = i0 === -1 ? i1 : (i1 === -1 ? i0 : Math.min(i0, i1))
-  if (start === -1) return null
-  let depth = 0, inStr = false, esc = false
-  const open = text[start], close = open === '[' ? ']' : '}'
-  for (let i = start; i < text.length; i++) {
-    const c = text[i]
-    if (esc) { esc = false; continue }
-    if (c === '\\') { esc = true; continue }
-    if (c === '"') { inStr = !inStr; continue }
-    if (inStr) continue
-    if (c === open) depth++
-    else if (c === close) { depth--; if (depth === 0) { try { return JSON.parse(text.slice(start, i + 1)) } catch { return null } } }
-  }
-  return null
+// parseAiJson lanza si consultarIA devolvió un error (cuota, red, Gemini caído)
+const extractFirstJson = parseAiJson
+
+// Une interacciones sin duplicar por proceso destino
+function mergeInteractions(existing, incoming) {
+  const out = Array.isArray(existing) ? [...existing] : []
+  const seen = new Set(out.map(i => i?.process_id))
+  ;(incoming || []).forEach(i => { if (!seen.has(i.process_id)) { out.push(i); seen.add(i.process_id) } })
+  return out
 }
 
 function parseAiArray(raw) {
@@ -132,6 +126,7 @@ function FormSection({ title, children }) {
 export default function Processes() {
   const [items, setItems] = useState([])
   const [audits, setAudits] = useState([])
+  const [companyProfile, setCompanyProfile] = useState(null)
   const [loading, setLoading] = useState(true)
   const [tableError, setTableError] = useState(null)
 
@@ -157,7 +152,11 @@ export default function Processes() {
     setLoading(true); setTableError(null)
     const { data, error } = await supabase.from('processes').select('*').order('process_type').order('name')
     if (error) { setTableError(error.message); setItems([]) }
-    else setItems(data || [])
+    // Tipos escritos distinto ("Apoyo", "Estrategico") se muestran en su grupo
+    else setItems((data || []).map(p => ({ ...p, process_type: normalizeProcessType(p.process_type, p.process_type) })))
+
+    const { data: prof } = await supabase.from('company_profile').select('*').limit(1).maybeSingle()
+    setCompanyProfile(prof || null)
 
     const { data: aud } = await supabase.from('internal_audits').select('id, audit_process, process_id, planned_date, status, findings_count')
     setAudits(aud || [])
@@ -205,8 +204,10 @@ export default function Processes() {
     setLoadingIA(true)
     try {
       const prompt = `
+${companyContextLine(companyProfile)}
 Proceso: "${form.name}"
 Tipo: "${form.process_type}"
+Adapta entradas, actividades, riesgos e indicadores a ESTA empresa y su sector, no genéricos.
 
 Tarea: Sugerir la caracterización técnica según ISO 9001.
 1. Objetivo y Alcance.
@@ -305,13 +306,18 @@ FORMATO EXACTO (ejemplo):
       if (!downstreamMap[i.from_id]) downstreamMap[i.from_id] = []
       downstreamMap[i.from_id].push({ process_id: i.to_id, label: i.label || '' })
     })
+    // Suma a las interacciones existentes (antes las reemplazaba y se perdían
+    // las cargadas a mano)
     const updates = items.filter(p => upstreamMap[p.id] || downstreamMap[p.id]).map(p =>
       supabase.from('processes').update({
-        interactions_upstream: upstreamMap[p.id] || p.interactions_upstream || [],
-        interactions_downstream: downstreamMap[p.id] || p.interactions_downstream || []
+        interactions_upstream: mergeInteractions(p.interactions_upstream, upstreamMap[p.id]),
+        interactions_downstream: mergeInteractions(p.interactions_downstream, downstreamMap[p.id])
       }).eq('id', p.id)
     )
-    await Promise.all(updates)
+    const results = await Promise.all(updates)
+    const failed = results.filter(r => r.error)
+    if (failed.length) toast.error(`No se pudieron guardar ${failed.length} de ${results.length} procesos: ${failed[0].error.message}`)
+    else toast.success(`Interacciones agregadas a ${results.length} procesos`)
     setIaInteractions(null); fetchAll()
   }
 

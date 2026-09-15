@@ -6,6 +6,7 @@
 // Si la IA falla, el caller puede caer al seed estático (seed_organization).
 
 import { consultarIA } from './aiClient'
+import { normalizeSwotCategory, SWOT_TYPE } from './lib/swot'
 
 // Profile mínimo viable para activar IA. Si no se cumple, mejor no llamar a la IA.
 export function hasUsefulProfile(profile) {
@@ -125,6 +126,17 @@ export async function personalizeFromProfile(profile) {
 
   if (!isValidCustomData(parsed)) {
     return { ok: false, error: 'La IA devolvió data incompleta' }
+  }
+
+  // Categoría/tipo coherentes antes de sembrar: "Oportunidades" u "opportunity"
+  // → Oportunidad/Externo. Los que no se reconocen se descartan.
+  if (Array.isArray(parsed.context)) {
+    parsed.context = parsed.context
+      .map(c => {
+        const category = normalizeSwotCategory(c?.category)
+        return category ? { ...c, category, type: SWOT_TYPE[category] } : null
+      })
+      .filter(Boolean)
   }
 
   return { ok: true, data: parsed }

@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { supabase } from './supabaseClient'
-import { consultarIA } from './aiClient'
+import { consultarIA, parseAiJson } from './aiClient'
+import { companyContextLine } from './lib/companyContext'
 import {
   FileText, Pencil, X, Save, Sparkles, Loader2, History, ShieldCheck, Send,
   AlertTriangle, CheckCircle2, Award, Calendar, ExternalLink, Plus, Trash2,
@@ -51,23 +52,16 @@ const EMPTY_FORM = {
 }
 
 // ─────── Helpers IA ───────
-function extractFirstJson(text) {
-  if (!text) return null
-  const start = text.indexOf('{') !== -1 ? text.indexOf('{') : text.indexOf('[')
-  if (start === -1) return null
-  let depth = 0, inStr = false, esc = false
-  const open = text[start], close = open === '{' ? '}' : ']'
-  for (let i = start; i < text.length; i++) {
-    const c = text[i]
-    if (esc) { esc = false; continue }
-    if (c === '\\') { esc = true; continue }
-    if (c === '"') { inStr = !inStr; continue }
-    if (inStr) continue
-    if (c === open) depth++
-    else if (c === close) { depth--; if (depth === 0) { try { return JSON.parse(text.slice(start, i + 1)) } catch { return null } } }
-  }
-  return null
-}
+// parseAiJson lanza si consultarIA devolvió un error (cuota, red, Gemini caído)
+const extractFirstJson = parseAiJson
+
+// Campos cuyo cambio invalida la aprobación del alcance (4.3 documentado)
+const CONTENT_FIELDS = [
+  'considerations_41_42', 'processes_covered', 'products_services', 'geographic_location',
+  'exclusions_83_etc', 'scope_statement', 'linked_processes_ids', 'iso_exclusions',
+]
+// Columnas que se envían al guardar (evita mandar id/org_id/created_at de la fila leída)
+const SAVE_FIELDS = Object.keys(EMPTY_FORM)
 
 // ─────── Componente ───────
 export default function ScopeDeclaration() {
@@ -135,9 +129,7 @@ export default function ScopeDeclaration() {
   const redactarConIA = async () => {
     setLoadingIA(true)
     try {
-      const ctx = companyProfile
-        ? `Empresa: ${companyProfile.company_name || ''} | Sector: ${companyProfile.industry || ''} | Productos: ${companyProfile.main_products || ''}`
-        : ''
+      const ctx = companyContextLine(companyProfile)
       const procNames = (form.linked_processes_ids || [])
         .map(id => processes.find(p => p.id === id)?.name).filter(Boolean).join(', ')
       const exclusionesText = (form.iso_exclusions || [])
@@ -179,7 +171,7 @@ Devuelve SOLO JSON, sin markdown:
     setLoadingValidate(true); setShowValidation(true); setValidationResult(null)
     try {
       const exclusionesText = form.iso_exclusions.map((e, i) => `${i + 1}. Cláusula: ${e.clause}\n   Justificación: ${e.justification}`).join('\n')
-      const ctx = companyProfile ? `Empresa: ${companyProfile.industry || 'N/D'} | Productos: ${companyProfile.main_products || 'N/D'}` : ''
+      const ctx = companyContextLine(companyProfile)
 
       const prompt = `Eres auditor ISO 9001. Evalúa si estas EXCLUSIONES son defendibles ante un auditor de certificación.
 
@@ -214,9 +206,27 @@ Devuelve SOLO JSON, sin markdown:
 
   // ─────── Guardar / Aprobar / Comunicar ───────
   const handleSave = async () => {
-    const payload = { ...form }
+    const payload = Object.fromEntries(SAVE_FIELDS.map(k => [k, form[k]]))
     ;['next_review_date', 'approved_at'].forEach(k => { if (!payload[k]) payload[k] = null })
     payload.last_reviewed = new Date().toISOString().slice(0, 10)
+
+    // Un alcance aprobado cuyo contenido cambia vuelve a Borrador: la versión
+    // nueva necesita su propia aprobación (4.3 / 7.5.2).
+    const contentChanged = scope && CONTENT_FIELDS.some(k =>
+      JSON.stringify(scope[k] ?? '') !== JSON.stringify(payload[k] ?? ''))
+    if (contentChanged && ['Aprobada', 'Comunicada'].includes(scope.status)) {
+      const ok = await confirm(
+        `El alcance está ${scope.status.toLowerCase()}. Al guardar cambios de contenido vuelve a Borrador y hay que aprobarlo otra vez.`,
+        { title: 'Nueva versión del alcance', confirmText: 'Guardar como borrador' }
+      )
+      if (!ok) return
+      payload.status = 'Borrador'
+      payload.approved_by = null
+      payload.approved_role = null
+      payload.approved_at = null
+      const m = String(scope.revision || 'v1.0').match(/^v?(\d+)(?:\.(\d+))?/i)
+      payload.revision = m ? `v${m[1]}.${Number(m[2] || 0) + 1}` : scope.revision
+    }
 
     const changes = []
     if (scope) {
@@ -234,6 +244,7 @@ Devuelve SOLO JSON, sin markdown:
       ? await supabase.from('scope_declaration').update(payload).eq('id', scope.id)
       : await supabase.from('scope_declaration').insert([payload])
     if (error) return toast.error(error.message)
+    toast.success(payload.status === 'Borrador' && contentChanged ? `Alcance guardado como ${payload.revision} (borrador)` : 'Alcance guardado')
     setEditing(false); fetchAll()
   }
 

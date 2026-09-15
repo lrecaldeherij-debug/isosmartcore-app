@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { supabase } from './supabaseClient'
-import { consultarIA } from './aiClient'
+import { consultarIA, parseAiJson } from './aiClient'
+import { companyContextLine } from './lib/companyContext'
 import { indexRow } from './lib/ragIndex'
 import {
   Sparkles, Loader2, Save, FileText, X, Pencil, ShieldCheck, Send,
@@ -43,23 +44,11 @@ const EMPTY_COMM = {
 }
 
 // ─────── Helpers IA ───────
-function extractFirstJson(text) {
-  if (!text) return null
-  const start = text.indexOf('{') !== -1 ? text.indexOf('{') : text.indexOf('[')
-  if (start === -1) return null
-  let depth = 0, inStr = false, esc = false
-  const open = text[start], close = open === '{' ? '}' : ']'
-  for (let i = start; i < text.length; i++) {
-    const c = text[i]
-    if (esc) { esc = false; continue }
-    if (c === '\\') { esc = true; continue }
-    if (c === '"') { inStr = !inStr; continue }
-    if (inStr) continue
-    if (c === open) depth++
-    else if (c === close) { depth--; if (depth === 0) { try { return JSON.parse(text.slice(start, i + 1)) } catch { return null } } }
-  }
-  return null
-}
+// parseAiJson lanza si consultarIA devolvió un error (cuota, red, Gemini caído)
+const extractFirstJson = parseAiJson
+
+// Campos cuyo cambio invalida la aprobación (la nueva versión se re-aprueba)
+const CONTENT_FIELDS = ['what_we_do', 'who_is_customer', 'value_proposition', 'commitments', 'final_policy_statement']
 
 // ─────── Componente ───────
 export default function QualityPolicy() {
@@ -83,7 +72,14 @@ export default function QualityPolicy() {
 
   const fetchAll = async () => {
     setLoading(true)
-    const { data } = await supabase.from('quality_policy').select('*').limit(1).maybeSingle()
+    const { data: rawPolicy, error: polErr } = await supabase
+      .from('quality_policy').select('*')
+      .order('created_at', { ascending: false }).limit(1).maybeSingle()
+    if (polErr) toast.error('No se pudo cargar la política: ' + polErr.message)
+    // La política redactada en el onboarding vive en policy_text: mostrarla acá
+    const data = rawPolicy && !rawPolicy.final_policy_statement && rawPolicy.policy_text
+      ? { ...rawPolicy, final_policy_statement: rawPolicy.policy_text }
+      : rawPolicy
     if (data) {
       setPolicy(data)
       setForm({ ...EMPTY_FORM, ...Object.fromEntries(Object.keys(EMPTY_FORM).map(k => [k, data[k] ?? EMPTY_FORM[k]])) })
@@ -91,7 +87,9 @@ export default function QualityPolicy() {
       setPolicy(null); setForm(EMPTY_FORM)
     }
 
-    const { data: objs } = await supabase.from('quality_objectives').select('id, objective, target_value, current_value').limit(50)
+    // Columnas reales: target / current / unit (target_value/current_value no
+    // existen y hacían fallar la consulta: la verificación decía "sin objetivos")
+    const { data: objs } = await supabase.from('quality_objectives').select('id, objective, target, current, unit').limit(50)
     setObjectives(objs || [])
 
     const { data: profile } = await supabase.from('company_profile').select('*').limit(1).maybeSingle()
@@ -107,9 +105,7 @@ export default function QualityPolicy() {
     }
     setLoadingIA(true)
     try {
-      const ctx = companyProfile
-        ? `Sector: ${companyProfile.industry || 'N/D'} | Tamaño: ${companyProfile.size || 'N/D'} | Productos: ${companyProfile.main_products || 'N/D'} | Propósito: ${companyProfile.purpose || 'N/D'}`
-        : 'Sin perfil de empresa cargado.'
+      const ctx = companyContextLine(companyProfile)
 
       const prompt = `Eres consultor ISO 9001 experto en políticas de calidad. Redacta la Política de Calidad formal.
 
@@ -151,7 +147,7 @@ POLÍTICA:
 "${form.final_policy_statement}"
 
 OBJETIVOS DE CALIDAD:
-${objectives.map((o, i) => `${i + 1}. ${o.objective} (meta: ${o.target_value || 'N/D'})`).join('\n')}
+${objectives.map((o, i) => `${i + 1}. ${o.objective} (meta: ${o.target ?? 'N/D'}${o.unit ? ' ' + o.unit : ''})`).join('\n')}
 
 Devuelve SOLO JSON, sin markdown:
 {
@@ -177,6 +173,25 @@ Devuelve SOLO JSON, sin markdown:
     const payload = { ...form }
     ;['next_review_date', 'approved_at'].forEach(k => { if (!payload[k]) payload[k] = null })
     payload.last_reviewed = new Date().toISOString().slice(0, 10)
+    // Objetivos, Tablero y el onboarding leen policy_text: mantenerlo igual
+    payload.policy_text = payload.final_policy_statement || null
+
+    // Una política aprobada cuyo contenido cambia vuelve a Borrador (5.2 / 7.5.2)
+    const contentChanged = policy && CONTENT_FIELDS.some(k =>
+      JSON.stringify(policy[k] ?? '') !== JSON.stringify(payload[k] ?? ''))
+    if (contentChanged && ['Aprobada', 'Comunicada'].includes(policy.status)) {
+      const ok = await confirm(
+        `La política está ${policy.status.toLowerCase()}. Al guardar cambios de contenido vuelve a Borrador y la Alta Dirección debe aprobarla y comunicarla otra vez.`,
+        { title: 'Nueva versión de la política', confirmText: 'Guardar como borrador' }
+      )
+      if (!ok) return
+      payload.status = 'Borrador'
+      payload.approved_by = null
+      payload.approved_role = null
+      payload.approved_at = null
+      const m = String(policy.revision || 'v1.0').match(/^v?(\d+)(?:\.(\d+))?/i)
+      payload.revision = m ? `v${m[1]}.${Number(m[2] || 0) + 1}` : policy.revision
+    }
 
     // change_log
     const changes = []
@@ -201,6 +216,8 @@ Devuelve SOLO JSON, sin markdown:
       savedId = inserted?.id
     }
     if (savedId) indexRow('quality_policy', savedId)
+    toast.success(contentChanged && payload.status === 'Borrador' && policy?.status !== 'Borrador'
+      ? `Política guardada como ${payload.revision} (borrador)` : 'Política guardada')
     setEditing(false); fetchAll()
   }
 
@@ -291,7 +308,8 @@ Devuelve SOLO JSON, sin markdown:
                 const payload = {
                   what_we_do: data.what_we_do || '', who_is_customer: data.who_is_customer || '',
                   value_proposition: data.value_proposition || '', commitments: data.commitments || '',
-                  final_policy_statement: data.final_policy_statement || '', status: 'Borrador'
+                  final_policy_statement: data.final_policy_statement || '', status: 'Borrador',
+                  policy_text: data.final_policy_statement || null,
                 }
                 const { error } = await supabase.from('quality_policy').insert([payload])
                 if (error) throw new Error(error.message)

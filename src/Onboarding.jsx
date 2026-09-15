@@ -1,7 +1,9 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from './supabaseClient'
 import { useOrg } from './OrgContext'
-import { consultarIA } from './aiClient'
+import { consultarIA, parseAiJson } from './aiClient'
+import { normalizeSwotCategory, normalizeLevel, SWOT_TYPE } from './lib/swot'
+import { normalizeProcessType } from './lib/processType'
 import {
   Building2, Compass, Award, Workflow, Target, Sparkles, Loader2,
   ChevronRight, ChevronLeft, Check, X, ArrowRight, Trash2, Plus,
@@ -36,25 +38,13 @@ const INDUSTRIES = [
 ]
 const SIZES = ['1-10', '11-50', '51-200', '201-500', '500+']
 
-// Helpers IA
-function extractFirstJson(text) {
-  if (!text) return null
-  const i0 = text.indexOf('{'), i1 = text.indexOf('[')
-  const start = i0 === -1 ? i1 : (i1 === -1 ? i0 : Math.min(i0, i1))
-  if (start === -1) return null
-  let depth = 0, inStr = false, esc = false
-  const open = text[start], close = open === '[' ? ']' : '}'
-  for (let i = start; i < text.length; i++) {
-    const c = text[i]
-    if (esc) { esc = false; continue }
-    if (c === '\\') { esc = true; continue }
-    if (c === '"') { inStr = !inStr; continue }
-    if (inStr) continue
-    if (c === open) depth++
-    else if (c === close) { depth--; if (depth === 0) { try { return JSON.parse(text.slice(start, i + 1)) } catch { return null } } }
-  }
-  return null
-}
+// Helpers IA — parseAiJson lanza si consultarIA devolvió un error
+const extractFirstJson = parseAiJson
+
+const COMPANY_PROFILE_FIELDS = [
+  'name', 'industry', 'description', 'employees_count', 'strategic_direction',
+  'main_products', 'founded_year', 'logo_url', 'website_url',
+]
 
 // ═══════════════════════════════════════════════════════════
 // COMPONENTE PRINCIPAL
@@ -84,6 +74,9 @@ export default function Onboarding({ onComplete }) {
     employees_count: '11-50', location: '', strategic_direction: '',
   })
   const [fodaFactors, setFodaFactors] = useState([])
+  // true solo si el FODA existente se leyó bien. Sin esto, una falla de red en
+  // la precarga dejaba la lista vacía y el guardado borraba todo el FODA.
+  const [fodaLoaded, setFodaLoaded] = useState(false)
   const [policyText, setPolicyText] = useState('')
   const [processList, setProcessList] = useState([])
   const [objective, setObjective] = useState({
@@ -103,9 +96,15 @@ export default function Onboarding({ onComplete }) {
           supabase.from('quality_objectives').select('*').order('created_at', { ascending: false }).limit(1).maybeSingle(),
         ])
         if (cp.data) setCompany(prev => ({ ...prev, ...cp.data }))
-        if (ctx.data?.length) setFodaFactors(ctx.data.map(f => ({
-          id: f.id, category: f.category, type: f.type, factor: f.factor, impact_level: f.impact_level || 'Medio'
-        })))
+        if (!ctx.error) {
+          if (ctx.data?.length) setFodaFactors(ctx.data.map(f => {
+            const category = normalizeSwotCategory(f.category) || f.category
+            return { id: f.id, category, type: SWOT_TYPE[category] || f.type, factor: f.factor, impact_level: f.impact_level || 'Medio' }
+          }))
+          setFodaLoaded(true)
+        } else {
+          console.error('Onboarding prefill FODA:', ctx.error)
+        }
         if (pol.data?.policy_text) setPolicyText(pol.data.policy_text)
         if (pr.data?.length) setProcessList(pr.data.map(p => ({
           id: p.id, name: p.name, process_type: p.process_type, objective: p.objective || ''
@@ -338,7 +337,7 @@ export default function Onboarding({ onComplete }) {
                 if (savingStep) return
                 setSavingStep(true)
                 try {
-                  const ok = await saveCurrentStep(currentStep, org, company, fodaFactors, policyText, processList, objective)
+                  const ok = await saveCurrentStep(currentStep, org, company, fodaFactors, policyText, processList, objective, fodaLoaded)
                   if (ok) await goNext()
                 } catch (err) {
                   console.error('saveCurrentStep error:', err)
@@ -360,7 +359,7 @@ export default function Onboarding({ onComplete }) {
                 if (savingStep || completing) return
                 setSavingStep(true)
                 try {
-                  const ok = await saveCurrentStep(currentStep, org, company, fodaFactors, policyText, processList, objective)
+                  const ok = await saveCurrentStep(currentStep, org, company, fodaFactors, policyText, processList, objective, fodaLoaded)
                   if (ok) await finishOnboarding(false)
                 } catch (err) {
                   console.error('saveCurrentStep (final) error:', err)
@@ -563,7 +562,7 @@ function StatBubble({ icon: Icon, label, sub, first }) {
 // Regla: si CUALQUIER escritura falla, toast humanizado + return false.
 // El wizard NO avanza hasta que el paso persiste realmente.
 // ═══════════════════════════════════════════════════════════
-async function saveCurrentStep(currentStep, org, company, fodaFactors, policyText, processList, objective) {
+async function saveCurrentStep(currentStep, org, company, fodaFactors, policyText, processList, objective, fodaLoaded = false) {
   const fail = (label, err) => {
     console.error(`[Onboarding] Paso ${currentStep} — ${label}:`, err)
     toast.error(`No se pudo guardar (${label}): ${humanizeDbError(err)}`)
@@ -580,18 +579,24 @@ async function saveCurrentStep(currentStep, org, company, fodaFactors, policyTex
         .eq('org_id', org.id).maybeSingle()
       if (selErr) return fail('leer perfil', selErr)
 
-      const payload = { ...company, org_id: org.id }
-      delete payload.id
+      // Solo columnas reales de company_profile. Antes se mandaba el estado
+      // completo, que incluía `location` (no existe) → PostgREST rechazaba el
+      // guardado y ninguna empresa nueva podía pasar este paso.
+      const payload = { org_id: org.id }
+      COMPANY_PROFILE_FIELDS.forEach(k => { if (company[k] !== undefined) payload[k] = company[k] })
+      if (company.location?.trim()) payload.location = company.location.trim()
 
-      if (existing) {
-        const { error } = await supabase
-          .from('company_profile').update(payload).eq('id', existing.id)
-        if (error) return fail('actualizar perfil de empresa', error)
-      } else {
-        const { error } = await supabase
-          .from('company_profile').insert([payload]).select().single()
-        if (error) return fail('crear perfil de empresa', error)
+      const write = (body) => existing
+        ? supabase.from('company_profile').update(body).eq('id', existing.id)
+        : supabase.from('company_profile').insert([body]).select().single()
+
+      let { error } = await write(payload)
+      // Si la columna location todavía no existe en la base, guardar sin ella
+      if (error && payload.location !== undefined && /location/i.test(error.message || '')) {
+        delete payload.location
+        ;({ error } = await write(payload))
       }
+      if (error) return fail(existing ? 'actualizar perfil de empresa' : 'crear perfil de empresa', error)
 
     } else if (currentStep === 1) {
       // ── Paso 1: FODA (sincronizar) ─────────────────────────────────────
@@ -601,7 +606,7 @@ async function saveCurrentStep(currentStep, org, company, fodaFactors, policyTex
 
       const existingIds = new Set((existingRows || []).map(e => e.id))
       const incomingIds = new Set(fodaFactors.filter(f => f.id).map(f => f.id))
-      const toDelete = [...existingIds].filter(id => !incomingIds.has(id))
+      const toDelete = fodaLoaded ? [...existingIds].filter(id => !incomingIds.has(id)) : []
 
       if (toDelete.length) {
         const { error } = await supabase
@@ -609,10 +614,10 @@ async function saveCurrentStep(currentStep, org, company, fodaFactors, policyTex
         if (error) return fail('eliminar factores FODA obsoletos', error)
       }
 
-      const toInsert = fodaFactors.filter(f => !f.id).map(f => ({
+      const toInsert = fodaFactors.filter(f => !f.id && f.factor?.trim() && normalizeSwotCategory(f.category)).map(f => ({
         org_id: org.id,
-        type: f.type || (['Fortaleza', 'Debilidad'].includes(f.category) ? 'Interno' : 'Externo'),
-        category: f.category,
+        type: SWOT_TYPE[normalizeSwotCategory(f.category)],
+        category: normalizeSwotCategory(f.category),
         factor: f.factor,
         impact_level: f.impact_level || 'Medio',
       }))
@@ -634,13 +639,25 @@ async function saveCurrentStep(currentStep, org, company, fodaFactors, policyTex
       if (existing) {
         const { error } = await supabase
           .from('quality_policy')
-          .update({ policy_text: policyText, status: 'Borrador' })
+          .update({ policy_text: policyText, final_policy_statement: policyText, status: 'Borrador' })
           .eq('id', existing.id)
         if (error) return fail('actualizar política', error)
       } else {
+        // quality_policy exige what_we_do, who_is_customer, value_proposition,
+        // commitments y final_policy_statement (NOT NULL): sin ellos el insert
+        // fallaba para toda empresa nueva. El módulo 5.2 muestra final_policy_statement.
         const { error } = await supabase
           .from('quality_policy')
-          .insert([{ org_id: org.id, policy_text: policyText, status: 'Borrador' }])
+          .insert([{
+            org_id: org.id,
+            policy_text: policyText,
+            final_policy_statement: policyText,
+            what_we_do: company.description || company.main_products || '',
+            who_is_customer: '',
+            value_proposition: '',
+            commitments: '',
+            status: 'Borrador',
+          }])
         if (error) return fail('crear política', error)
       }
 
@@ -670,15 +687,20 @@ async function saveCurrentStep(currentStep, org, company, fodaFactors, policyTex
     } else if (currentStep === 4) {
       // ── Paso 4: Objetivo de calidad ────────────────────────────────────
       if (!objective.name && !objective.objective) return true // skip silent si vacío
+      // target es NOT NULL en quality_objectives: sin meta el insert fallaba
+      if (objective.target === '' || objective.target == null || !Number.isFinite(Number(objective.target))) {
+        toast.warning('Pon una meta numérica para el objetivo (o dejá el objetivo vacío para cargarlo después)')
+        return false
+      }
 
       const payload = {
         org_id: org.id,
         name: objective.name || objective.objective?.slice(0, 80),
         objective: objective.objective || objective.name,
-        indicator: objective.indicator,
-        baseline_value: objective.baseline_value === '' ? null : Number(objective.baseline_value),
-        target: objective.target === '' ? null : Number(objective.target),
-        unit: objective.unit,
+        indicator: objective.indicator || '',
+        baseline_value: objective.baseline_value === '' || objective.baseline_value == null ? null : Number(objective.baseline_value),
+        target: Number(objective.target),
+        unit: objective.unit || '%',
         frequency: objective.frequency,
         year: new Date().getFullYear(),
         category: 'Calidad',
@@ -779,17 +801,21 @@ Devuelve SOLO un JSON array de 4-6 factores, sin markdown. Cada uno:
       const raw = await consultarIA(prompt, 'Devuelve ÚNICAMENTE JSON array válido.')
       const arr = extractFirstJson(raw)
       if (!Array.isArray(arr) || !arr.length) throw new Error('La IA no devolvió factores parseables')
-      const valid = arr.filter(f =>
-        ['Fortaleza', 'Debilidad', 'Oportunidad', 'Amenaza'].includes(f.category) && f.factor
-      ).map(f => ({
-        category: f.category,
-        type: ['Fortaleza', 'Debilidad'].includes(f.category) ? 'Interno' : 'Externo',
-        factor: f.factor,
-        impact_level: ['Alto', 'Medio', 'Bajo'].includes(f.impact_level) ? f.impact_level : 'Medio',
-      }))
+      // Normaliza "Oportunidades", "threat", etc. Antes el filtro exacto
+      // descartaba en silencio todo lo que no viniera escrito igual.
+      const valid = arr
+        .map(f => ({ ...f, category: normalizeSwotCategory(f.category) }))
+        .filter(f => f.category && f.factor)
+        .map(f => ({
+          category: f.category,
+          type: SWOT_TYPE[f.category],
+          factor: f.factor,
+          impact_level: normalizeLevel(f.impact_level),
+        }))
       // Agregar a los existentes (no reemplazar)
       setFactors(prev => [...prev, ...valid])
-      toast.success(`IA agregó ${valid.length} factores`)
+      const dropped = arr.length - valid.length
+      toast.success(`IA agregó ${valid.length} factores${dropped > 0 ? ` (${dropped} sin categoría válida)` : ''}`)
     } catch (err) {
       toast.error('Error IA: ' + err.message)
     }
@@ -976,7 +1002,7 @@ Devuelve SOLO un JSON array de 4-6 procesos, sin markdown. Cada uno:
       if (!Array.isArray(arr) || !arr.length) throw new Error('La IA no devolvió procesos parseables')
       const valid = arr.filter(p => p.name).map(p => ({
         name: p.name,
-        process_type: ['Estratégico', 'Operativo', 'Soporte'].includes(p.process_type) ? p.process_type : 'Operativo',
+        process_type: normalizeProcessType(p.process_type, 'Operativo'),
         objective: p.objective || '',
       }))
       // No duplicar por nombre

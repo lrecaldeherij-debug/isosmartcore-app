@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, Fragment } from 'react'
 import { createPortal } from 'react-dom'
 import { supabase } from './supabaseClient'
 import { useOrg } from './OrgContext'
-import { consultarIA } from './aiClient'
+import { consultarIA, parseAiJson } from './aiClient'
 import {
   Network, Plus, Pencil, Trash2, X, Save, Loader2, Sparkles,
   Download, GitBranch, LayoutGrid, List, User, Crown, Users,
@@ -29,24 +29,8 @@ const EMPTY_FORM = {
 }
 
 // ───────────────────── Helpers IA ──────────────────────
-function extractFirstJson(text) {
-  if (!text) return null
-  const i0 = text.indexOf('{'), i1 = text.indexOf('[')
-  const start = i0 === -1 ? i1 : (i1 === -1 ? i0 : Math.min(i0, i1))
-  if (start === -1) return null
-  let depth = 0, inStr = false, esc = false
-  const open = text[start], close = open === '[' ? ']' : '}'
-  for (let i = start; i < text.length; i++) {
-    const c = text[i]
-    if (esc) { esc = false; continue }
-    if (c === '\\') { esc = true; continue }
-    if (c === '"') { inStr = !inStr; continue }
-    if (inStr) continue
-    if (c === open) depth++
-    else if (c === close) { depth--; if (depth === 0) { try { return JSON.parse(text.slice(start, i + 1)) } catch { return null } } }
-  }
-  return null
-}
+// parseAiJson lanza si consultarIA devolvió un error (cuota, red, Gemini caído)
+const extractFirstJson = parseAiJson
 function parseAiArray(raw) {
   const p = extractFirstJson(raw)
   if (Array.isArray(p)) return p
@@ -93,7 +77,7 @@ export default function OrgChart({ alCambiarVista }) {
     // de RLS. Ver Dashboard.jsx para el racional detallado.
     const [jd, pr, ps, cp] = await Promise.all([
       supabase.from('job_descriptions').select('*').eq('org_id', orgId).order('position_index', { ascending: true }),
-      supabase.from('processes').select('id, name, type').eq('org_id', orgId).order('name'),
+      supabase.from('processes').select('id, name, process_type').eq('org_id', orgId).order('name'),
       supabase.from('personnel').select('id, full_name, job_title, job_id').eq('org_id', orgId).order('full_name'),
       supabase.from('company_profile').select('*').eq('org_id', orgId).maybeSingle(),
     ])
@@ -455,7 +439,7 @@ export default function OrgChart({ alCambiarVista }) {
       const url = canvas.toDataURL('image/png')
       const a = document.createElement('a')
       a.href = url
-      a.download = `organigrama_${(orgProfile?.company_name || 'empresa').replace(/\s/g, '_')}_${new Date().toISOString().slice(0, 10)}.png`
+      a.download = `organigrama_${(orgProfile?.name || 'empresa').replace(/\s/g, '_')}_${new Date().toISOString().slice(0, 10)}.png`
       a.click()
       toast.success('Organigrama exportado')
     } catch (err) {
@@ -467,10 +451,11 @@ export default function OrgChart({ alCambiarVista }) {
   const sugerirEstructuraIA = async () => {
     setLoadingIA(true); setIaSuggestions(null)
     try {
-      const empresa = orgProfile?.company_name || 'la empresa'
-      const sector = orgProfile?.sector || ''
-      const tamano = orgProfile?.size || ''
-      const ctxProc = processes.slice(0, 20).map(p => ({ nombre: p.name, tipo: p.type }))
+      // Columnas reales de company_profile (company_name/sector/size no existen)
+      const empresa = orgProfile?.name || 'la empresa'
+      const sector = orgProfile?.industry || ''
+      const tamano = orgProfile?.employees_count ? `${orgProfile.employees_count} empleados` : ''
+      const ctxProc = processes.slice(0, 20).map(p => ({ nombre: p.name, tipo: p.process_type }))
       const ctxJobs = jobs.map(j => ({ titulo: j.title, area: j.area, nivel: j.level }))
 
       const prompt = `Eres consultor ISO 9001 experto en diseño organizacional. Diseña una estructura jerárquica completa para ${empresa}${sector ? ' (' + sector + ')' : ''}${tamano ? ' tamaño ' + tamano : ''} adecuada al SGC según cláusula 5.3.
@@ -541,11 +526,14 @@ Diseña una estructura coherente:
       const parent = allJobs.find(j => j.title?.toLowerCase().trim() === parentTitle && j.id !== newJob.id)
       if (parent) updates.push({ id: newJob.id, parent_id: parent.id })
     })
+    let linkFails = 0
     for (const u of updates) {
-      await supabase.from('job_descriptions').update({ parent_id: u.parent_id }).eq('id', u.id)
+      const { error: linkErr } = await supabase.from('job_descriptions').update({ parent_id: u.parent_id }).eq('id', u.id)
+      if (linkErr) linkFails++
     }
 
-    toast.success(`${rows.length} cargos creados${updates.length ? ' · ' + updates.length + ' vínculos resueltos' : ''}`)
+    toast.success(`${rows.length} cargos creados${updates.length ? ' · ' + (updates.length - linkFails) + ' vínculos resueltos' : ''}`)
+    if (linkFails) toast.warning(`${linkFails} cargos quedaron sin jefe asignado: usá "Auto-organizar" o arrastralos.`)
     setIaSuggestions(null); setIaSelected(new Set())
     fetchAll()
   }

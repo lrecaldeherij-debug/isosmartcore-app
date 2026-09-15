@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { supabase } from './supabaseClient'
-import { consultarIA } from './aiClient'
+import { consultarIA, parseAiJson } from './aiClient'
+import { companyContextLine } from './lib/companyContext'
 import {
   Sparkles, Loader2, UserCircle, Briefcase, Trash2, ExternalLink, FileText, X,
   Plus, Search, Filter, Eye, Pencil, AlertTriangle, ShieldCheck, Award,
@@ -66,24 +67,8 @@ const EMPTY_FORM = {
 }
 
 // ───────────── Helpers IA ─────────────
-function extractFirstJson(text) {
-  if (!text) return null
-  const i0 = text.indexOf('{'), i1 = text.indexOf('[')
-  const start = i0 === -1 ? i1 : (i1 === -1 ? i0 : Math.min(i0, i1))
-  if (start === -1) return null
-  let depth = 0, inStr = false, esc = false
-  const open = text[start], close = open === '[' ? ']' : '}'
-  for (let i = start; i < text.length; i++) {
-    const c = text[i]
-    if (esc) { esc = false; continue }
-    if (c === '\\') { esc = true; continue }
-    if (c === '"') { inStr = !inStr; continue }
-    if (inStr) continue
-    if (c === open) depth++
-    else if (c === close) { depth--; if (depth === 0) { try { return JSON.parse(text.slice(start, i + 1)) } catch { return null } } }
-  }
-  return null
-}
+// parseAiJson lanza si consultarIA devolvió un error (cuota, red, Gemini caído)
+const extractFirstJson = parseAiJson
 
 // ───────────── Subcomponentes ─────────────
 function KPI({ icon: Icon, label, value, color = '#0ea5e9', sub }) {
@@ -114,6 +99,7 @@ function FormSection({ title, children, accent }) {
 export default function RolesResponsibilities() {
   const [jobs, setJobs] = useState([])
   const [processes, setProcesses] = useState([])
+  const [companyProfile, setCompanyProfile] = useState(null)
   const [loading, setLoading] = useState(true)
   const [tableError, setTableError] = useState(null)
 
@@ -138,6 +124,8 @@ export default function RolesResponsibilities() {
     else setJobs(data || [])
     const { data: pr } = await supabase.from('processes').select('id, name, process_type').order('name')
     setProcesses(pr || [])
+    const { data: prof } = await supabase.from('company_profile').select('*').limit(1).maybeSingle()
+    setCompanyProfile(prof || null)
     setLoading(false)
   }
 
@@ -200,6 +188,7 @@ export default function RolesResponsibilities() {
     setLoadingIA(true)
     try {
       const prompt = `
+${companyContextLine(companyProfile)}
 Cargo: "${form.title}"
 Área: "${form.dependency || 'no especificada'}"
 Nivel: "${form.level}"
@@ -347,6 +336,9 @@ FORMATO:
     e.preventDefault()
     const payload = { ...form }
     payload.authorities_json = payload.authorities_json.filter(a => a && a.trim())
+    // El organigrama agrupa por `area`; este módulo carga `dependency`. Sin esto
+    // los cargos creados acá aparecían en "Sin área".
+    if (!payload.area && payload.dependency) payload.area = payload.dependency
     // Postgres rechaza '' en columnas UUID/DATE/INT/NUMERIC. Convertimos
     // cualquier string vacío del payload a null — para TEXT es equivalente
     // semántico, y para tipos estrictos evita el 22P02.

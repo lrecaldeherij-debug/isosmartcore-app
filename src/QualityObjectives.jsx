@@ -164,8 +164,8 @@ export default function QualityObjectives({ alCambiarVista }) {
     setLoading(true)
     const [obj, pr, pol, rk, sa, op, cp] = await Promise.all([
       supabase.from('quality_objectives').select('*').order('created_at', { ascending: false }),
-      supabase.from('processes').select('id, name, type').order('name'),
-      supabase.from('quality_policy').select('id, policy_text, status').order('created_at', { ascending: false }),
+      supabase.from('processes').select('id, name, process_type').order('name'),
+      supabase.from('quality_policy').select('id, policy_text, final_policy_statement, status').order('created_at', { ascending: false }),
       supabase.from('risk_matrix').select('id, risk_description').order('score_initial', { ascending: false }).limit(50),
       supabase.from('strategic_actions').select('id, title').order('created_at', { ascending: false }).limit(50),
       supabase.from('improvement_opportunities').select('id, title').order('created_at', { ascending: false }).limit(50),
@@ -173,7 +173,8 @@ export default function QualityObjectives({ alCambiarVista }) {
     ])
     setItems(obj.data || [])
     setProcesses(pr.data || [])
-    setPolicies(pol.data || [])
+    // policy_text puede estar vacío si la política se redactó en el módulo 5.2
+    setPolicies((pol.data || []).map(p => ({ ...p, policy_text: p.policy_text || p.final_policy_statement || '' })))
     setRisks(rk.data || [])
     setStrategicActions(sa.data || [])
     setOpps(op.data || [])
@@ -463,7 +464,7 @@ Devuelve SOLO un JSON objeto sin markdown:
     try {
       const policy = policies.find(p => p.status === 'Aprobada' || p.status === 'Comunicada') || policies[0]
       if (!policy?.policy_text) throw new Error('No hay una política de calidad cargada. Definila primero.')
-      const ctxProc = processes.slice(0, 15).map(p => ({ nombre: p.name, tipo: p.type }))
+      const ctxProc = processes.slice(0, 15).map(p => ({ nombre: p.name, tipo: p.process_type }))
       const existentes = items.slice(0, 15).map(o => o.name || o.objective?.slice(0, 80)).filter(Boolean)
       const empresa = orgProfile?.company_name || 'la empresa'
       const year = new Date().getFullYear()

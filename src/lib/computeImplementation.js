@@ -67,7 +67,7 @@ export function computeImplementation(r) {
       const p = r.policy
       if (!p) return item('5.2', 'Política de Calidad', 'politica', false, 0, 'Sin política declarada')
       let pct = 30
-      if (p.policy_text) pct += 30
+      if (p.policy_text || p.final_policy_statement) pct += 30
       if (p.status === 'Aprobada' || p.status === 'Comunicada') pct += 40
       return item('5.2', 'Política de Calidad', 'politica', pct >= 70, pct, `Status: ${p.status || 'Borrador'}`)
     })(),
@@ -204,7 +204,7 @@ export async function loadSnapshotData(supabase, orgId) {
     supabase.from('context_analysis').select('id, last_reviewed_date').eq('org_id', orgId),
     supabase.from('documents').select('id').eq('org_id', orgId).limit(1000),
     supabase.from('communication_matrix').select('id').eq('org_id', orgId).limit(1000),
-    supabase.from('quality_policy').select('policy_text, status').eq('org_id', orgId).maybeSingle(),
+    supabase.from('quality_policy').select('policy_text, final_policy_statement, status').eq('org_id', orgId).order('created_at', { ascending: false }).limit(1).maybeSingle(),
     supabase.from('strategic_actions').select('id').eq('org_id', orgId).limit(500),
     supabase.from('management_review').select('review_date').eq('org_id', orgId),
   ])

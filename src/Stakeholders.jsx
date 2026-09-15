@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { supabase } from './supabaseClient'
-import { consultarIA } from './aiClient'
+import { consultarIA, parseAiJson } from './aiClient'
+import { companyContextLine } from './lib/companyContext'
 import {
   Users, Plus, Search, Filter, Eye, Pencil, Trash2, X, AlertTriangle,
   Sparkles, Loader2, ExternalLink, Grid3x3, ListChecks, Building2,
@@ -73,23 +74,33 @@ const EMPTY_FORM = {
 }
 
 // ─────── Helpers IA ───────
-function extractFirstJson(text) {
-  if (!text) return null
-  const i0 = text.indexOf('{'), i1 = text.indexOf('[')
-  const start = i0 === -1 ? i1 : (i1 === -1 ? i0 : Math.min(i0, i1))
-  if (start === -1) return null
-  let depth = 0, inStr = false, esc = false
-  const open = text[start], close = open === '[' ? ']' : '}'
-  for (let i = start; i < text.length; i++) {
-    const c = text[i]
-    if (esc) { esc = false; continue }
-    if (c === '\\') { esc = true; continue }
-    if (c === '"') { inStr = !inStr; continue }
-    if (inStr) continue
-    if (c === open) depth++
-    else if (c === close) { depth--; if (depth === 0) { try { return JSON.parse(text.slice(start, i + 1)) } catch { return null } } }
+// parseAiJson lanza si consultarIA devolvió un error, así se muestra la causa
+// real en vez de una sugerencia vacía.
+const extractFirstJson = parseAiJson
+
+// Normaliza valores de IA/importación/seed ("alto", "Clientes") para que la
+// fila aparezca en la matriz Poder-Interés y en los filtros.
+function normalizeCategory(value) {
+  const v = String(value || '').trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
+  const hit = CATEGORY_OPTIONS.find(c => {
+    const k = c.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
+    return v === k || v === k + 's' || v === k + 'es'
+  })
+  return hit || (v.startsWith('regulad') || v.includes('gobierno') || v.includes('autoridad') ? 'Regulador' : 'Otro')
+}
+function levelOrNull(value) {
+  const v = String(value || '').trim().toLowerCase()
+  return { alto: 'Alto', alta: 'Alto', high: 'Alto', medio: 'Medio', media: 'Medio', medium: 'Medio', bajo: 'Bajo', baja: 'Bajo', low: 'Bajo' }[v] || null
+}
+function normalizeStakeholder(it) {
+  const power = levelOrNull(it.power_level) || levelOrNull(it.influence_level) || 'Medio'
+  return {
+    ...it,
+    category: normalizeCategory(it.category),
+    power_level: power,
+    interest_level: levelOrNull(it.interest_level) || 'Medio',
+    influence_level: levelOrNull(it.influence_level) || power,
   }
-  return null
 }
 
 function parseAiArray(raw) {
@@ -157,7 +168,8 @@ export default function Stakeholders() {
       supabase.from('stakeholders').select('*').order('created_at', { ascending: false }),
       supabase.from('company_profile').select('*').limit(1).maybeSingle()
     ])
-    setItems(main.data || [])
+    if (main.error) toast.error('No se pudieron cargar las partes interesadas: ' + main.error.message)
+    setItems((main.data || []).map(normalizeStakeholder))
     setCompanyProfile(prof.data || null)
     setLoading(false)
   }
@@ -222,7 +234,7 @@ export default function Stakeholders() {
     if (!form.name) return toast.warning('Escribe el nombre de la parte interesada primero')
     setLoadingIA(true); setIaSuggestion(null)
     try {
-      const ctx = companyProfile ? `Empresa: ${companyProfile.company_name || ''} | Sector: ${companyProfile.industry || ''} | Productos: ${companyProfile.main_products || ''}` : ''
+      const ctx = companyProfile ? companyContextLine(companyProfile) : ''
       const prompt = `Eres consultor ISO 9001. Estoy analizando esta parte interesada:
 
 Nombre: "${form.name}"
@@ -273,9 +285,7 @@ Devuelve SOLO JSON sin markdown:
   const sugerirDelSectorIA = async () => {
     setLoadingIASector(true); setIaSectorList(null)
     try {
-      const ctx = companyProfile
-        ? `Empresa: ${companyProfile.company_name || ''} | Sector: ${companyProfile.industry || ''} | Tamaño: ${companyProfile.size || ''} | Productos: ${companyProfile.main_products || ''}`
-        : 'Sin perfil de empresa cargado.'
+      const ctx = companyContextLine(companyProfile)
 
       const prompt = `Eres consultor ISO 9001. Sugiere 6-10 PARTES INTERESADAS típicas y pertinentes al SGC de esta empresa.
 
@@ -311,14 +321,15 @@ Devuelve SOLO JSON array, sin markdown:
     const rows = iaSectorList
       .map((s, i) => ({ s, i }))
       .filter(({ i }) => iaSelected.has(i))
-      .map(({ s }) => ({
+      .map(({ s }) => normalizeStakeholder(s))
+      .map(s => ({
         name: s.name || 'Sin nombre',
-        category: CATEGORY_OPTIONS.includes(s.category) ? s.category : 'Otro',
+        category: s.category,
         expectations: s.expectations || '',
-        power_level: LEVEL_OPTIONS.includes(s.power_level) ? s.power_level : 'Medio',
-        interest_level: LEVEL_OPTIONS.includes(s.interest_level) ? s.interest_level : 'Medio',
+        power_level: s.power_level,
+        interest_level: s.interest_level,
         engagement_strategy: deriveStrategy(s.power_level, s.interest_level),
-        influence_level: s.power_level || 'Medio',
+        influence_level: s.influence_level,
         is_sgc_requirement: !!s.is_sgc_requirement,
         follow_up_frequency: FREQ_OPTIONS.includes(s.follow_up_frequency) ? s.follow_up_frequency : 'Anual',
         status: 'Pendiente',
@@ -387,15 +398,17 @@ Devuelve SOLO JSON array, sin markdown:
               onImported={async (data) => {
                 const items2 = Array.isArray(data.stakeholders) ? data.stakeholders : []
                 if (!items2.length) throw new Error('La IA no extrajo items válidos')
-                const payload = items2.map(s => ({
-                  name: s.name || '', expectations: s.expectations || '',
-                  category: s.category || 'Otro',
-                  power_level: s.power_level || 'Medio', interest_level: s.interest_level || 'Medio',
-                  influence_level: s.influence_level || 'Medio',
+                const payload = items2.filter(s => String(s.name || '').trim()).map(normalizeStakeholder).map(s => ({
+                  name: s.name.trim(), expectations: s.expectations || '',
+                  category: s.category,
+                  power_level: s.power_level, interest_level: s.interest_level,
+                  influence_level: s.influence_level,
+                  engagement_strategy: deriveStrategy(s.power_level, s.interest_level),
                   is_sgc_requirement: !!s.is_sgc_requirement,
-                  follow_up_frequency: s.follow_up_frequency || 'Anual',
+                  follow_up_frequency: FREQ_OPTIONS.includes(s.follow_up_frequency) ? s.follow_up_frequency : 'Anual',
                   status: 'Pendiente'
                 }))
+                if (!payload.length) throw new Error('Ninguna parte interesada tiene nombre')
                 const { error } = await supabase.from('stakeholders').insert(payload)
                 if (error) throw new Error(error.message)
                 fetchAll()

@@ -14,6 +14,7 @@ import DocumentImporter from './DocumentImporter'
 import ArrayPreviewTable from './ArrayPreviewTable'
 import { toast } from './lib/toast'
 import { confirm } from './lib/confirm'
+import { normalizeSwotCategory, normalizeLevel } from './lib/swot'
 
 // ─────── Constantes ───────
 const TYPE_OPTIONS = ['Interno', 'Externo']
@@ -43,6 +44,31 @@ const EMPTY_FORM = {
   status: 'Activo', next_review_date: '',
   linked_risk_id: '', linked_stakeholder_id: '',
   crossover_strategy: ''
+}
+
+// Categoría normalizada (plurales, minúsculas, inglés); ver lib/swot.js
+const normalizeCategory = normalizeSwotCategory
+
+// Fila lista para insertar desde IA/importación. Devuelve null si la categoría
+// no se reconoce (se descarta en lugar de caer silenciosamente en Fortaleza).
+function toContextRow(s, extra = {}) {
+  const category = normalizeCategory(s.category) || normalizeCategory(s.type)
+  if (!category || !String(s.factor || '').trim()) return null
+  const impact_level = normalizeLevel(s.impact_level)
+  const probability = normalizeLevel(s.probability)
+  return {
+    type: CATEGORY_META[category].type,
+    category,
+    factor: String(s.factor).trim(),
+    description: s.description || '',
+    strategy: s.strategy || '',
+    impact_level,
+    probability,
+    priority_score: LEVEL_SCORE[impact_level] * LEVEL_SCORE[probability],
+    status: 'Activo',
+    last_reviewed_date: new Date().toISOString().slice(0, 10),
+    ...extra,
+  }
 }
 
 // ─────── Helpers IA ───────
@@ -121,7 +147,13 @@ export default function ContextAnalysis() {
       supabase.from('stakeholders').select('id, name').limit(50),
       supabase.from('company_profile').select('*').limit(1).maybeSingle()
     ])
-    setItems(main.data || [])
+    if (main.error) toast.error('No se pudo cargar el FODA: ' + main.error.message)
+    // Datos viejos con categoría escrita distinto ("Oportunidades") se muestran
+    // en su cuadrante correcto en vez de desaparecer o romper la lista.
+    setItems((main.data || []).map(it => {
+      const category = normalizeCategory(it.category)
+      return category ? { ...it, category, type: CATEGORY_META[category].type } : it
+    }))
     setRisks(rk.data || [])
     setStakeholders(sh.data || [])
     setCompanyProfile(prof.data || null)
@@ -143,11 +175,9 @@ export default function ContextAnalysis() {
     setEditingId(item.id); setShowForm(true); setDetailItem(null)
   }
 
-  // Auto-categoría según tipo + categoría
-  const handleTypeChange = (type) => {
-    const allowed = CATEGORY_OPTIONS.filter(c => CATEGORY_META[c].type === type)
-    const newCat = allowed.includes(form.category) ? form.category : allowed[0]
-    setForm({ ...form, type, category: newCat })
+  // El tipo se deriva de la categoría: nunca pueden quedar incoherentes
+  const handleCategoryChange = (category) => {
+    setForm({ ...form, category, type: CATEGORY_META[category].type })
   }
 
   const handleDelete = async (id) => {
@@ -166,13 +196,18 @@ export default function ContextAnalysis() {
       last_reviewed_date: today,
       change_log: [...(prev?.change_log || []), { at: new Date().toISOString(), changes: [{ field: 'reviewed', from: prev?.last_reviewed_date, to: today }] }]
     }
-    await supabase.from('context_analysis').update(updates).eq('id', id)
+    const { error } = await supabase.from('context_analysis').update(updates).eq('id', id)
+    if (error) return toast.error(error.message)
+    toast.success('Marcado como revisado hoy')
     fetchAll()
   }
 
   const handleSubmit = async (e) => {
     e.preventDefault()
     const payload = { ...form }
+    const category = normalizeCategory(payload.category) || 'Fortaleza'
+    payload.category = category
+    payload.type = CATEGORY_META[category].type
     ;['next_review_date'].forEach(k => { if (!payload[k]) payload[k] = null })
     // Sweep universal: cualquier campo *_id con string vacío → null (Postgres no acepta '' como UUID)
     Object.keys(payload).forEach(k => {
@@ -207,10 +242,14 @@ export default function ContextAnalysis() {
     if (!form.factor) return toast.warning('Escribe un factor primero')
     setLoadingIA(true); setIaSuggestion(null)
     try {
+      const empresa = companyProfile
+        ? `Empresa: ${companyProfile.name || 'N/D'} | Sector: ${companyProfile.industry || 'N/D'} | Productos/servicios: ${companyProfile.main_products || 'N/D'}`
+        : 'Empresa: (sin perfil cargado)'
       const prompt = `Eres consultor ISO 9001 ayudando con análisis FODA.
 
+${empresa}
 Factor: "${form.factor}"
-Tipo: ${form.type}
+Tipo: ${CATEGORY_META[form.category]?.type || form.type}
 Categoría: ${form.category}
 
 Devuelve SOLO JSON sin markdown:
@@ -291,26 +330,21 @@ Devuelve SOLO JSON array, sin markdown:
 
   const saveIaFullSelected = async () => {
     if (!iaFullSuggestions) return
-    const today = new Date().toISOString().slice(0, 10)
     const rows = iaFullSuggestions
-      .map((s, i) => ({ s, i }))
-      .filter(({ i }) => iaSelected.has(i))
-      .map(({ s }) => ({
-        type: TYPE_OPTIONS.includes(s.type) ? s.type : 'Interno',
-        category: CATEGORY_OPTIONS.includes(s.category) ? s.category : 'Fortaleza',
-        factor: s.factor || 'Factor sin título',
-        description: s.description || '',
-        strategy: s.strategy || '',
-        impact_level: LEVEL_OPTIONS.includes(s.impact_level) ? s.impact_level : 'Medio',
-        probability: LEVEL_OPTIONS.includes(s.probability) ? s.probability : 'Medio',
-        priority_score: LEVEL_SCORE[s.impact_level || 'Medio'] * LEVEL_SCORE[s.probability || 'Medio'],
-        status: 'Activo',
-        last_reviewed_date: today,
+      .filter((_, i) => iaSelected.has(i))
+      .map(s => toContextRow(s, {
         change_log: [{ at: new Date().toISOString(), changes: [{ field: 'created', from: null, to: 'IA FODA completo' }] }]
       }))
-    if (!rows.length) return setIaFullSuggestions(null)
-    const { error } = await supabase.from('context_analysis').insert(rows)
+      .filter(Boolean)
+    if (!rows.length) {
+      toast.warning('Ningún factor seleccionado tiene una categoría válida')
+      return
+    }
+    const { data: inserted, error } = await supabase.from('context_analysis').insert(rows).select('id')
     if (error) return toast.error(error.message)
+    ;(inserted || []).forEach(r => indexRow('context_analysis', r.id))
+    const skipped = iaSelected.size - rows.length
+    toast.success(`${rows.length} factores cargados${skipped > 0 ? ` · ${skipped} descartados por categoría no reconocida` : ''}`)
     setIaFullSuggestions(null); fetchAll()
   }
 
@@ -400,15 +434,11 @@ Devuelve SOLO JSON, sin markdown:
               onImported={async (data) => {
                 const factors = Array.isArray(data.context) ? data.context : []
                 if (factors.length === 0) throw new Error('La IA no extrajo factores válidos')
-                const today2 = new Date().toISOString().slice(0, 10)
-                const payload = factors.map(f => ({
-                  type: f.type || 'Interno', category: f.category || 'Fortaleza',
-                  factor: f.factor || '', description: f.description || '', strategy: f.strategy || '',
-                  impact_level: 'Medio', probability: 'Medio', priority_score: 4,
-                  status: 'Activo', last_reviewed_date: today2
-                }))
-                const { error } = await supabase.from('context_analysis').insert(payload)
+                const payload = factors.map(f => toContextRow(f)).filter(Boolean)
+                if (payload.length === 0) throw new Error('Ningún factor tiene título y categoría válida (Fortaleza, Debilidad, Oportunidad o Amenaza)')
+                const { data: inserted, error } = await supabase.from('context_analysis').insert(payload).select('id')
                 if (error) throw new Error(error.message)
+                ;(inserted || []).forEach(r => indexRow('context_analysis', r.id))
                 fetchAll()
               }}
               renderPreview={(data, setData) => (
@@ -488,12 +518,28 @@ Devuelve SOLO JSON, sin markdown:
           <h3 style={{ margin: '0 0 14px 0', color: '#1f2937' }}>{editingId ? 'Editar' : 'Nuevo'} Factor de Contexto</h3>
           <form onSubmit={handleSubmit}>
             <FormSection title="Clasificación">
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                <SelectField label="Tipo" value={form.type} options={TYPE_OPTIONS} onChange={handleTypeChange} />
-                <SelectField label="Categoría"
-                  value={form.category}
-                  options={CATEGORY_OPTIONS.filter(c => CATEGORY_META[c].type === form.type)}
-                  onChange={v => setForm({ ...form, category: v })} />
+              {/* Las 4 categorías siempre visibles; el tipo (interno/externo) se deriva */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 8 }}>
+                {CATEGORY_OPTIONS.map(cat => {
+                  const meta = CATEGORY_META[cat]
+                  const active = normalizeCategory(form.category) === cat
+                  return (
+                    <button key={cat} type="button" onClick={() => handleCategoryChange(cat)}
+                      style={{
+                        padding: '10px 12px', borderRadius: 10, cursor: 'pointer', textAlign: 'left',
+                        border: `2px solid ${active ? meta.color : '#e5e7eb'}`,
+                        background: active ? meta.bg : 'white',
+                      }}>
+                      <div style={{ fontSize: 14, fontWeight: 700, color: active ? meta.color : '#374151' }}>{meta.icon} {cat}</div>
+                      <div style={{ fontSize: 11, color: '#6b7280' }}>
+                        {meta.type} · {cat === 'Fortaleza' || cat === 'Oportunidad' ? 'positivo' : 'negativo'}
+                      </div>
+                    </button>
+                  )
+                })}
+              </div>
+              <div style={{ marginTop: 6, fontSize: 11, color: '#6b7280' }}>
+                Internos: dependen de la empresa (recursos, personal, procesos). Externos: vienen del entorno (mercado, clientes, regulación).
               </div>
             </FormSection>
 
@@ -564,6 +610,12 @@ Devuelve SOLO JSON, sin markdown:
         </div>
       )}
 
+      {!showForm && !loading && items.some(i => !CATEGORY_META[i.category]) && (
+        <div style={{ margin: '0 0 12px', padding: '10px 12px', background: '#fef3c7', color: '#92400e', borderRadius: 8, fontSize: 13 }}>
+          Hay {items.filter(i => !CATEGORY_META[i.category]).length} factor(es) sin categoría reconocida. Abrí la vista <strong>Lista</strong> y editalos para asignarles Fortaleza, Debilidad, Oportunidad o Amenaza.
+        </div>
+      )}
+
       {/* VISTA MATRIZ 2x2 */}
       {!showForm && viewMode === 'matrix' && (loading ? <p>Cargando...</p> : (
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
@@ -625,7 +677,7 @@ Devuelve SOLO JSON, sin markdown:
                 </td></tr>
               )}
               {filtered.map(item => {
-                const meta = CATEGORY_META[item.category]
+                const meta = CATEGORY_META[item.category] || { icon: '❔', color: '#6b7280', bg: '#f3f4f6' }
                 const st = STATUS_COLORS[item.status] || STATUS_COLORS['Activo']
                 const vencida = item.next_review_date && item.next_review_date < today
                 return (
@@ -728,9 +780,16 @@ Devuelve SOLO JSON, sin markdown:
                     }} />
                   </td>
                   <td style={{ padding: 6 }}>
-                    <span style={{ padding: '1px 6px', borderRadius: 4, background: CATEGORY_META[s.category]?.bg || '#f3f4f6', color: CATEGORY_META[s.category]?.color || '#6b7280', fontWeight: 700 }}>
-                      {CATEGORY_META[s.category]?.icon} {s.category}
-                    </span>
+                    {(() => {
+                      const cat = normalizeCategory(s.category) || normalizeCategory(s.type)
+                      const meta = CATEGORY_META[cat]
+                      return (
+                        <span style={{ padding: '1px 6px', borderRadius: 4, background: meta?.bg || '#f3f4f6', color: meta?.color || '#6b7280', fontWeight: 700 }}
+                          title={cat ? '' : 'Categoría no reconocida: este factor no se cargará'}>
+                          {meta?.icon || '❔'} {cat || s.category || 'Sin categoría'}
+                        </span>
+                      )
+                    })()}
                   </td>
                   <td style={{ padding: 6 }}>
                     <strong>{s.factor}</strong>
