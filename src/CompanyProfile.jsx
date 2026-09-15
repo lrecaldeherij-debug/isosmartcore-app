@@ -1,18 +1,23 @@
 import { useState, useEffect } from 'react'
 import { supabase } from './supabaseClient'
-import { consultarIA } from './aiClient'
-import { Building2, Save, Sparkles, Loader2, MapPin, Users, Target, Rocket } from 'lucide-react'
+import { consultarIA, parseAiJson, clampString } from './aiClient'
+import { Building2, Save, Sparkles, Loader2, Rocket, Wand2 } from 'lucide-react'
 import { toast } from './lib/toast'
-import { confirm } from './lib/confirm'
 import { useOrg } from './OrgContext'
 import { humanizeDbError } from './lib/humanizeDbError'
+import { parseStrategicDirection, composeStrategicDirection } from './lib/strategicDirection'
+import MissionVisionAI from './components/MissionVisionAI'
 
 export default function CompanyProfile() {
   const { org } = useOrg()
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [loadingIA, setLoadingIA] = useState(false)
-  
+  const [showMvAI, setShowMvAI] = useState(false)
+  // Misión y visión se editan por separado y se guardan juntas en
+  // strategic_direction (ver lib/strategicDirection.js).
+  const [mv, setMv] = useState({ mission: '', vision: '', legacy: false })
+
   const [profile, setProfile] = useState({
     name: '',
     industry: '',
@@ -46,6 +51,7 @@ export default function CompanyProfile() {
       console.error('Error fetching profile:', error)
     } else if (data) {
       setProfile(data)
+      setMv(parseStrategicDirection(data.strategic_direction))
     }
     setLoading(false)
   }
@@ -64,7 +70,12 @@ export default function CompanyProfile() {
     // WITH CHECK y el DEFAULT no falle. Antes se confiaba en el DEFAULT
     // auth_org_id() y esto silenciosamente fallaba sin datos guardados
     // (caso Talleres Mejía — Ago 2026).
-    const payload = { ...profile, user_id: user?.id, org_id: org.id }
+    const payload = {
+      ...profile,
+      strategic_direction: composeStrategicDirection(mv),
+      user_id: user?.id,
+      org_id: org.id,
+    }
     delete payload.id
 
     if (profile.id) {
@@ -72,7 +83,10 @@ export default function CompanyProfile() {
         if (error) {
           console.error('[CompanyProfile update]', error)
           toast.error(humanizeDbError(error, { table: 'company_profile' }))
-        } else toast.success('Perfil de la empresa actualizado')
+        } else {
+          toast.success('Perfil de la empresa actualizado')
+          setMv(prev => ({ ...prev, legacy: false }))
+        }
     } else {
         const { data: inserted, error } = await supabase
           .from('company_profile')
@@ -88,6 +102,7 @@ export default function CompanyProfile() {
         } else {
             toast.success('Perfil creado · El sistema ahora entiende mejor tu empresa')
             setProfile(inserted) // usamos la fila insertada, ya trae el id nuevo
+            setMv(parseStrategicDirection(inserted.strategic_direction))
         }
     }
     setSaving(false)
@@ -99,41 +114,63 @@ export default function CompanyProfile() {
         return
     }
 
+    const empty = {
+      description: !profile.description?.trim(),
+      main_products: !profile.main_products?.trim(),
+      mission: !mv.mission.trim(),
+      vision: !mv.vision.trim(),
+    }
+    if (!Object.values(empty).some(Boolean)) {
+      toast.info('El perfil ya está completo. Para pulir misión y visión usá "Mejorar con IA".')
+      return
+    }
+
     setLoadingIA(true)
     const prompt = `
         Empresa: "${profile.name}"
         Industria/Sector: "${profile.industry}"
         Productos principales (opcional): "${profile.main_products}"
         Sitio Web para referencia: "${profile.website_url}"
-        
+
         Actúa como un consultor de negocios experto. Genera un perfil profesional para "Entender la organización" en un contexto ISO 9001.
-        
+        No inventes certificaciones, cifras ni países que no estén en los datos.
+
         Genera un JSON con:
         1. "description": Una descripción clara y profesional de a qué se dedica la empresa (max 300 caracteres).
-        2. "strategic_direction": Una propuesta breve de Misión/Visión enfocada a calidad.
-        3. "main_products": Lista sugerida de productos/servicios principales si no se proveyeron.
+        2. "mission": Misión en presente: qué hace, para quién y qué valor entrega (max 300 caracteres).
+        3. "vision": Visión con un horizonte de 3 a 5 años, creíble para la empresa (max 260 caracteres).
+        4. "main_products": Lista sugerida de productos/servicios principales si no se proveyeron.
     `
 
-    const respuesta = await consultarIA(prompt, "Eres un consultor experto en desarrollo organizacional e ISO 9001.")
-    
     try {
-        let cleanText = respuesta.replace(/```json/g, '').replace(/```/g, '').trim();
-        if (cleanText.includes('{')) cleanText = cleanText.substring(cleanText.indexOf('{'));
-        if (cleanText.includes('}')) cleanText = cleanText.substring(0, cleanText.lastIndexOf('}') + 1);
-        
-        const data = JSON.parse(cleanText)
-        
-        setProfile(prev => ({
-            ...prev,
-            description: data.description || prev.description,
-            strategic_direction: data.strategic_direction || prev.strategic_direction,
-            main_products: prev.main_products || data.main_products || ''
-        }))
+      const data = parseAiJson(await consultarIA(prompt, "Eres un consultor experto en desarrollo organizacional e ISO 9001."))
+      if (!data || Array.isArray(data)) throw new Error('La IA no devolvió un perfil válido. Probá de nuevo.')
+
+      // Solo completa lo vacío: nunca pisa lo que el usuario ya escribió.
+      const filled = []
+      setProfile(prev => ({
+        ...prev,
+        description: empty.description && data.description ? clampString(data.description, 500) : prev.description,
+        main_products: empty.main_products && typeof data.main_products === 'string' ? data.main_products : prev.main_products,
+      }))
+      if (empty.description && data.description) filled.push('descripción')
+      if (empty.main_products && typeof data.main_products === 'string') filled.push('productos')
+      setMv(prev => ({
+        ...prev,
+        mission: empty.mission && data.mission ? clampString(data.mission, 400) : prev.mission,
+        vision: empty.vision && data.vision ? clampString(data.vision, 350) : prev.vision,
+      }))
+      if (empty.mission && data.mission) filled.push('misión')
+      if (empty.vision && data.vision) filled.push('visión')
+
+      if (filled.length) toast.success(`Completado con IA: ${filled.join(', ')}. Revisalo y guardá.`)
+      else toast.warning('La IA no devolvió contenido para los campos vacíos.')
     } catch (e) {
-        console.error(e)
-        toast.error('La IA generó texto, pero hubo un error de formato')
+      console.error(e)
+      toast.error(e.message || 'No se pudo autocompletar con IA')
+    } finally {
+      setLoadingIA(false)
     }
-    setLoadingIA(false)
   }
 
   if (loading) return <div style={{padding:'40px', textAlign:'center'}}>Cargando perfil...</div>
@@ -285,15 +322,54 @@ export default function CompanyProfile() {
                        />
                    </div>
 
+                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', flexWrap: 'wrap', margin: '4px 0 8px' }}>
+                       <span style={{ fontWeight: 600, color: '#334155' }}>Dirección estratégica</span>
+                       <button
+                         type="button"
+                         className="btn"
+                         onClick={() => {
+                           if (!profile.name || !profile.industry) {
+                             toast.warning('Ingresá al menos el Nombre de la Empresa y el Sector/Industria')
+                             return
+                           }
+                           setShowMvAI(true)
+                         }}
+                         style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 12px', fontSize: '0.85rem' }}
+                       >
+                           <Wand2 size={16} /> Mejorar con IA
+                       </button>
+                   </div>
+
+                   {mv.legacy && (
+                       <p style={{ fontSize: '0.8rem', color: '#92400e', background: '#fef3c7', padding: '8px 10px', borderRadius: '6px', margin: '0 0 10px' }}>
+                           Tu dirección estratégica anterior estaba en un solo texto y quedó en Misión.
+                           Separala a mano o usá "Mejorar con IA" para proponer misión y visión.
+                       </p>
+                   )}
+
                    <div className="form-group">
-                       <label className="form-label">Dirección Estratégica (Misión/Visión Resumida)</label>
-                       <p style={{fontSize:'0.8rem', color:'#64748b', marginBottom:'5px'}}>¿Hacia dónde va la empresa?</p>
-                       <textarea 
+                       <label className="form-label">Misión</label>
+                       <p style={{fontSize:'0.8rem', color:'#64748b', marginBottom:'5px'}}>¿Qué hacemos, para quién y qué valor entregamos?</p>
+                       <textarea
                          className="form-textarea"
-                         style={{ height: '120px' }}
-                         placeholder="Convertirnos en líderes del mercado mediante..."
-                         value={profile.strategic_direction}
-                         onChange={e => setProfile({...profile, strategic_direction: e.target.value})}
+                         style={{ height: '110px' }}
+                         maxLength={600}
+                         placeholder="Brindamos servicios de ... para ... garantizando ..."
+                         value={mv.mission}
+                         onChange={e => setMv({ ...mv, mission: e.target.value })}
+                       />
+                   </div>
+
+                   <div className="form-group">
+                       <label className="form-label">Visión</label>
+                       <p style={{fontSize:'0.8rem', color:'#64748b', marginBottom:'5px'}}>¿Dónde queremos estar en 3 a 5 años?</p>
+                       <textarea
+                         className="form-textarea"
+                         style={{ height: '110px' }}
+                         maxLength={500}
+                         placeholder="Para 2030, ser reconocidos como ..."
+                         value={mv.vision}
+                         onChange={e => setMv({ ...mv, vision: e.target.value })}
                        />
                    </div>
                </div>
@@ -314,6 +390,15 @@ export default function CompanyProfile() {
         </form>
       </div>
       
+      <MissionVisionAI
+        open={showMvAI}
+        onClose={() => setShowMvAI(false)}
+        profile={profile}
+        current={mv}
+        orgId={org?.id}
+        onApply={changes => setMv(prev => ({ ...prev, ...changes, legacy: false }))}
+      />
+
       <div style={{ marginTop: '30px', textAlign: 'center', color: '#94a3b8', fontSize: '0.9rem' }}>
           🔒 Esta información es privada y se utilizará únicamente para contextualizar tu Sistema de Gestión de Calidad.
       </div>

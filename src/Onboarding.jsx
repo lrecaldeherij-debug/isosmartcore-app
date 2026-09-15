@@ -902,7 +902,7 @@ Empresa: ${company.name}
 Industria: ${company.industry || 'general'}
 Productos/servicios: ${company.main_products || 'no especificado'}
 Tamaño: ${company.employees_count || 'no especificado'}
-Misión: ${company.strategic_direction || 'no especificada'}
+Dirección estratégica (misión/visión): ${company.strategic_direction || 'no especificada'}
 Fortalezas clave: ${fortalezas.length ? fortalezas.join(', ') : 'no especificadas'}
 
 Devuelve SOLO el texto de la política (sin markdown, sin "**", sin títulos), 5-10 líneas claras. Debe incluir:
