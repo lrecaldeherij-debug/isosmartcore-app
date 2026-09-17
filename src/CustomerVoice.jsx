@@ -17,6 +17,7 @@ import {
   ThumbsUp, ThumbsDown, Minus, ArrowUpRight,
 } from 'lucide-react'
 import { supabase } from './supabaseClient'
+import { indexRow, deindexRow } from './lib/ragIndex'
 import { useOrg } from './OrgContext'
 import { can } from './lib/roles'
 import { toast } from './lib/toast'
@@ -262,12 +263,13 @@ function SatisfactionTab({ orgId, canWrite }) {
     }
 
     const q = editing
-      ? supabase.from('customer_satisfaction_surveys').update(payload).eq('id', editing.id)
-      : supabase.from('customer_satisfaction_surveys').insert([{ ...payload, org_id: orgId }])
-    const { error } = await q
+      ? supabase.from('customer_satisfaction_surveys').update(payload).eq('id', editing.id).select('id').single()
+      : supabase.from('customer_satisfaction_surveys').insert([{ ...payload, org_id: orgId }]).select('id').single()
+    const { data: saved, error } = await q
     setSaving(false)
     if (error) { toast.error(error.message); return }
     toast.success(editing ? 'Respuesta actualizada' : 'Respuesta registrada')
+    if (saved?.id) indexRow('customer_satisfaction_surveys', saved.id)
     setModalOpen(false)
     load()
   }
@@ -281,6 +283,7 @@ function SatisfactionTab({ orgId, canWrite }) {
     if (!ok) return
     const { error } = await supabase.from('customer_satisfaction_surveys').delete().eq('id', row.id)
     if (error) { toast.error(error.message); return }
+    deindexRow('customer_satisfaction_surveys', row.id)
     toast.success('Respuesta eliminada')
     load()
   }
@@ -786,12 +789,13 @@ function FeedbackTab({ orgId, canWrite }) {
       updated_at: new Date().toISOString(),
     }
     const q = editing
-      ? supabase.from('customer_feedback').update(payload).eq('id', editing.id)
-      : supabase.from('customer_feedback').insert([{ ...payload, org_id: orgId }])
-    const { error } = await q
+      ? supabase.from('customer_feedback').update(payload).eq('id', editing.id).select('id').single()
+      : supabase.from('customer_feedback').insert([{ ...payload, org_id: orgId }]).select('id').single()
+    const { data: saved, error } = await q
     setSaving(false)
     if (error) { toast.error(error.message); return }
     toast.success(editing ? 'Registro actualizado' : 'Comunicación registrada')
+    if (saved?.id) indexRow('customer_feedback', saved.id)
     setModalOpen(false)
     load()
   }
@@ -805,6 +809,7 @@ function FeedbackTab({ orgId, canWrite }) {
     if (!ok) return
     const { error } = await supabase.from('customer_feedback').delete().eq('id', row.id)
     if (error) { toast.error(error.message); return }
+    deindexRow('customer_feedback', row.id)
     toast.success('Registro eliminado')
     load()
   }

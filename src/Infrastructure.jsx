@@ -21,6 +21,7 @@ import {
   CalendarClock, ChevronRight,
 } from 'lucide-react'
 import { supabase } from './supabaseClient'
+import { indexRow, deindexRow } from './lib/ragIndex'
 import { useOrg } from './OrgContext'
 import { can } from './lib/roles'
 import { toast } from './lib/toast'
@@ -232,12 +233,13 @@ export default function Infrastructure() {
       updated_at: new Date().toISOString(),
     }
     const q = editing
-      ? supabase.from('infrastructure_assets').update(payload).eq('id', editing.id)
-      : supabase.from('infrastructure_assets').insert([{ ...payload, org_id: orgId }])
-    const { error } = await q
+      ? supabase.from('infrastructure_assets').update(payload).eq('id', editing.id).select('id').single()
+      : supabase.from('infrastructure_assets').insert([{ ...payload, org_id: orgId }]).select('id').single()
+    const { data: saved, error } = await q
     setSaving(false)
     if (error) { toast.error(error.message); return }
     toast.success(editing ? 'Activo actualizado' : 'Activo registrado')
+    if (saved?.id) indexRow('infrastructure_assets', saved.id)
     setAssetModal(false)
     load()
   }
@@ -251,6 +253,7 @@ export default function Infrastructure() {
     if (!ok) return
     const { error } = await supabase.from('infrastructure_assets').delete().eq('id', a.id)
     if (error) { toast.error(error.message); return }
+    deindexRow('infrastructure_assets', a.id)
     toast.success('Activo eliminado')
     load()
   }

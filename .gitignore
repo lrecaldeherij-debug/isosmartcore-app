@@ -39,6 +39,8 @@ test-supabase.html
 
 # One-off internal scripts (no deploy)
 scripts/
+# Excepción: verificador de columnas contra el esquema real (se versiona)
+!scripts/check-db-columns.py
 
 # Artifacts locales de auditoría — no commitear
 revision-*.txt

@@ -26,6 +26,7 @@ import {
   Trash2, Pencil, TrendingUp, AlertTriangle, Archive, RefreshCw,
 } from 'lucide-react'
 import { supabase } from './supabaseClient'
+import { indexRow, deindexRow } from './lib/ragIndex'
 import { objectiveMet } from './lib/objectiveProgress'
 import { isHighRisk, needsControl } from './lib/riskLevel'
 import { useOrg } from './OrgContext'
@@ -447,12 +448,13 @@ Devolvé SOLO un JSON con esta forma exacta:
       updated_at: new Date().toISOString(),
     }
     const q = editing
-      ? supabase.from('data_analysis_reports').update(payload).eq('id', editing.id)
-      : supabase.from('data_analysis_reports').insert([{ ...payload, org_id: orgId }])
-    const { error } = await q
+      ? supabase.from('data_analysis_reports').update(payload).eq('id', editing.id).select('id').single()
+      : supabase.from('data_analysis_reports').insert([{ ...payload, org_id: orgId }]).select('id').single()
+    const { data: saved, error } = await q
     setSaving(false)
     if (error) { toast.error(error.message); return }
     toast.success(editing ? 'Informe actualizado' : 'Informe creado')
+    if (saved?.id) indexRow('data_analysis_reports', saved.id)
     setModalOpen(false)
     load()
   }
@@ -466,6 +468,7 @@ Devolvé SOLO un JSON con esta forma exacta:
     if (!ok) return
     const { error } = await supabase.from('data_analysis_reports').delete().eq('id', r.id)
     if (error) { toast.error(error.message); return }
+    deindexRow('data_analysis_reports', r.id)
     toast.success('Informe eliminado')
     load()
   }

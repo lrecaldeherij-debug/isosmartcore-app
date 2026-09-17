@@ -21,6 +21,7 @@ import {
 } from 'lucide-react'
 import { supabase } from './supabaseClient'
 import { useOrg } from './OrgContext'
+import { indexRow, deindexRow } from './lib/ragIndex'
 import { can } from './lib/roles'
 import { toast } from './lib/toast'
 import { confirm, promptText } from './lib/confirm'
@@ -199,6 +200,7 @@ export default function QmsChanges() {
     payload.estimated_cost = payload.estimated_cost === '' ? null : Number(payload.estimated_cost)
 
     let error
+    let savedId = editingId
     if (editingId) {
       const prev = items.find(i => i.id === editingId)
       const changes = Object.keys(payload)
@@ -210,10 +212,13 @@ export default function QmsChanges() {
       const { data: { user } } = await supabase.auth.getUser()
       payload.created_by = user?.id
       payload.change_log = [{ at: new Date().toISOString(), changes: [{ field: 'created', from: null, to: payload.title }] }]
-      ;({ error } = await supabase.from('qms_changes').insert([payload]))
+      const { data: inserted, error: insErr } = await supabase.from('qms_changes').insert([payload]).select('id').single()
+      error = insErr
+      savedId = inserted?.id
     }
     setSaving(false)
     if (error) return toast.error(error.message)
+    if (savedId) indexRow('qms_changes', savedId)   // que el Copiloto lo vea
     toast.success(editingId ? 'Cambio actualizado' : 'Cambio registrado')
     setModalOpen(false)
     fetchAll()
@@ -225,6 +230,7 @@ export default function QmsChanges() {
     if (!ok) return
     const { error } = await supabase.from('qms_changes').delete().eq('id', item.id)
     if (error) return toast.error(error.message)
+    deindexRow('qms_changes', item.id)
     toast.success('Cambio eliminado')
     fetchAll()
   }

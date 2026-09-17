@@ -197,6 +197,146 @@ function extractChunkFromRow(table: string, row: any): { content: string; title:
     };
   }
 
+
+  if (table === "qms_changes") {
+    const content = stringifyForEmbedding({
+      "Cambio": row.title,
+      "Código": row.code,
+      "Tipo": row.change_type,
+      "Descripción": row.description,
+      "Propósito": row.purpose,
+      "Consecuencias potenciales": row.consequences,
+      "Acciones para la integridad del SGC": row.integrity_actions,
+      "Recursos": row.resources_required,
+      "Responsabilidades y autoridades": row.responsibilities,
+      "Cláusulas afectadas": row.affected_clauses,
+      "Nivel de riesgo": row.risk_level,
+      "Estado": row.status,
+      "Aprobado por": row.approved_by,
+      "Resultado de verificación": row.verification_result,
+      "Notas de verificación": row.verification_notes,
+    });
+    if (!content) return null;
+    return { content, title: `Cambio SGC · ${(row.title || "sin título").slice(0, 80)}` };
+  }
+
+  if (table === "organizational_knowledge") {
+    const content = stringifyForEmbedding({
+      "Conocimiento": row.title,
+      "Descripción": row.description,
+      "Tipo": row.knowledge_type,
+      "Fuente": row.source,
+      "Detalle de la fuente": row.source_detail,
+      "Disponibilidad": row.availability,
+      "Quién lo tiene": row.knowledge_holder,
+      "Respaldo": row.backup_holder,
+      "Riesgo si se pierde": row.loss_risk,
+      "Método de retención": row.retention_method,
+      "Se usa en el proceso": row.used_in_process,
+      "Estado": row.status,
+    });
+    if (!content) return null;
+    return { content, title: `Conocimiento · ${(row.title || "sin título").slice(0, 80)}` };
+  }
+
+  if (table === "infrastructure_assets") {
+    const content = stringifyForEmbedding({
+      "Activo": row.name,
+      "Código": row.code,
+      "Categoría": row.category,
+      "Descripción": row.description,
+      "Ubicación": row.location,
+      "Responsable": row.responsible,
+      "Se usa en el proceso": row.used_in_process,
+      "Criticidad": row.criticality,
+      "Estado": row.status,
+      "Marca": row.brand,
+      "Modelo": row.model,
+      "Frecuencia de mantenimiento (meses)": row.maintenance_frequency_months,
+      "Último mantenimiento": row.last_maintenance_date,
+      "Próximo mantenimiento": row.next_maintenance_date,
+    });
+    if (!content) return null;
+    return { content, title: `Infraestructura · ${(row.name || "sin nombre").slice(0, 80)}` };
+  }
+
+  if (table === "customer_feedback") {
+    const content = stringifyForEmbedding({
+      "Código": row.code,
+      "Cliente": row.customer_name,
+      "Tipo": row.feedback_type,
+      "Canal": row.channel,
+      "Severidad": row.severity,
+      "Detalle": row.description,
+      "Respuesta dada": row.response,
+      "Causa raíz": row.root_cause,
+      "Acción correctiva": row.corrective_action,
+      "Cliente satisfecho": row.customer_satisfied,
+      "Estado": row.status,
+      "Fecha de recepción": row.received_date,
+    });
+    if (!content) return null;
+    return { content, title: `Voz del cliente · ${(row.code || row.customer_name || "sin código").slice(0, 80)}` };
+  }
+
+  if (table === "customer_satisfaction_surveys") {
+    const content = stringifyForEmbedding({
+      "Cliente": row.customer_name,
+      "Fecha": row.survey_date,
+      "Puntaje global": row.overall_score,
+      "NPS": row.nps_score,
+      "Calidad": row.score_quality,
+      "Entrega": row.score_delivery,
+      "Comunicación": row.score_communication,
+      "Relación valor-precio": row.score_value,
+      "Capacidad de respuesta": row.score_responsiveness,
+      "Competencia técnica": row.score_technical,
+      "Comentarios": row.comments,
+      "Acción disparada": row.triggered_action,
+    });
+    if (!content) return null;
+    return { content, title: `Satisfacción · ${(row.customer_name || row.survey_date || "respuesta anónima")}` };
+  }
+
+  if (table === "data_analysis_reports") {
+    const content = stringifyForEmbedding({
+      "Informe": row.title,
+      "Período": `${row.period_start || ""} a ${row.period_end || ""}`,
+      "Conformidad de productos y servicios": row.analysis_conformity,
+      "Satisfacción del cliente": row.analysis_satisfaction,
+      "Desempeño del SGC": row.analysis_qms_performance,
+      "Eficacia de la planificación": row.analysis_planning,
+      "Eficacia de acciones ante riesgos": row.analysis_risks,
+      "Desempeño de proveedores externos": row.analysis_suppliers,
+      "Necesidades de mejora": row.analysis_improvement,
+      "Conclusiones": row.conclusions,
+      "Recomendaciones": row.recommendations,
+      "Estado": row.status,
+    });
+    if (!content) return null;
+    return { content, title: `Análisis de datos · ${(row.title || row.period_end || "sin título").slice(0, 80)}` };
+  }
+
+  if (table === "awareness_records") {
+    const content = stringifyForEmbedding({
+      "Persona": row.person_name,
+      "Cargo": row.person_position,
+      "Tipo de sesión": row.session_type,
+      "Fecha": row.session_date,
+      "Impartida por": row.delivered_by,
+      "Cubrió la política de calidad": row.covered_policy ? "sí" : "no",
+      "Cubrió los objetivos": row.covered_objectives ? "sí" : "no",
+      "Cubrió su contribución al SGC": row.covered_contribution ? "sí" : "no",
+      "Cubrió las implicaciones de no cumplir": row.covered_implications ? "sí" : "no",
+      "Comprensión verificada": row.comprehension_verified ? "sí" : "no",
+      "Método de verificación": row.verification_method,
+      "Puntaje": row.quiz_score,
+      "Notas": row.notes,
+    });
+    if (!content) return null;
+    return { content, title: `Toma de conciencia · ${(row.person_name || row.session_type || "sin persona").slice(0, 80)}` };
+  }
+
   return null;
 }
 
@@ -280,6 +420,13 @@ const ALLOWED_TABLES = new Set([
   "quality_objectives",
   "internal_audits",
   "management_review",
+  "qms_changes",
+  "organizational_knowledge",
+  "infrastructure_assets",
+  "customer_feedback",
+  "customer_satisfaction_surveys",
+  "data_analysis_reports",
+  "awareness_records",
 ]);
 
 Deno.serve(async (req: Request) => {

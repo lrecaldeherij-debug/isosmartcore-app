@@ -16,6 +16,7 @@ import {
   Trash2, Pencil, Brain, UserCheck, ShieldAlert, Users, CalendarClock,
 } from 'lucide-react'
 import { supabase } from './supabaseClient'
+import { indexRow, deindexRow } from './lib/ragIndex'
 import { useOrg } from './OrgContext'
 import { can } from './lib/roles'
 import { toast } from './lib/toast'
@@ -257,12 +258,13 @@ function KnowledgeTab({ orgId, canWrite }) {
       updated_at: new Date().toISOString(),
     }
     const q = editing
-      ? supabase.from('organizational_knowledge').update(payload).eq('id', editing.id)
-      : supabase.from('organizational_knowledge').insert([{ ...payload, org_id: orgId }])
-    const { error } = await q
+      ? supabase.from('organizational_knowledge').update(payload).eq('id', editing.id).select('id').single()
+      : supabase.from('organizational_knowledge').insert([{ ...payload, org_id: orgId }]).select('id').single()
+    const { data: saved, error } = await q
     setSaving(false)
     if (error) { toast.error(error.message); return }
     toast.success(editing ? 'Conocimiento actualizado' : 'Conocimiento registrado')
+    if (saved?.id) indexRow('organizational_knowledge', saved.id)
     setModalOpen(false)
     load()
   }
@@ -276,6 +278,7 @@ function KnowledgeTab({ orgId, canWrite }) {
     if (!ok) return
     const { error } = await supabase.from('organizational_knowledge').delete().eq('id', r.id)
     if (error) { toast.error(error.message); return }
+    deindexRow('organizational_knowledge', r.id)
     toast.success('Registro eliminado')
     load()
   }
@@ -662,12 +665,13 @@ function AwarenessTab({ orgId, canWrite }) {
       updated_at: new Date().toISOString(),
     }
     const q = editing
-      ? supabase.from('awareness_records').update(payload).eq('id', editing.id)
-      : supabase.from('awareness_records').insert([{ ...payload, org_id: orgId }])
-    const { error } = await q
+      ? supabase.from('awareness_records').update(payload).eq('id', editing.id).select('id').single()
+      : supabase.from('awareness_records').insert([{ ...payload, org_id: orgId }]).select('id').single()
+    const { data: saved, error } = await q
     setSaving(false)
     if (error) { toast.error(error.message); return }
     toast.success(editing ? 'Registro actualizado' : 'Toma de conciencia registrada')
+    if (saved?.id) indexRow('awareness_records', saved.id)
     setModalOpen(false)
     load()
   }
@@ -681,6 +685,7 @@ function AwarenessTab({ orgId, canWrite }) {
     if (!ok) return
     const { error } = await supabase.from('awareness_records').delete().eq('id', r.id)
     if (error) { toast.error(error.message); return }
+    deindexRow('awareness_records', r.id)
     toast.success('Registro eliminado')
     load()
   }

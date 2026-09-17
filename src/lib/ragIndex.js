@@ -28,6 +28,13 @@ const ALLOWED = new Set([
   'quality_objectives',
   'internal_audits',
   'management_review',
+  'qms_changes',
+  'organizational_knowledge',
+  'infrastructure_assets',
+  'customer_feedback',
+  'customer_satisfaction_surveys',
+  'data_analysis_reports',
+  'awareness_records',
 ])
 
 /**
