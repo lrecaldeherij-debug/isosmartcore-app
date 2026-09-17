@@ -34,6 +34,7 @@ const RisksOpportunities = lazy(() => import('./RisksOpportunities'))
 const QualityObjectives = lazy(() => import('./QualityObjectives'))
 const StrategicActionPlan = lazy(() => import('./StrategicActionPlan'))
 const QmsChanges = lazy(() => import('./QmsChanges'))                  // 6.3
+const Inspection = lazy(() => import('./Inspection'))                  // ISO/IEC 17020 fase 1
 const Personnel = lazy(() => import('./Personnel'))
 const Training = lazy(() => import('./Training'))
 const Documents = lazy(() => import('./Documents'))
@@ -486,6 +487,13 @@ function AppShell() {
             <NavItem id="proveedores" label="Proveedores (8.4)" icon={Truck} />
           </NavGroup>
 
+          {/* Solo organismos de inspección: se habilita por organización */}
+          {org?.inspection_module_enabled && (
+            <NavGroup title="Inspección (17020)" sectionKey="inspeccion" icon={ShieldCheck}>
+              <NavItem id="inspeccion" label="Base técnica (5.2.3/7.2/7.3)" icon={Ruler} />
+            </NavGroup>
+          )}
+
           <NavGroup title="Evaluación (9)" sectionKey="evaluacion" icon={Search}>
             <NavItem id="analisis_datos" label="Análisis de Datos (9.1.3)" icon={BarChart3} />
             <NavItem id="auditorias" label="Auditorías Internas (9.2)" icon={Search} />
@@ -551,6 +559,7 @@ function AppShell() {
         {vistaActual === 'riesgos' && <RisksOpportunities />}
         {vistaActual === 'objetivos' && <QualityObjectives />}
         {vistaActual === 'cambios_sgc' && <QmsChanges />}
+        {vistaActual === 'inspeccion' && <Inspection />}
         {vistaActual === 'plan_estrategico' && <StrategicActionPlan />}
         {vistaActual === 'personal' && <Personnel />}
         {vistaActual === 'formacion' && <Training />}

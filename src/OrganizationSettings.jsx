@@ -26,15 +26,20 @@ const ROLE_DESCRIPTIONS = {
 const INVITABLE_ROLES = ['quality_manager', 'auditor', 'viewer']
 
 export default function OrganizationSettings() {
-  const { org, profile, can, role: myRole } = useOrg()
+  const { org, profile, can, role: myRole, refresh } = useOrg()
   const [tab, setTab] = useState('general')
   const [orgName, setOrgName] = useState('')
   const [members, setMembers] = useState([])
   const [loading, setLoading] = useState(false)
   const [msg, setMsg] = useState(null)
+  const [inspectionEnabled, setInspectionEnabled] = useState(false)
+  const [savingModule, setSavingModule] = useState(false)
 
   useEffect(() => {
-    if (org) setOrgName(org.name)
+    if (org) {
+      setOrgName(org.name)
+      setInspectionEnabled(!!org.inspection_module_enabled)
+    }
   }, [org])
 
   const showMsg = (text, kind = 'ok') => {
@@ -56,6 +61,27 @@ export default function OrganizationSettings() {
   useEffect(() => {
     if (tab === 'members') loadMembers()
   }, [tab])
+
+  // Módulo ISO/IEC 17020: se habilita por organización desde acá
+  const toggleInspectionModule = async (value) => {
+    setSavingModule(true)
+    const { error } = await supabase
+      .from('organizations')
+      .update({ inspection_module_enabled: value })
+      .eq('id', org.id)
+    setSavingModule(false)
+    if (error) {
+      showMsg(/inspection_module_enabled/i.test(error.message)
+        ? 'Falta aplicar la migración del módulo de inspección (17020).'
+        : error.message, 'err')
+      return
+    }
+    setInspectionEnabled(value)
+    showMsg(value
+      ? 'Módulos de inspección habilitados. Aparecen en el menú como "Inspección (17020)".'
+      : 'Módulos de inspección ocultos. Los datos cargados no se borran.')
+    if (typeof refresh === 'function') refresh()
+  }
 
   const saveOrgName = async () => {
     if (!orgName.trim()) return
@@ -146,6 +172,24 @@ export default function OrganizationSettings() {
               Solo el owner puede modificar estos datos.
             </p>
           )}
+
+          <hr style={{ border: 'none', borderTop: '1px solid var(--sidebar-border)', margin: '1.5rem 0' }} />
+
+          <h3 style={{ marginTop: 0 }}>Organismo de inspección (ISO/IEC 17020)</h3>
+          <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginTop: '-0.25rem' }}>
+            Si tu empresa hace inspecciones y va a acreditarse bajo ISO/IEC 17020, esto agrega los
+            módulos técnicos (alcance, métodos e ítems) sobre el mismo SGC. Si solo usás ISO 9001,
+            dejalo apagado y no cambia nada.
+          </p>
+          <label style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', cursor: can.admin ? 'pointer' : 'default' }}>
+            <input
+              type="checkbox"
+              checked={!!inspectionEnabled}
+              disabled={!can.admin || savingModule}
+              onChange={(e) => toggleInspectionModule(e.target.checked)}
+            />
+            <span>Habilitar módulos de inspección</span>
+          </label>
         </div>
       )}
 

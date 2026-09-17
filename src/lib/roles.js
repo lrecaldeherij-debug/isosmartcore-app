@@ -47,6 +47,10 @@ export const PERMISSIONS = {
   quality_objectives:      { read: READ_ALL, write: FULL_WRITE, delete: new Set(['owner', 'quality_manager']) },
   strategic_actions:       { read: READ_ALL, write: FULL_WRITE, delete: new Set(['owner', 'quality_manager']) },
   qms_changes:             { read: READ_ALL, write: FULL_WRITE, delete: new Set(['owner', 'quality_manager']) },
+  // ISO/IEC 17020 — organismo de inspección
+  inspection_scopes:       { read: READ_ALL, write: FULL_WRITE, delete: new Set(['owner']) },
+  inspection_methods:      { read: READ_ALL, write: FULL_WRITE, delete: new Set(['owner', 'quality_manager']) },
+  inspection_items:        { read: READ_ALL, write: OPERATIONAL_WRITE, delete: new Set(['owner', 'quality_manager']) },
   training_records:        { read: READ_ALL, write: FULL_WRITE, delete: new Set(['owner', 'quality_manager']) },
   personnel:               { read: READ_ALL, write: FULL_WRITE, delete: new Set(['owner', 'quality_manager']) },
   suppliers:               { read: READ_ALL, write: FULL_WRITE, delete: new Set(['owner', 'quality_manager']) },
