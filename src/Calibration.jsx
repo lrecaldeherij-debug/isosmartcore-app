@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { supabase } from './supabaseClient'
-import { consultarIA } from './aiClient'
+import { consultarIA, assertNoAiError } from './aiClient'
 import {
   Ruler, Plus, Calendar, AlertCircle, CheckCircle, FileText, X, Eye,
   Pencil, Trash2, Search, Filter, BarChart3, Sparkles, Loader2,
@@ -269,8 +269,8 @@ export default function Calibration() {
     try {
       const { data: profile } = await supabase.from('company_profile').select('*').maybeSingle()
       const resumen = profile ? {
-        nombre: profile.name, sector: profile.industry, tamano: profile.size,
-        productos: profile.main_products,
+        nombre: profile.name, sector: profile.industry, tamano: profile.employees_count,
+        productos: profile.main_products, descripcion: profile.description,
       } : null
 
       const prompt = `
@@ -1083,6 +1083,8 @@ function extractAllObjects(text) {
 }
 function parseAiArray(raw) {
   if (!raw) return null
+  // Si la IA falló, esto lanza con la causa real en vez de fabricar una fila
+  assertNoAiError(raw)
   const arrStr = extractFirstJson(raw, '[', ']')
   if (arrStr) { try { const arr = JSON.parse(arrStr); if (Array.isArray(arr) && arr.length) return arr } catch {} }
   const objStr = extractFirstJson(raw, '{', '}')

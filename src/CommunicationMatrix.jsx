@@ -1,7 +1,7 @@
 import { useEffect, useState, useMemo } from 'react'
 import { createPortal } from 'react-dom'
 import { supabase } from './supabaseClient'
-import { consultarIA } from './aiClient'
+import { consultarIA, assertNoAiError } from './aiClient'
 import {
   Share2, Plus, Trash2, Info, Pencil, X, Eye, ExternalLink,
   Sparkles, Loader2, Filter, BarChart3, Mail, Users
@@ -154,10 +154,9 @@ export default function CommunicationMatrix() {
       const profileResumen = profile ? {
         nombre: profile.name,
         sector: profile.industry,
-        tamano: profile.size,
-        ubicacion: profile.location,
+        tamano: profile.employees_count,
         productos: profile.main_products,
-        clientes_tipicos: profile.typical_clients,
+        descripcion: profile.description,
       } : null
 
       const prompt = `
@@ -825,6 +824,8 @@ function extractAllObjects(text) {
 // 3) múltiples objetos sueltos concatenados.
 function parseAiArray(raw) {
   if (!raw) return null
+  // Si la IA falló, esto lanza con la causa real en vez de fabricar una fila
+  assertNoAiError(raw)
   // 1) Array directo [...]
   const arrStr = extractFirstJson(raw, '[', ']')
   if (arrStr) {

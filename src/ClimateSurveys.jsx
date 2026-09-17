@@ -2,7 +2,7 @@ import { useEffect, useState, useMemo } from 'react'
 import { createPortal } from 'react-dom'
 import { supabase } from './supabaseClient'
 import { useOrg } from './OrgContext'
-import { consultarIA } from './aiClient'
+import { consultarIA, parseAiJson } from './aiClient'
 import {
   Sparkles, Loader2, Send, User, Pencil, Trash2, X,
   Eye, ExternalLink, BarChart3, Filter, TrendingUp, MailPlus, Check, AlertTriangle
@@ -298,10 +298,10 @@ Responde EXCLUSIVAMENTE con un JSON con este formato:
         prompt,
         'Eres un consultor experto en ISO 9001 cláusula 7.1.4 (ambiente para la operación de los procesos) y clima organizacional. Responde ÚNICAMENTE con el JSON pedido, sin markdown ni texto extra.'
       )
-      let cleanText = respuesta.replace(/```json/g, '').replace(/```/g, '').trim()
-      if (!cleanText.startsWith('{') && cleanText.includes('{')) cleanText = cleanText.substring(cleanText.indexOf('{'))
-      if (!cleanText.endsWith('}') && cleanText.includes('}')) cleanText = cleanText.substring(0, cleanText.lastIndexOf('}') + 1)
-      const data = JSON.parse(cleanText)
+      // parseAiJson lanza con la causa real si la IA falló; antes el JSON de
+      // error se tomaba como análisis válido y el panel salía en blanco.
+      const data = parseAiJson(respuesta)
+      if (!data || Array.isArray(data)) throw new Error('La IA no devolvió un análisis legible. Probá de nuevo.')
       setIaAnalysis(data)
     } catch (err) {
       toast.error('No pudimos procesarla. ' + (err?.message || ''))

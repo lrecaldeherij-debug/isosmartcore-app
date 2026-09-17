@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { v4 as uuidv4 } from 'uuid'
 import { supabase } from './supabaseClient'
-import { consultarIA } from './aiClient'
+import { consultarIA, parseAiJson } from './aiClient'
 import {
   Users, Plus, Search, Filter, Eye, Pencil, Trash2, X, AlertTriangle,
   Sparkles, Loader2, ExternalLink, FileText, GraduationCap, Award,
@@ -38,23 +38,9 @@ const EMPTY_FORM = {
 }
 
 // ─────── Helpers IA ───────
-function extractFirstJson(text) {
-  if (!text) return null
-  const start = text.indexOf('{') !== -1 ? text.indexOf('{') : text.indexOf('[')
-  if (start === -1) return null
-  let depth = 0, inStr = false, esc = false
-  const open = text[start], close = open === '{' ? '}' : ']'
-  for (let i = start; i < text.length; i++) {
-    const c = text[i]
-    if (esc) { esc = false; continue }
-    if (c === '\\') { esc = true; continue }
-    if (c === '"') { inStr = !inStr; continue }
-    if (inStr) continue
-    if (c === open) depth++
-    else if (c === close) { depth--; if (depth === 0) { try { return JSON.parse(text.slice(start, i + 1)) } catch { return null } } }
-  }
-  return null
-}
+// parseAiJson lanza si consultarIA devolvió un error (cuota, red, Gemini caído)
+const extractFirstJson = parseAiJson
+
 
 // Drive link helpers
 function convertDriveLinkToDirect(value) {
@@ -150,6 +136,14 @@ export default function Personnel() {
         supabase.from('training_attendees').select('person_id, training:training_id (course_name, training_date)').in('person_id', ids),
         supabase.from('performance_evaluations').select('*').in('person_id', ids).order('evaluation_date', { ascending: false })
       ])
+      // Antes estos fallos eran mudos: el historial de capacitaciones y de
+      // evaluaciones aparecía vacío como si la persona no tuviera ninguno.
+      const faltaMigracion = [tr.error, ev.error].some(e => e && /training_attendees|performance_evaluations/i.test(e.message))
+      if (faltaMigracion) {
+        toast.error('Falta aplicar la migración de capacitaciones y evaluaciones de desempeño.')
+      } else if (tr.error || ev.error) {
+        toast.error('No se pudo cargar el historial: ' + (tr.error || ev.error).message)
+      }
       const grp = {}
       for (const t of tr.data || []) {
         if (!grp[t.person_id]) grp[t.person_id] = []

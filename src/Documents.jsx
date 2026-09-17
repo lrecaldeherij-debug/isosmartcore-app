@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { supabase } from './supabaseClient'
 import { useOrg } from './OrgContext'
-import { consultarIA } from './aiClient'
+import { consultarIA, assertNoAiError } from './aiClient'
 import { indexRow, deindexRow } from './lib/ragIndex'
 import {
   ShieldCheck, Send, Pencil, Trash2, AlertCircle, CheckCircle2, History,
@@ -14,7 +14,7 @@ import IsoInfoCard from './IsoInfoCard'
 import { CLAUSE_GUIDES } from './clauseGuides'
 import ModuleSeedBanner from './ModuleSeedBanner'
 import { toast } from './lib/toast'
-import { confirm } from './lib/confirm'
+import { confirm, promptText } from './lib/confirm'
 
 const STATUS_COLORS = {
   'Borrador':     { bg: '#fff8e1', fg: '#8a6d00', stripe: '#f5b800' },
@@ -372,7 +372,8 @@ export default function Documents() {
   }
 
   const handleSubmitForApproval = async (doc) => {
-    const note = prompt('Nota para el aprobador (opcional):') || null
+    // window.prompt está bloqueado en Chrome mobile / iframe: usamos el modal propio
+    const note = (await promptText('Nota para el aprobador (opcional)', { rows: 2 })) || null
     const { error } = await supabase.rpc('submit_for_approval', {
       p_entity_type: 'documents_versions',
       p_entity_id: doc.id,
@@ -405,8 +406,8 @@ export default function Documents() {
     try {
       const { data: profile } = await supabase.from('company_profile').select('*').maybeSingle()
       const profileResumen = profile ? {
-        nombre: profile.name, sector: profile.industry, tamano: profile.size,
-        ubicacion: profile.location, productos: profile.main_products,
+        nombre: profile.name, sector: profile.industry, tamano: profile.employees_count,
+        productos: profile.main_products, descripcion: profile.description,
       } : null
 
       const codigosUsados = items.map(i => i.code)
@@ -1410,6 +1411,8 @@ function extractAllObjects(text) {
 
 function parseAiArray(raw) {
   if (!raw) return null
+  // Si la IA falló, esto lanza con la causa real en vez de fabricar una fila
+  assertNoAiError(raw)
   const arrStr = extractFirstJson(raw, '[', ']')
   if (arrStr) { try { const arr = JSON.parse(arrStr); if (Array.isArray(arr) && arr.length) return arr } catch {} }
   const objStr = extractFirstJson(raw, '{', '}')

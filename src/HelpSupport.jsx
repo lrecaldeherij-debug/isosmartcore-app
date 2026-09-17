@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { useOrg } from './OrgContext'
 import { supabase } from './supabaseClient'
+import { companyContextLine } from './lib/companyContext'
 import { consultarIA } from './aiClient'
 import { toast } from './lib/toast'
 import { colors, families, tracking, weight } from './components/ui/tokens'
@@ -40,7 +41,9 @@ export default function HelpSupport({ embedded = false, onClose }) {
   useEffect(() => {
     (async () => {
       try {
-        const { data } = await supabase.from('company_profile').select('company_name, sector, size, main_products').maybeSingle()
+        // Columnas reales: name / industry / employees_count (las anteriores no
+        // existen, así que la consulta fallaba y el asistente nunca tenía contexto)
+        const { data } = await supabase.from('company_profile').select('name, industry, employees_count, main_products, description').maybeSingle()
         setOrgContext(data || null)
       } catch (err) {
         console.warn('HelpSupport: contexto org no disponible', err)
@@ -60,7 +63,7 @@ export default function HelpSupport({ embedded = false, onClose }) {
     setLoading(true)
 
     const ctxLine = orgContext
-      ? `Contexto de la empresa del usuario: "${orgContext.company_name || 'sin nombre'}"${orgContext.sector ? ', sector: ' + orgContext.sector : ''}${orgContext.size ? ', tamaño: ' + orgContext.size : ''}. Usa este contexto si la pregunta lo amerita.`
+      ? `Contexto de la empresa del usuario: ${companyContextLine(orgContext)}. Usa este contexto si la pregunta lo amerita.`
       : 'Sin contexto de empresa cargado todavía.'
     const sys = `${SYSTEM_BASE}\n\n${ctxLine}`
 
@@ -178,7 +181,7 @@ export default function HelpSupport({ embedded = false, onClose }) {
 
       {tab === 'formacion' && <FormationTab orgId={org?.id} />}
 
-      {tab === 'human' && <HumanSupportForm orgName={orgContext?.company_name || org?.name} />}
+      {tab === 'human' && <HumanSupportForm orgName={orgContext?.name || org?.name} />}
     </div>
   )
 

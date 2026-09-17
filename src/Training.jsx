@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { supabase } from './supabaseClient'
-import { consultarIA } from './aiClient'
+import { consultarIA, parseAiJson } from './aiClient'
+import { companyContextLine } from './lib/companyContext'
 import {
   GraduationCap, Plus, Search, Filter, Eye, Pencil, Trash2, X,
   Sparkles, Loader2, CheckCircle2, AlertTriangle, Clock, Award,
@@ -47,7 +48,7 @@ const EMPTY_FORM = {
   trainer: '',
   duration_hours: '',
   cost: '',
-  currency: 'PYG',
+  currency: 'USD',
   learning_objective: '',
   target_job_ids: [],
   target_process_ids: [],
@@ -66,24 +67,8 @@ const EMPTY_FORM = {
 }
 
 // ───────────────────── Helpers IA ──────────────────────
-function extractFirstJson(text) {
-  if (!text) return null
-  const i0 = text.indexOf('{'), i1 = text.indexOf('[')
-  const start = i0 === -1 ? i1 : (i1 === -1 ? i0 : Math.min(i0, i1))
-  if (start === -1) return null
-  let depth = 0, inStr = false, esc = false
-  const open = text[start], close = open === '[' ? ']' : '}'
-  for (let i = start; i < text.length; i++) {
-    const c = text[i]
-    if (esc) { esc = false; continue }
-    if (c === '\\') { esc = true; continue }
-    if (c === '"') { inStr = !inStr; continue }
-    if (inStr) continue
-    if (c === open) depth++
-    else if (c === close) { depth--; if (depth === 0) { try { return JSON.parse(text.slice(start, i + 1)) } catch { return null } } }
-  }
-  return null
-}
+// parseAiJson lanza si consultarIA devolvió un error (cuota, red, Gemini caído)
+const extractFirstJson = parseAiJson
 
 function parseAiArray(raw) {
   if (!raw) return []
@@ -148,10 +133,11 @@ export default function Training({ alCambiarVista }) {
       supabase.from('training_records').select('*').order('training_date', { ascending: false }),
       supabase.from('personnel').select('id, full_name, job_title, job_id, process_id, competency_gap, status').order('full_name'),
       supabase.from('job_descriptions').select('id, title, code, competencies_json').order('title'),
-      supabase.from('processes').select('id, name, type').order('name'),
+      supabase.from('processes').select('id, name, process_type').order('name'),
       supabase.from('quality_objectives').select('id, name, status').order('created_at', { ascending: false }),
       supabase.from('company_profile').select('*').maybeSingle(),
     ])
+    if (tr.error) toast.error('No se pudieron cargar las capacitaciones: ' + tr.error.message)
     setItems(tr.data || [])
     setPersonnel(per.data || [])
     setJobs(jb.data || [])
@@ -164,10 +150,18 @@ export default function Training({ alCambiarVista }) {
 
   const fetchAttendees = async (trainingIds) => {
     if (!trainingIds?.length) return
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('training_attendees')
       .select('training_id, person_id, personnel:person_id (full_name, job_title)')
       .in('training_id', trainingIds)
+    // Sin esto la lista de asistentes salía vacía en silencio (la tabla no
+    // existía en producción hasta la migración del 2026-09-17)
+    if (error) {
+      toast.error(/training_attendees/i.test(error.message)
+        ? 'Falta aplicar la migración de asistentes a capacitación.'
+        : 'No se pudieron cargar los asistentes: ' + error.message)
+      return
+    }
     const grouped = {}
     for (const a of data || []) {
       if (!grouped[a.training_id]) grouped[a.training_id] = []
@@ -223,9 +217,9 @@ export default function Training({ alCambiarVista }) {
   const jobMap = useMemo(() => Object.fromEntries(jobs.map(j => [j.id, j])), [jobs])
   const processMap = useMemo(() => Object.fromEntries(processes.map(p => [p.id, p])), [processes])
 
-  const formatCurrency = (n, c = 'PYG') => {
+  const formatCurrency = (n, c = 'USD') => {
     if (!n) return '—'
-    return new Intl.NumberFormat('es-PY').format(n) + ' ' + (c || 'PYG')
+    return new Intl.NumberFormat('es-EC').format(n) + ' ' + (c || 'USD')
   }
 
   const diffChanges = (orig, curr) => {
@@ -306,10 +300,12 @@ export default function Training({ alCambiarVista }) {
       const { error } = await supabase.from('training_records').update(payload).eq('id', editingId)
       if (error) { toast.error(error.message); return }
 
-      await supabase.from('training_attendees').delete().eq('training_id', editingId)
+      const { error: delErr } = await supabase.from('training_attendees').delete().eq('training_id', editingId)
+      if (delErr) toast.warning('Curso guardado, error actualizando asistentes: ' + delErr.message)
       if (selectedAttendees.size > 0) {
         const rows = [...selectedAttendees].map(person_id => ({ training_id: editingId, person_id, attended: true }))
-        await supabase.from('training_attendees').insert(rows)
+        const { error: aErr } = await supabase.from('training_attendees').insert(rows)
+        if (aErr) toast.warning('Curso guardado, error vinculando asistentes: ' + aErr.message)
       }
       toast.success('Capacitación actualizada')
     } else {
@@ -334,6 +330,7 @@ export default function Training({ alCambiarVista }) {
 
   const handleDelete = async (id) => {
     if (!await confirm('¿Eliminar este registro de capacitación? Se borrarán también los asistentes vinculados.', { tone: 'danger', confirmText: 'Eliminar' })) return
+    // Si la FK tiene ON DELETE CASCADE esto es redundante, pero no molesta
     await supabase.from('training_attendees').delete().eq('training_id', id)
     const { error } = await supabase.from('training_records').delete().eq('id', id)
     if (error) { toast.error(error.message); return }
@@ -393,14 +390,17 @@ export default function Training({ alCambiarVista }) {
         cargo: j.title,
         competencias: j.competencies_json
       }))
-      const ctxProcesses = processes.slice(0, 15).map(p => ({ id: p.id, nombre: p.name, tipo: p.type }))
+      const ctxProcesses = processes.slice(0, 15).map(p => ({ id: p.id, nombre: p.name, tipo: p.process_type }))
       const ctxObjectives = objectives.filter(o => o.status !== 'Cumplido').slice(0, 10).map(o => ({ nombre: o.name, status: o.status }))
 
-      const empresa = orgProfile?.company_name || 'la empresa'
-      const sector = orgProfile?.sector || ''
+      // Columnas reales de company_profile (company_name/sector no existen)
+      const empresa = orgProfile?.name || 'la empresa'
+      const sector = orgProfile?.industry || ''
       const year = new Date().getFullYear() + 1
 
       const prompt = `Eres consultor ISO 9001 experto en gestión de talento humano. Genera un PLAN ANUAL DE CAPACITACIÓN para ${empresa}${sector ? ' (sector: ' + sector + ')'  : ''} para el año ${year}, basado en la Detección de Necesidades de Capacitación (DNC) según ISO 9001 cláusula 7.2.
+
+EMPRESA: ${companyContextLine(orgProfile)}
 
 PERSONAL CON BRECHAS DE COMPETENCIA:
 ${JSON.stringify(ctxPersonnel, null, 2)}
@@ -583,7 +583,7 @@ Devuelve SOLO un JSON objeto, sin markdown:
         <Kpi label="Realizados" value={stats.realizados} icon={<CheckCircle2 size={18} />} color="#1e40af" />
         <Kpi label="Eficaces" value={stats.eficaces} icon={<Award size={18} />} color="#166534" />
         <Kpi label="Pend. eficacia" value={stats.pendienteEf} icon={<AlertTriangle size={18} />} color="#b45309" />
-        <Kpi label="Costo total" value={formatCurrency(stats.totalCost, 'PYG')} icon={<DollarSign size={18} />} color="#16a34a" small />
+        <Kpi label="Costo total" value={formatCurrency(stats.totalCost, 'USD')} icon={<DollarSign size={18} />} color="#16a34a" small />
       </div>
 
       {/* Sugerencias IA: Plan anual */}
@@ -806,7 +806,7 @@ function FormCard({ form, setForm, editing, jobs, processes, personnel, selected
             </Field>
             <Field label="Moneda">
               <select value={form.currency} onChange={e => set({ currency: e.target.value })} style={inputStyle}>
-                <option>PYG</option><option>USD</option><option>EUR</option><option>BRL</option>
+                <option>USD</option><option>EUR</option><option>COP</option><option>PEN</option><option>PYG</option>
               </select>
             </Field>
           </Row>

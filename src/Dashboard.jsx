@@ -54,7 +54,7 @@ export default function Dashboard({ alCambiarVista }) {
         supabase.from('job_descriptions').select('id, title, competencies_json').eq('org_id', orgId),
         supabase.from('stakeholders').select('id, name, expectations, needs').eq('org_id', orgId),
         supabase.from('context_analysis').select('id, last_reviewed_date').eq('org_id', orgId),
-        supabase.from('documents').select('id').eq('org_id', orgId).limit(1000),
+        supabase.from('documents_versions').select('id, status').eq('org_id', orgId).limit(1000),
         supabase.from('communication_matrix').select('id').eq('org_id', orgId).limit(1000),
         supabase.from('quality_policy').select('policy_text, final_policy_statement, status').eq('org_id', orgId).order('created_at', { ascending: false }).limit(1).maybeSingle(),
         supabase.from('strategic_actions').select('id').eq('org_id', orgId).limit(500),

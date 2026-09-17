@@ -132,9 +132,12 @@ export function computeImplementation(r) {
     })(),
     // 7.5 Documentos
     (() => {
+      // La tabla real es documents_versions: antes consultaba 'documents'
+      // (inexistente) y el avance de 7.5 siempre daba 0.
       const total = r.documents.length
-      const pct = Math.min(100, total >= 5 ? 100 : total * 18)
-      return item('7.5', 'Información Documentada', 'documentos', pct >= 70, pct, `${total} documentos registrados`)
+      const vigentes = r.documents.filter(d => d.status === 'Vigente').length
+      const pct = Math.min(100, (total >= 5 ? 60 : total * 12) + (total ? Math.round(vigentes / total * 40) : 0))
+      return item('7.5', 'Información Documentada', 'documentos', pct >= 70, pct, `${total} documentos · ${vigentes} vigentes`)
     })(),
     // 8.4 Proveedores
     (() => {
@@ -214,7 +217,7 @@ export async function loadSnapshotData(supabase, orgId) {
     supabase.from('job_descriptions').select('id, title, competencies_json').eq('org_id', orgId),
     supabase.from('stakeholders').select('id, name, expectations, needs').eq('org_id', orgId),
     supabase.from('context_analysis').select('id, last_reviewed_date').eq('org_id', orgId),
-    supabase.from('documents').select('id').eq('org_id', orgId).limit(1000),
+    supabase.from('documents_versions').select('id, status').eq('org_id', orgId).limit(1000),
     supabase.from('communication_matrix').select('id').eq('org_id', orgId).limit(1000),
     supabase.from('quality_policy').select('policy_text, final_policy_statement, status').eq('org_id', orgId).order('created_at', { ascending: false }).limit(1).maybeSingle(),
     supabase.from('strategic_actions').select('id').eq('org_id', orgId).limit(500),

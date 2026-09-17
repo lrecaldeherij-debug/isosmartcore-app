@@ -44,6 +44,13 @@ Cobertura técnica del software frente a los requisitos de la norma.
 
 ## 7. Apoyo
 
+> **Revisión 2026-09-17:** tres tablas que el frontend usa no existían en
+> producción (`training_attendees`, `performance_evaluations`,
+> `report_artifacts`): las definían dos migraciones del archivo (v23 y v28) que
+> nunca se aplicaron. El historial de capacitaciones por persona, las
+> evaluaciones de desempeño y el informe oficial firmado fallaban en silencio.
+> Se recrean en `20260917130000_tablas_faltantes_v23_v28.sql`.
+
 - [x] **7.1.2 Personas** — `Personnel.jsx`
 - [x] **7.1.3 Infraestructura** — `Infrastructure.jsx` *(cerrado 2026-09-10)*
       Activos por categoría con criticidad, plan de mantenimiento preventivo e

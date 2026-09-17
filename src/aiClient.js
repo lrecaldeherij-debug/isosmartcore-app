@@ -82,6 +82,17 @@ export function parseAiJson(raw) {
   return parsed
 }
 
+/**
+ * Lanza si la respuesta es un error de consultarIA; si no, no hace nada.
+ *
+ * Para los parsers "tolerantes" que devuelven strings o arman arrays a mano:
+ * sin esto, '{"error":"❌ ..."}' terminaba convertido en una fila con un campo
+ * `error`, y el módulo guardaba basura en vez de mostrar la causa real.
+ */
+export function assertNoAiError(raw) {
+  parseAiJson(raw)
+}
+
 export async function consultarIA(prompt, systemContext = '', options = {}) {
   const { sanitized, warnings, wasModified } = sanitizeUserPrompt(prompt)
 
