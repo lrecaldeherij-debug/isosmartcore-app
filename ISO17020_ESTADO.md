@@ -54,16 +54,36 @@ impide duplicar), datos técnicos, verificación registrada de que el ítem est�
 **listo** antes de inspeccionarlo (quién y cuándo) y notas de cuidado para
 evitar deterioro mientras está bajo custodia del organismo.
 
+## Decisión tomada: Herij es **tipo no A** (2026-09-17)
+
+La empresa también interviene ítems del mismo tipo que inspecciona, así que
+declara tipo no A. La norma no lo prohíbe, pero exige salvaguardas, y la más
+dura es el Anexo A.2 b): **quien diseñó, fabricó, instaló, reparó o mantuvo un
+ítem no puede inspeccionar ese mismo ítem**.
+
+Para poder aplicar esa regla hay que saber quién intervino cada ítem, y eso no
+se registraba en ningún lado. Construido en
+`20260917150000_iso17020_salvaguardas_no_a.sql`:
+
+- `item_interventions` — qué hizo la empresa sobre cada ítem (diseño,
+  fabricación, instalación, reparación, mantenimiento, modificación), quién lo
+  hizo (personal propio o contratista), cuándo y con qué OT de respaldo.
+- `item_inspection_restrictions` — vista que responde, por ítem, qué personas
+  quedan inhabilitadas y por qué. La fase 3 la va a consultar para **bloquear**
+  la asignación de esos inspectores a ese ítem.
+- Declaración de tipo y salvaguardas a nivel organización (Configuración), y
+  por actividad en el alcance: la edición 2026 permite tipos distintos por
+  actividad.
+
+En la pestaña Ítems, cada ítem con intervenciones muestra en rojo quiénes no
+pueden inspeccionarlo.
+
 ## Decisiones que siguen abiertas
 
-1. **Tipo de independencia de Herij.** ¿La empresa diseña, fabrica, instala,
-   repara o mantiene alguno de los ítems que inspecciona? Si no, es Tipo A. Si
-   sí, es no A y aplica la salvaguarda de que quien mantiene no inspecciona el
-   mismo ítem. Ya se puede declarar por actividad en el módulo.
-2. **Alcance inicial a acreditar.** Conviene arrancar angosto (por ejemplo
+1. **Alcance inicial a acreditar.** Conviene arrancar angosto (por ejemplo
    espesores por ultrasonido e inspección visual de soldadura) porque cada
    actividad arrastra métodos, inspectores autorizados y formato de informe.
-3. **Validación de IsoSmartCore (7.5.1).** El sistema que registra y reporta
+2. **Validación de IsoSmartCore (7.5.1).** El sistema que registra y reporta
    inspecciones debe estar validado y cada cambio autorizado antes de
    implementarse. La norma exime al software comercial de uso general, pero
    conviene no contar con esa exención: hay que armar un expediente de

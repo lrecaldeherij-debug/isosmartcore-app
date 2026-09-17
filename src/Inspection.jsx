@@ -16,7 +16,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
   Search, Plus, Pencil, Trash2, ShieldCheck, FlaskConical, Boxes, Ruler,
-  AlertTriangle, CheckCircle2, Sparkles, Lock, ClipboardCheck,
+  AlertTriangle, CheckCircle2, Sparkles, Lock, ClipboardCheck, UserX, Wrench,
 } from 'lucide-react'
 import { supabase } from './supabaseClient'
 import { useOrg } from './OrgContext'
@@ -51,6 +51,14 @@ const VALIDATION_STATUS = ['No aplica', 'Pendiente', 'En curso', 'Validado', 'No
 const ITEM_STATUS = {
   'Registrado': 'neutral', 'Listo': 'info', 'En inspección': 'warning',
   'Inspeccionado': 'success', 'No apto': 'danger', 'Fuera de alcance': 'neutral',
+}
+
+// Anexo A.2 b): quien intervino un ítem no puede inspeccionarlo
+const INTERVENTION_TYPES = ['Diseño', 'Fabricación', 'Instalación', 'Reparación', 'Mantenimiento', 'Modificación']
+
+const EMPTY_INTERVENTION = {
+  intervention_type: 'Mantenimiento', person_id: '', person_name: '',
+  performed_at: new Date().toISOString().slice(0, 10), work_order_ref: '', description: '',
 }
 
 const EMPTY_SCOPE = {
@@ -99,16 +107,21 @@ export default function Inspection() {
   const [scopes, setScopes] = useState([])
   const [methods, setMethods] = useState([])
   const [items, setItems] = useState([])
+  const [personnel, setPersonnel] = useState([])
+  const [restrictions, setRestrictions] = useState([])
   const [profile, setProfile] = useState(null)
   const [loading, setLoading] = useState(true)
 
   const load = async () => {
     setLoading(true)
-    const [sc, me, it, cp] = await Promise.all([
+    const [sc, me, it, cp, per, res] = await Promise.all([
       supabase.from('inspection_scopes').select('*').eq('org_id', org.id).order('activity'),
       supabase.from('inspection_methods').select('*').eq('org_id', org.id).order('name'),
       supabase.from('inspection_items').select('*').eq('org_id', org.id).order('tag'),
       supabase.from('company_profile').select('*').eq('org_id', org.id).maybeSingle(),
+      supabase.from('personnel').select('id, full_name, job_title').eq('org_id', org.id).order('full_name'),
+      // Quién quedó inhabilitado para inspeccionar cada ítem (Anexo A.2 b)
+      supabase.from('item_inspection_restrictions').select('*').eq('org_id', org.id),
     ])
     const err = sc.error || me.error || it.error
     if (err) {
@@ -119,6 +132,8 @@ export default function Inspection() {
     setScopes(sc.data || [])
     setMethods(me.data || [])
     setItems(it.data || [])
+    setPersonnel(per.data || [])
+    setRestrictions(res.data || [])
     setProfile(cp.data || null)
     setLoading(false)
   }
@@ -163,7 +178,7 @@ export default function Inspection() {
 
       {tab === 'scopes' && (
         <ScopesTab scopes={scopes} methods={methods} canWrite={canWrite} canDelete={canDelete}
-          orgId={org.id} onChanged={load} />
+          orgId={org.id} defaultIndependence={org.inspection_independence_type || 'no_A'} onChanged={load} />
       )}
       {tab === 'methods' && (
         <MethodsTab methods={methods} scopes={scopes} canWrite={canWrite} canDelete={canDelete}
@@ -171,7 +186,8 @@ export default function Inspection() {
       )}
       {tab === 'items' && (
         <ItemsTab items={items} scopes={scopes} canWrite={canWrite} canDelete={canDelete}
-          orgId={org.id} onChanged={load} />
+          orgId={org.id} personnel={personnel} restrictions={restrictions}
+          isNoA={(org.inspection_independence_type || 'no_A') === 'no_A'} onChanged={load} />
       )}
     </div>
   )
@@ -179,7 +195,7 @@ export default function Inspection() {
 
 // ─── Pestaña 1: alcance técnico (5.2.3) ──────────────────────────────────────
 
-function ScopesTab({ scopes, methods, canWrite, canDelete, orgId, onChanged }) {
+function ScopesTab({ scopes, methods, canWrite, canDelete, orgId, defaultIndependence, onChanged }) {
   const [modal, setModal] = useState(false)
   const [editing, setEditing] = useState(null)
   const [form, setForm] = useState(EMPTY_SCOPE)
@@ -192,7 +208,10 @@ function ScopesTab({ scopes, methods, canWrite, canDelete, orgId, onChanged }) {
     sinMetodo: scopes.filter(s => !methods.some(m => m.scope_id === s.id)).length,
   }), [scopes, methods])
 
-  const openNew = () => { setForm({ ...EMPTY_SCOPE, code: `ALC-${String(scopes.length + 1).padStart(2, '0')}` }); setEditing(null); setModal(true) }
+  const openNew = () => {
+    setForm({ ...EMPTY_SCOPE, independence_type: defaultIndependence, code: `ALC-${String(scopes.length + 1).padStart(2, '0')}` })
+    setEditing(null); setModal(true)
+  }
   const openEdit = (s) => {
     setForm({ ...EMPTY_SCOPE, ...Object.fromEntries(Object.keys(EMPTY_SCOPE).map(k => [k, s[k] ?? EMPTY_SCOPE[k]])) })
     setEditing(s); setModal(true)
@@ -332,6 +351,16 @@ function ScopesTab({ scopes, methods, canWrite, canDelete, orgId, onChanged }) {
               </Select>
             </Field>
           </Row>
+          {form.independence_type === 'no_A' && (
+            <p style={{
+              fontSize: font.sm, color: colors.warningText, background: colors.warningLight,
+              padding: '8px 10px', borderRadius: radius.md, margin: '0 0 8px',
+            }}>
+              <strong>Tipo no A:</strong> quien haya diseñado, fabricado, instalado, reparado o mantenido un ítem
+              no puede inspeccionar ese mismo ítem (Anexo A.2 b). Registrá esas intervenciones en la pestaña Ítems
+              para que el sistema sepa a quién inhabilitar.
+            </p>
+          )}
           <Field label="Justificación del tipo" hint="Qué vínculos existen con quien diseña, fabrica o mantiene el ítem, y qué salvaguardas se aplican">
             <Textarea rows={2} value={form.independence_note} onChange={e => setForm({ ...form, independence_note: e.target.value })} />
           </Field>
@@ -654,7 +683,13 @@ Devuelve SOLO JSON, sin markdown:
 
 // ─── Pestaña 3: ítems (7.3) ──────────────────────────────────────────────────
 
-function ItemsTab({ items, scopes, canWrite, canDelete, orgId, onChanged }) {
+function ItemsTab({ items, scopes, canWrite, canDelete, orgId, personnel, restrictions, isNoA, onChanged }) {
+  const [intervFor, setIntervFor] = useState(null)   // ítem al que se le cargan intervenciones
+  const restrictionsByItem = useMemo(() => {
+    const m = {}
+    for (const r of restrictions || []) (m[r.item_id] ||= []).push(r)
+    return m
+  }, [restrictions])
   const [modal, setModal] = useState(false)
   const [editing, setEditing] = useState(null)
   const [form, setForm] = useState(EMPTY_ITEM)
@@ -667,7 +702,8 @@ function ItemsTab({ items, scopes, canWrite, canDelete, orgId, onChanged }) {
     listos: items.filter(i => i.readiness_verified).length,
     sinVerificar: items.filter(i => !i.readiness_verified && i.status !== 'Inspeccionado').length,
     noAptos: items.filter(i => i.status === 'No apto').length,
-  }), [items])
+    conIntervencion: Object.keys(restrictionsByItem).length,
+  }), [items, restrictionsByItem])
 
   const filtered = useMemo(() => items.filter(i => {
     if (filterStatus !== 'all' && i.status !== filterStatus) return false
@@ -731,7 +767,19 @@ function ItemsTab({ items, scopes, canWrite, canDelete, orgId, onChanged }) {
           color={kpis.sinVerificar > 0 ? colors.warning : colors.success} subtitle="no inspeccionar aún" />
         <Kpi label="No aptos" value={kpis.noAptos} icon={<AlertTriangle size={14} />}
           color={kpis.noAptos > 0 ? colors.danger : colors.success} />
+        {isNoA && (
+          <Kpi label="Con intervención propia" value={kpis.conIntervencion} icon={<UserX size={14} />}
+            color={colors.info} subtitle="tienen personal inhabilitado" />
+        )}
       </Grid>
+
+      {isNoA && (
+        <p style={{ margin: '14px 0 0', fontSize: font.sm, color: colors.textMuted, maxWidth: '70ch' }}>
+          Herij está declarada <strong>tipo no A</strong>: también interviene ítems del mismo tipo que inspecciona.
+          Por eso cada ítem lleva el registro de qué hizo la empresa sobre él y quién, y esas personas
+          quedan inhabilitadas para inspeccionarlo (Anexo A.2 b).
+        </p>
+      )}
 
       <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center', margin: '16px 0 12px' }}>
         <div style={{ position: 'relative', flex: '1 1 220px', minWidth: '180px' }}>
@@ -771,8 +819,22 @@ function ItemsTab({ items, scopes, canWrite, canDelete, orgId, onChanged }) {
                       Listo verificado por {it.readiness_by} el {it.readiness_at}
                     </div>
                   )}
+                  {(restrictionsByItem[it.id] || []).length > 0 && (
+                    <div style={{
+                      marginTop: '8px', padding: '6px 8px', background: colors.dangerLight || colors.warningLight,
+                      color: colors.dangerText || colors.warningText, borderRadius: radius.md, fontSize: font.xs,
+                    }}>
+                      <strong>No pueden inspeccionarlo:</strong>{' '}
+                      {restrictionsByItem[it.id].map(r => `${r.person_name || 'sin identificar'} (${r.interventions})`).join(' · ')}
+                    </div>
+                  )}
                 </div>
                 <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                  {isNoA && canWrite && (
+                    <Button size="sm" variant="ghost" icon={<Wrench size={14} />} onClick={() => setIntervFor(it)}>
+                      Intervenciones
+                    </Button>
+                  )}
                   {canWrite && !it.readiness_verified && (
                     <Button size="sm" variant="success" icon={<ClipboardCheck size={14} />} onClick={() => verificarListo(it)}>
                       Verificar listo
@@ -844,6 +906,148 @@ function ItemsTab({ items, scopes, canWrite, canDelete, orgId, onChanged }) {
           <Button variant="primary" onClick={save} loading={saving} disabled={!canWrite}>Guardar</Button>
         </Modal.Footer>
       </Modal>
+
+      <InterventionsModal item={intervFor} onClose={() => setIntervFor(null)} orgId={orgId}
+        personnel={personnel} canWrite={canWrite} onChanged={onChanged} />
     </>
+  )
+}
+
+// ─── Intervenciones de la empresa sobre un ítem (Anexo A.2 b) ────────────────
+//
+// Tipo no A: la empresa también interviene ítems como los que inspecciona.
+// Quien figure acá queda inhabilitado para inspeccionar ESE ítem. La fase 3
+// (asignación de inspector) va a leer esta misma información para bloquearlo.
+
+function InterventionsModal({ item, onClose, orgId, personnel, canWrite, onChanged }) {
+  const [rows, setRows] = useState([])
+  const [form, setForm] = useState(EMPTY_INTERVENTION)
+  const [loading, setLoading] = useState(false)
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    if (!item) { setRows([]); return }
+    let cancelled = false
+    setLoading(true)
+    supabase.from('item_interventions')
+      .select('*, personnel:person_id (full_name)')
+      .eq('item_id', item.id)
+      .order('performed_at', { ascending: false })
+      .then(({ data, error }) => {
+        if (cancelled) return
+        if (error) toast.error('No se pudieron cargar las intervenciones: ' + error.message)
+        setRows(data || [])
+        setForm(EMPTY_INTERVENTION)
+        setLoading(false)
+      })
+    return () => { cancelled = true }
+  }, [item])
+
+  if (!item) return null
+
+  const add = async () => {
+    if (!form.person_id && !form.person_name.trim()) {
+      return toast.warning('Indicá quién hizo la intervención: sin persona identificada la inhabilitación no se puede aplicar')
+    }
+    setSaving(true)
+    const { data: { user } } = await supabase.auth.getUser()
+    const { error } = await supabase.from('item_interventions').insert([{
+      org_id: orgId,
+      item_id: item.id,
+      intervention_type: form.intervention_type,
+      person_id: form.person_id || null,
+      person_name: form.person_id ? null : form.person_name.trim(),
+      performed_at: form.performed_at || null,
+      work_order_ref: form.work_order_ref || null,
+      description: form.description || null,
+      created_by: user?.id,
+    }])
+    setSaving(false)
+    if (error) return toast.error(error.message)
+    toast.success('Intervención registrada. Esa persona ya no puede inspeccionar este ítem.')
+    setForm(EMPTY_INTERVENTION)
+    onChanged()
+    onClose()
+  }
+
+  const remove = async (r) => {
+    const ok = await confirm(
+      '¿Eliminar esta intervención? Si la persona efectivamente intervino el ítem, borrarla deja al organismo sin la evidencia de la salvaguarda.',
+      { title: 'Eliminar intervención', tone: 'danger', confirmText: 'Eliminar' })
+    if (!ok) return
+    const { error } = await supabase.from('item_interventions').delete().eq('id', r.id)
+    if (error) return toast.error(error.message)
+    toast.success('Intervención eliminada')
+    setRows(prev => prev.filter(x => x.id !== r.id))
+    onChanged()
+  }
+
+  return (
+    <Modal open={!!item} onClose={onClose} title={`Intervenciones sobre ${item.tag}`} maxWidth="760px">
+      <Modal.Section title="Qué hizo la empresa sobre este ítem">
+        <p style={{ margin: '0 0 10px', fontSize: font.sm, color: colors.textMuted }}>
+          Registrá diseño, fabricación, instalación, reparación, mantenimiento o modificación hechos por la
+          empresa sobre este ítem. Quien figure acá queda inhabilitado para inspeccionarlo.
+        </p>
+        {loading ? <Spinner label="Cargando…" /> : rows.length === 0 ? (
+          <p style={{ fontSize: font.sm, color: colors.textGhost, fontStyle: 'italic', margin: 0 }}>
+            Sin intervenciones registradas: cualquier inspector autorizado puede inspeccionarlo.
+          </p>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            {rows.map(r => (
+              <div key={r.id} style={{
+                display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap',
+                border: `1px solid ${colors.border}`, borderRadius: radius.md, padding: '8px 10px',
+              }}>
+                <Badge variant="warning">{r.intervention_type}</Badge>
+                <div style={{ flex: '1 1 200px', minWidth: 0, fontSize: font.sm }}>
+                  <strong>{r.personnel?.full_name || r.person_name || 'Sin identificar'}</strong>
+                  {r.performed_at ? ` · ${r.performed_at}` : ''}
+                  {r.work_order_ref ? ` · ${r.work_order_ref}` : ''}
+                  {r.description ? <div style={{ color: colors.textMuted }}>{r.description}</div> : null}
+                </div>
+                {canWrite && <Button size="sm" variant="ghost" icon={<Trash2 size={14} />} onClick={() => remove(r)} />}
+              </div>
+            ))}
+          </div>
+        )}
+      </Modal.Section>
+
+      {canWrite && (
+        <Modal.Section title="Registrar intervención">
+          <Row>
+            <Field label="Tipo">
+              <Select value={form.intervention_type} onChange={e => setForm({ ...form, intervention_type: e.target.value })}>
+                {INTERVENTION_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+              </Select>
+            </Field>
+            <Field label="Persona" hint="Si es personal propio, elegilo de la lista">
+              <Select value={form.person_id} onChange={e => setForm({ ...form, person_id: e.target.value })}>
+                <option value="">— otra persona / contratista —</option>
+                {personnel.map(p => <option key={p.id} value={p.id}>{p.full_name}</option>)}
+              </Select>
+            </Field>
+            {!form.person_id && (
+              <Field label="Nombre">
+                <Input value={form.person_name} onChange={e => setForm({ ...form, person_name: e.target.value })} />
+              </Field>
+            )}
+          </Row>
+          <Row>
+            <Field label="Fecha"><Input type="date" value={form.performed_at || ''} onChange={e => setForm({ ...form, performed_at: e.target.value })} /></Field>
+            <Field label="OT o contrato de respaldo"><Input value={form.work_order_ref} onChange={e => setForm({ ...form, work_order_ref: e.target.value })} /></Field>
+          </Row>
+          <Field label="Qué se hizo">
+            <Textarea rows={2} value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} />
+          </Field>
+          <Button variant="primary" icon={<Plus size={16} />} onClick={add} loading={saving}>Registrar</Button>
+        </Modal.Section>
+      )}
+
+      <Modal.Footer>
+        <Button variant="ghost" onClick={onClose}>Cerrar</Button>
+      </Modal.Footer>
+    </Modal>
   )
 }

@@ -34,11 +34,15 @@ export default function OrganizationSettings() {
   const [msg, setMsg] = useState(null)
   const [inspectionEnabled, setInspectionEnabled] = useState(false)
   const [savingModule, setSavingModule] = useState(false)
+  const [independenceType, setIndependenceType] = useState('no_A')
+  const [safeguards, setSafeguards] = useState('')
 
   useEffect(() => {
     if (org) {
       setOrgName(org.name)
       setInspectionEnabled(!!org.inspection_module_enabled)
+      setIndependenceType(org.inspection_independence_type || 'no_A')
+      setSafeguards(org.inspection_safeguards || '')
     }
   }, [org])
 
@@ -80,6 +84,23 @@ export default function OrganizationSettings() {
     showMsg(value
       ? 'Módulos de inspección habilitados. Aparecen en el menú como "Inspección (17020)".'
       : 'Módulos de inspección ocultos. Los datos cargados no se borran.')
+    if (typeof refresh === 'function') refresh()
+  }
+
+  const saveIndependence = async () => {
+    setSavingModule(true)
+    const { error } = await supabase
+      .from('organizations')
+      .update({ inspection_independence_type: independenceType, inspection_safeguards: safeguards || null })
+      .eq('id', org.id)
+    setSavingModule(false)
+    if (error) {
+      showMsg(/inspection_independence_type/i.test(error.message)
+        ? 'Falta aplicar la migración de salvaguardas de tipo no A.'
+        : error.message, 'err')
+      return
+    }
+    showMsg('Declaración de independencia guardada.')
     if (typeof refresh === 'function') refresh()
   }
 
@@ -190,6 +211,52 @@ export default function OrganizationSettings() {
             />
             <span>Habilitar módulos de inspección</span>
           </label>
+
+          {inspectionEnabled && (
+            <div style={{ marginTop: '1.25rem' }}>
+              <div className="form-group">
+                <label className="form-label">Tipo de independencia declarado (5.1 / Anexo A)</label>
+                <select
+                  className="form-select"
+                  value={independenceType}
+                  disabled={!can.admin}
+                  onChange={(e) => setIndependenceType(e.target.value)}
+                >
+                  <option value="A">Tipo A — no diseñamos, fabricamos, instalamos, reparamos ni mantenemos lo que inspeccionamos</option>
+                  <option value="no_A">Tipo no A — también intervenimos ítems del tipo que inspeccionamos</option>
+                </select>
+              </div>
+
+              {independenceType === 'no_A' && (
+                <p style={{
+                  background: 'var(--warning-bg, #fef3c7)', color: 'var(--warning-text, #92400e)',
+                  padding: '0.75rem 1rem', borderRadius: '6px', fontSize: '0.9rem',
+                }}>
+                  Como tipo no A, la norma exige una salvaguarda concreta: <strong>quien diseñó, fabricó,
+                  instaló, reparó o mantuvo un ítem no puede inspeccionar ese mismo ítem</strong> (Anexo A.2 b).
+                  Registrá esas intervenciones en Inspección → Ítems para que el sistema sepa a quién inhabilitar.
+                </p>
+              )}
+
+              <div className="form-group">
+                <label className="form-label">Salvaguardas declaradas</label>
+                <textarea
+                  className="form-textarea"
+                  rows={3}
+                  value={safeguards}
+                  disabled={!can.admin}
+                  onChange={(e) => setSafeguards(e.target.value)}
+                  placeholder="Separación de responsabilidades y líneas de reporte, control de acceso a registros, quién decide sobre el dictamen"
+                />
+              </div>
+
+              {can.admin && (
+                <button className="btn btn-primary" disabled={savingModule} onClick={saveIndependence}>
+                  <Save size={16} /> Guardar declaración
+                </button>
+              )}
+            </div>
+          )}
         </div>
       )}
 
