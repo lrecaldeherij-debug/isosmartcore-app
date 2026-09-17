@@ -17,7 +17,7 @@ módulos de inspección*. Las empresas que solo usan ISO 9001 no ven nada nuevo.
 | # | Fase | Cláusulas | Estado |
 |---|------|-----------|--------|
 | 1 | Base técnica: alcance, métodos e ítems | 5.2.3 · 7.2 · 7.3 | **Hecha** (2026-09-17) |
-| 2 | Inspectores autorizados | 6.1.2 b, d · 6.1.4–6.1.9 | Pendiente |
+| 2 | Inspectores autorizados | 6.1.2 b, d · 6.1.4–6.1.9 | **Hecha** (2026-09-17) |
 | 3 | Registro e informe de inspección con dictamen | 6.2.4 · 7.4 · 7.6 | Pendiente |
 | 4 | Imparcialidad, apelaciones y quejas | 4.1 · 4.2 · 5.1 · Anexo A · 7.7 · 7.8 | Pendiente |
 | 5 | Validez de resultados y datos | 6.2.9–6.2.10 · 7.2.6 · 7.5 · 8.4.3 · 8.5.3 | Pendiente |
@@ -78,12 +78,51 @@ se registraba en ningún lado. Construido en
 En la pestaña Ítems, cada ítem con intervenciones muestra en rojo quiénes no
 pueden inspeccionarlo.
 
+## Alcance inicial decidido (2026-09-17)
+
+Tres actividades, todas sobre juntas soldadas:
+
+| Método | Sigla | Certificación típica |
+|--------|-------|----------------------|
+| Ultrasonido phased array | PAUT | SNT-TC-1A / ISO 9712 nivel II |
+| Líquidos penetrantes | PT | SNT-TC-1A / ISO 9712 nivel II |
+| Partículas magnéticas | MT | SNT-TC-1A / ISO 9712 nivel II |
+
+Cada una necesita, antes de la evaluación: su alcance declarado, su método
+documentado con los apartados de 7.2.5, al menos un inspector autorizado con
+certificación vigente, y observación en campo registrada.
+
+## Fase 2 — qué quedó construido
+
+Migración `20260917160000_iso17020_fase2_inspectores.sql`, módulo `Inspectors.jsx`.
+
+**Certificaciones (6.1.2).** Por método y nivel (PAUT II, PT II, MT II, CWI,
+API 510…), con organismo, número, vencimiento y **examen de agudeza visual**,
+que en SNT-TC-1A e ISO 9712 vence al año. Avisa las que vencen en 60 días.
+
+**Autorización por método (6.1.2 d / 6.1.4).** Qué puede hacer cada persona
+(ejecutar, interpretar, firmar), con qué restricciones, respaldada por una
+certificación concreta, y con su **período mentorizado**: mentor, inicio,
+cierre, cantidad de inspecciones supervisadas y conclusión del mentor.
+
+**Monitoreo (6.1.5–6.1.8).** Observación en campo, revisión de informes,
+reinspección o comparación entre inspectores, con resultado, hallazgos,
+necesidad de formación detectada y **efecto sobre la autorización**.
+
+> **Tres automatismos que evitan los hallazgos clásicos:**
+> - No se puede activar una autorización con la **certificación vencida**, con
+>   la **visión vencida** o con **"No apto"** en el examen visual.
+> - No se puede activar sin **cerrar el período mentorizado**.
+> - Un monitoreo con efecto *Suspende* **suspende la autorización en el acto**,
+>   por trigger. El hallazgo no queda solo escrito.
+
+El estado que se muestra no es el que alguien escribió a mano: sale de la vista
+`inspector_authorization_status`, que cruza autorización, certificación, visión
+y último monitoreo, y responde si el inspector está habilitado **hoy**.
+
 ## Decisiones que siguen abiertas
 
-1. **Alcance inicial a acreditar.** Conviene arrancar angosto (por ejemplo
-   espesores por ultrasonido e inspección visual de soldadura) porque cada
-   actividad arrastra métodos, inspectores autorizados y formato de informe.
-2. **Validación de IsoSmartCore (7.5.1).** El sistema que registra y reporta
+1. **Validación de IsoSmartCore (7.5.1).** El sistema que registra y reporta
    inspecciones debe estar validado y cada cambio autorizado antes de
    implementarse. La norma exime al software comercial de uso general, pero
    conviene no contar con esa exención: hay que armar un expediente de
