@@ -35,10 +35,12 @@ Cobertura técnica del software frente a los requisitos de la norma.
 - [x] **6.2 Objetivos de calidad** — `QualityObjectives.jsx`, metodología SMART;
       acciones para lograrlos (6.2.2) en `StrategicActionPlan.jsx`
       *(revisado 2026-09-15: avance correcto para objetivos de reducción)*
-- [ ] **6.3 Planificación de los cambios** — **no cubierto.** `StrategicActionPlan.jsx`
-      es un plan de acciones (6.1.2 / 6.2.2), no registra cambios al SGC con
-      propósito, consecuencias, integridad del sistema, recursos y
-      responsabilidades. Pendiente de construir.
+- [x] **6.3 Planificación de los cambios** — `QmsChanges.jsx` *(cerrado 2026-09-17)*
+      Registro de cambios al SGC con los 4 puntos de la cláusula (propósito y
+      consecuencias, integridad del SGC, recursos, responsabilidades y
+      autoridades), aprobación obligatoria antes de ejecutar y verificación
+      posterior de eficacia. El Plan de Acción cubre 6.1.2 / 6.2.2, no esta cláusula.
+      Requiere la migración `20260917120000_qms_changes_6_3.sql`.
 
 ## 7. Apoyo
 

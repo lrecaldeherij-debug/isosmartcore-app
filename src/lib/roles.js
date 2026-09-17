@@ -46,6 +46,7 @@ export const PERMISSIONS = {
   risk_matrix:             { read: READ_ALL, write: FULL_WRITE, delete: new Set(['owner', 'quality_manager']) },
   quality_objectives:      { read: READ_ALL, write: FULL_WRITE, delete: new Set(['owner', 'quality_manager']) },
   strategic_actions:       { read: READ_ALL, write: FULL_WRITE, delete: new Set(['owner', 'quality_manager']) },
+  qms_changes:             { read: READ_ALL, write: FULL_WRITE, delete: new Set(['owner', 'quality_manager']) },
   training_records:        { read: READ_ALL, write: FULL_WRITE, delete: new Set(['owner', 'quality_manager']) },
   personnel:               { read: READ_ALL, write: FULL_WRITE, delete: new Set(['owner', 'quality_manager']) },
   suppliers:               { read: READ_ALL, write: FULL_WRITE, delete: new Set(['owner', 'quality_manager']) },

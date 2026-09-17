@@ -92,6 +92,18 @@ export function computeImplementation(r) {
       const pct = Math.min(100, Math.round((total >= 3 ? 50 : total * 15) + (medidos / Math.max(total, 1) * 50)))
       return item('6.2', 'Objetivos de Calidad', 'objetivos', pct >= 70, pct, `${total} objetivos · ${medidos} con medición`)
     })(),
+    // 6.3 Planificación de los cambios
+    (() => {
+      // Puede venir undefined si el raw lo armó una vista vieja
+      const changes = r.qmsChanges || []
+      const total = changes.length
+      // Bien planificado = tiene los 4 puntos que pide la norma
+      const planificados = changes.filter(c =>
+        c.purpose && c.consequences && c.integrity_actions && c.resources_required && c.responsibilities).length
+      if (total === 0) return item('6.3', 'Planificación de Cambios', 'cambios_sgc', false, 0, 'Sin cambios del SGC registrados')
+      const pct = Math.round((planificados / total) * 100)
+      return item('6.3', 'Planificación de Cambios', 'cambios_sgc', pct >= 70, pct, `${total} cambios · ${planificados} con planificación completa`)
+    })(),
     // 6.2.b Plan estratégico
     (() => {
       const total = r.strategicActions.length
@@ -186,7 +198,7 @@ export async function loadSnapshotData(supabase, orgId) {
   const [
     risks, ncs, suppliers, objectives, measurements, personnel,
     scope, audits, training, opps, processes, jobs, stakeholders,
-    context, documents, commMatrix, policy, strategicActions, review
+    context, documents, commMatrix, policy, strategicActions, qmsChanges, review
   ] = await Promise.all([
     supabase.from('risk_matrix').select('score_initial, score_residual, status, control_measure').eq('org_id', orgId),
     supabase.from('non_conformities').select('id, status, type, severity, due_date, effectiveness_result, closure_date, is_recurrent, created_at, root_cause, five_whys').eq('org_id', orgId).limit(500),
@@ -206,6 +218,7 @@ export async function loadSnapshotData(supabase, orgId) {
     supabase.from('communication_matrix').select('id').eq('org_id', orgId).limit(1000),
     supabase.from('quality_policy').select('policy_text, final_policy_statement, status').eq('org_id', orgId).order('created_at', { ascending: false }).limit(1).maybeSingle(),
     supabase.from('strategic_actions').select('id').eq('org_id', orgId).limit(500),
+    supabase.from('qms_changes').select('id, purpose, consequences, integrity_actions, resources_required, responsibilities, status').eq('org_id', orgId).limit(500),
     supabase.from('management_review').select('review_date').eq('org_id', orgId),
   ])
 
@@ -230,6 +243,7 @@ export async function loadSnapshotData(supabase, orgId) {
     commMatrix: commMatrix.data || [],
     policy: policy.data || null,
     strategicActions: strategicActions.data || [],
+    qmsChanges: qmsChanges.data || [],
     review: review.data || [],
   }
 }

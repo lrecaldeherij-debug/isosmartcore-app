@@ -38,7 +38,7 @@ export default function Dashboard({ alCambiarVista }) {
       const [
         risks, ncs, suppliers, objectives, measurements, personnel,
         scope, audits, training, opps, processes, jobs, stakeholders,
-        context, documents, commMatrix, policy, strategicActions, review
+        context, documents, commMatrix, policy, strategicActions, qmsChanges, review
       ] = await Promise.all([
         supabase.from('risk_matrix').select('score_initial, score_residual, status, control_measure').eq('org_id', orgId),
         supabase.from('non_conformities').select('id, status, type, severity, due_date, effectiveness_result, closure_date, is_recurrent, created_at, root_cause, five_whys').eq('org_id', orgId).limit(500),
@@ -58,6 +58,7 @@ export default function Dashboard({ alCambiarVista }) {
         supabase.from('communication_matrix').select('id').eq('org_id', orgId).limit(1000),
         supabase.from('quality_policy').select('policy_text, final_policy_statement, status').eq('org_id', orgId).order('created_at', { ascending: false }).limit(1).maybeSingle(),
         supabase.from('strategic_actions').select('id').eq('org_id', orgId).limit(500),
+        supabase.from('qms_changes').select('id, purpose, consequences, integrity_actions, resources_required, responsibilities, status').eq('org_id', orgId).limit(500),
         supabase.from('management_review').select('review_date').eq('org_id', orgId),
       ])
 
@@ -82,6 +83,7 @@ export default function Dashboard({ alCambiarVista }) {
         commMatrix: commMatrix.data || [],
         policy: policy.data || null,
         strategicActions: strategicActions.data || [],
+        qmsChanges: qmsChanges.data || [],
         review: review.data || [],
       })
     } catch (err) {

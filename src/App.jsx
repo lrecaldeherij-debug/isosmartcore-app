@@ -33,6 +33,7 @@ const RolesResponsibilities = lazy(() => import('./RolesResponsibilities'))
 const RisksOpportunities = lazy(() => import('./RisksOpportunities'))
 const QualityObjectives = lazy(() => import('./QualityObjectives'))
 const StrategicActionPlan = lazy(() => import('./StrategicActionPlan'))
+const QmsChanges = lazy(() => import('./QmsChanges'))                  // 6.3
 const Personnel = lazy(() => import('./Personnel'))
 const Training = lazy(() => import('./Training'))
 const Documents = lazy(() => import('./Documents'))
@@ -462,6 +463,7 @@ function AppShell() {
             <NavItem id="riesgos" label="Riesgos (6.1)" icon={ShieldAlert} />
             <NavItem id="objetivos" label="Objetivos (6.2)" icon={Target} />
             <NavItem id="plan_estrategico" label="Plan de Acción (6.1-6.2)" icon={Map} />
+            <NavItem id="cambios_sgc" label="Cambios del SGC (6.3)" icon={GitMerge} />
           </NavGroup>
 
           <NavGroup title="Soporte (7)" sectionKey="soporte" icon={Users}>
@@ -548,6 +550,7 @@ function AppShell() {
         {vistaActual === 'organigrama' && <OrgChart />}
         {vistaActual === 'riesgos' && <RisksOpportunities />}
         {vistaActual === 'objetivos' && <QualityObjectives />}
+        {vistaActual === 'cambios_sgc' && <QmsChanges />}
         {vistaActual === 'plan_estrategico' && <StrategicActionPlan />}
         {vistaActual === 'personal' && <Personnel />}
         {vistaActual === 'formacion' && <Training />}
