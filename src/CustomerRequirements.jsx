@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { supabase } from './supabaseClient'
-import { consultarIA } from './aiClient'
+import { consultarIA, assertNoAiError } from './aiClient'
 import {
   ShoppingCart, Plus, CheckCircle, AlertCircle, X, Eye, Pencil, Trash2,
   Search, Filter, BarChart3, Sparkles, Loader2, ExternalLink, AlertTriangle,
@@ -192,7 +192,8 @@ export default function CustomerRequirements() {
     try {
       const { data: profile } = await supabase.from('company_profile').select('*').maybeSingle()
       const resumen = profile ? {
-        empresa: profile.name, sector: profile.industry, productos: profile.main_products, pais: profile.location,
+        empresa: profile.name, sector: profile.industry, productos: profile.main_products,
+        descripcion: profile.description, tamano: profile.employees_count,
       } : null
       const prompt = `
 Eres un consultor experto en ISO 9001 cláusula 8.2 (requisitos para productos y servicios).
@@ -215,6 +216,8 @@ Devuelve EXCLUSIVAMENTE este JSON (sin markdown, sin texto extra):
         'Eres un consultor ISO 9001 8.2. Responde solo con el JSON pedido. Sin markdown.'
       )
       console.log('[IA Requisitos] respuesta:', respuesta)
+      // Lanza con la causa real si la IA falló (cuota, red, Gemini caído)
+      assertNoAiError(respuesta)
       const objStr = extractFirstJson(respuesta, '{', '}')
       if (!objStr) throw new Error('IA no devolvió JSON válido.')
       const obj = JSON.parse(objStr)

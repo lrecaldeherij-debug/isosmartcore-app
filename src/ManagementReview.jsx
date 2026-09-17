@@ -6,7 +6,8 @@ import {
   ChevronDown, ChevronRight, ListChecks
 } from 'lucide-react'
 import { supabase } from './supabaseClient'
-import { consultarIA } from './aiClient'
+import { objectiveMet } from './lib/objectiveProgress'
+import { consultarIA, parseAiJson } from './aiClient'
 import { indexRow, deindexRow } from './lib/ragIndex'
 import IsoInfoCard from './IsoInfoCard'
 import { CLAUSE_GUIDES } from './clauseGuides'
@@ -73,25 +74,8 @@ const EMPTY_FORM = {
 }
 
 // ───────────────────── Helpers IA ──────────────────────
-function extractFirstJson(text) {
-  if (!text) return null
-  const i0 = text.indexOf('{'), i1 = text.indexOf('[')
-  const start = i0 === -1 ? i1 : (i1 === -1 ? i0 : Math.min(i0, i1))
-  if (start === -1) return null
-  let depth = 0, inStr = false, esc = false
-  const open = text[start], close = open === '[' ? ']' : '}'
-  for (let i = start; i < text.length; i++) {
-    const c = text[i]
-    if (esc) { esc = false; continue }
-    if (c === '\\') { esc = true; continue }
-    if (c === '"') { inStr = !inStr; continue }
-    if (inStr) continue
-    if (c === open) depth++
-    else if (c === close) { depth--; if (depth === 0) { try { return JSON.parse(text.slice(start, i + 1)) } catch { return null } } }
-  }
-  return null
-}
-
+// parseAiJson lanza si consultarIA devolvió un error (cuota, red, Gemini caído)
+const extractFirstJson = parseAiJson
 function parseAiArray(raw) {
   if (!raw) return []
   const parsed = extractFirstJson(raw)
@@ -294,8 +278,11 @@ export default function ManagementReview({ alReportar }) {
       const [ncs, audits, objs, suppliers, complaints] = await Promise.all([
         supabase.from('non_conformities').select('id, status, description, created_at').gte('created_at', start).lte('created_at', end + 'T23:59:59'),
         supabase.from('internal_audits').select('id, audit_process, status, findings_count, planned_date').gte('planned_date', start).lte('planned_date', end),
-        supabase.from('quality_objectives').select('id, objective, target_value, current_value, status').limit(50),
-        supabase.from('suppliers').select('id, name, evaluation_score, status').limit(100),
+        // Columnas reales: name/target/current/unit (target_value y current_value
+        // no existen: la consulta fallaba y la revisión decía 0 objetivos)
+        supabase.from('quality_objectives').select('id, name, objective, indicator, unit, baseline_value, target, current, status').limit(50),
+        // suppliers usa supplier_name, no name
+        supabase.from('suppliers').select('id, supplier_name, evaluation_score, status').limit(100),
         supabase.from('non_conformities').select('id, description').eq('source', 'Queja Cliente').gte('created_at', start).lte('created_at', end + 'T23:59:59').limit(50)
       ])
 
@@ -306,11 +293,8 @@ export default function ManagementReview({ alReportar }) {
       const auditClosed = auditRows.filter(a => a.status === 'Cerrada').length
       const findingsTotal = auditRows.reduce((s, a) => s + (a.findings_count || 0), 0)
       const objRows = objs.data || []
-      const objCumplidos = objRows.filter(o => {
-        if (o.current_value == null || o.target_value == null) return false
-        const cur = Number(o.current_value), tgt = Number(o.target_value)
-        return Number.isFinite(cur) && Number.isFinite(tgt) && cur >= tgt
-      }).length
+      // Cumplido según la dirección del objetivo (subir o reducir)
+      const objCumplidos = objRows.filter(o => objectiveMet(o)).length
       const supRows = suppliers.data || []
       const supRej = supRows.filter(s => s.status === 'Rechazado').length
       const supCond = supRows.filter(s => s.status === 'Condicionado').length
@@ -330,7 +314,7 @@ export default function ManagementReview({ alReportar }) {
         inputs_customer_feedback: f.inputs_customer_feedback ||
           (complRows.length ? `Quejas registradas en el período: ${complRows.length}` : 'Sin quejas registradas en el período'),
         inputs_objectives: f.inputs_objectives ||
-          `Objetivos totales: ${objRows.length}\nCumplidos: ${objCumplidos}\nDetalle:\n${objRows.map(o => `- ${o.objective}: ${o.current_value}/${o.target_value} (${o.status})`).join('\n')}`
+          `Objetivos totales: ${objRows.length}\nCumplidos: ${objCumplidos}\nDetalle:\n${objRows.map(o => `- ${o.name || o.objective}: ${o.current ?? 's/d'}/${o.target ?? 's/d'} ${o.unit || ''} (${o.status})`).join('\n')}`
       }))
       toast.success(`KPIs cargados: ${ncRows.length} NCs · ${auditRows.length} auditorías · ${objRows.length} objetivos · ${supRows.length} proveedores`)
     } catch (err) {

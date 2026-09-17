@@ -6,7 +6,8 @@ import {
   ShieldCheck, Calendar
 } from 'lucide-react'
 import { supabase } from './supabaseClient'
-import { consultarIA } from './aiClient'
+import { companyContextLine } from './lib/companyContext'
+import { consultarIA, parseAiJson } from './aiClient'
 import { indexRow, deindexRow } from './lib/ragIndex'
 import IsoInfoCard from './IsoInfoCard'
 import { CLAUSE_GUIDES } from './clauseGuides'
@@ -61,25 +62,8 @@ const EMPTY_FORM = {
 }
 
 // ───────────────────── Helpers IA ──────────────────────
-function extractFirstJson(text) {
-  if (!text) return null
-  const i0 = text.indexOf('{'), i1 = text.indexOf('[')
-  const start = i0 === -1 ? i1 : (i1 === -1 ? i0 : Math.min(i0, i1))
-  if (start === -1) return null
-  let depth = 0, inStr = false, esc = false
-  const open = text[start], close = open === '[' ? ']' : '}'
-  for (let i = start; i < text.length; i++) {
-    const c = text[i]
-    if (esc) { esc = false; continue }
-    if (c === '\\') { esc = true; continue }
-    if (c === '"') { inStr = !inStr; continue }
-    if (inStr) continue
-    if (c === open) depth++
-    else if (c === close) { depth--; if (depth === 0) { try { return JSON.parse(text.slice(start, i + 1)) } catch { return null } } }
-  }
-  return null
-}
-
+// parseAiJson lanza si consultarIA devolvió un error (cuota, red, Gemini caído)
+const extractFirstJson = parseAiJson
 function parseAiArray(raw) {
   if (!raw) return []
   const parsed = extractFirstJson(raw)
@@ -273,7 +257,7 @@ export default function InternalAudits({ alReportar }) {
     try {
       const { data: profileRows } = await supabase.from('company_profile').select('*').limit(1)
       const profile = profileRows?.[0] || {}
-      const ctx = `Empresa: ${profile.company_name || 'N/D'} | Sector: ${profile.industry || 'N/D'} | Productos: ${profile.main_products || 'N/D'}`
+      const ctx = companyContextLine(profile)
       const procesosList = processes.length
         ? processes.map(p => `- ${p.name}`).join('\n')
         : '- (no hay procesos cargados, usa procesos genéricos de ISO 9001)'

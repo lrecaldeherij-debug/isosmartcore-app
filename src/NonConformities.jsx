@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { supabase } from './supabaseClient'
-import { consultarIA } from './aiClient'
+import { consultarIA, assertNoAiError } from './aiClient'
 import { indexRow, deindexRow } from './lib/ragIndex'
 import {
   AlertOctagon, Plus, Search, Filter, Eye, Pencil, Trash2, X,
@@ -104,7 +104,7 @@ const EMPTY_FORM = {
   action_plan: '',
   responsible: '',
   cost_impact: '',
-  currency: 'PYG',
+  currency: 'USD',
   evidence_url: '',
   effectiveness_check_date: '',
   effectiveness_result: 'Pendiente',
@@ -152,11 +152,14 @@ function extractFirstJson(text, prefer) {
   return null
 }
 function parseAiObject(raw) {
+  // Lanza con la causa real si la IA falló, en vez de devolver {error: ...}
+  assertNoAiError(raw)
   const p = extractFirstJson(raw, 'object')
   if (p && typeof p === 'object' && !Array.isArray(p)) return p
   return null
 }
 function parseAiArray(raw) {
+  assertNoAiError(raw)
   const p = extractFirstJson(raw, 'array')
   if (Array.isArray(p)) return p
   if (p && Array.isArray(p.items)) return p.items
@@ -314,6 +317,21 @@ export default function NonConformities({ datosPrellenados, alCambiarVista }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault()
+    // 10.2: una NC no se cierra sin causa raíz, acción y verificación de
+    // eficacia. Antes se podía poner "Cerrada" en el desplegable y listo —
+    // hallazgo seguro en auditoría.
+    if (form.status === 'Cerrada') {
+      const tieneCausa = form.root_cause?.trim() || (form.five_whys || []).some(w => w.answer?.trim())
+      const faltan = []
+      if (!tieneCausa) faltan.push('causa raíz (o los 5 porqués)')
+      if (!form.action_plan?.trim() && !form.correction?.trim()) faltan.push('acción correctiva')
+      if (form.effectiveness_result === 'Pendiente' || !form.effectiveness_result) faltan.push('verificación de eficacia')
+      if (faltan.length) {
+        toast.warning(`No se puede cerrar la NC sin: ${faltan.join(', ')}. Usá "Verificar eficacia" cuando corresponda.`)
+        return
+      }
+    }
+
     const payload = {
       ...form,
       process_id: form.process_id || null,
@@ -953,7 +971,7 @@ function FormCard({ form, setForm, editing, processes, audits, risks, suppliers,
             </Field>
             <Field label="Moneda">
               <select value={form.currency} onChange={e => set({ currency: e.target.value })} style={inputStyle}>
-                <option>PYG</option><option>USD</option><option>EUR</option><option>BRL</option>
+                <option>USD</option><option>EUR</option><option>COP</option><option>PEN</option><option>PYG</option>
               </select>
             </Field>
             <Field label="URL evidencia">
@@ -1017,7 +1035,7 @@ function DetailModal({ item, processMap, auditMap, riskMap, supplierMap, ncMap, 
             <D label="Detección">{item.detection_date ? new Date(item.detection_date).toLocaleDateString() : '—'}</D>
             <D label="Detectado por">{item.detected_by || '—'}</D>
             <D label="Fecha límite">{item.due_date ? new Date(item.due_date).toLocaleDateString() : '—'}</D>
-            <D label="Costo impacto">{item.cost_impact ? new Intl.NumberFormat('es-PY').format(item.cost_impact) + ' ' + (item.currency || '') : '—'}</D>
+            <D label="Costo impacto">{item.cost_impact ? new Intl.NumberFormat('es-EC').format(item.cost_impact) + ' ' + (item.currency || '') : '—'}</D>
           </DetailGrid>
         </ModalSection>
 

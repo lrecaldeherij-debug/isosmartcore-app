@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { supabase } from './supabaseClient'
-import { consultarIA } from './aiClient'
+import { consultarIA, assertNoAiError } from './aiClient'
 import {
   Package, RefreshCcw, Plus, Trash2, AlertTriangle, X, Eye, Pencil,
   Search, Filter, BarChart3, Sparkles, Loader2, ExternalLink, Calendar,
@@ -216,6 +216,8 @@ Devuelve EXCLUSIVAMENTE este JSON (sin markdown):
         'Eres un consultor ISO 9001 8.5.3/8.5.6. Responde solo con JSON. Sin markdown.'
       )
       console.log('[IA Incidente]', respuesta)
+      // Lanza con la causa real si la IA falló (cuota, red, Gemini caído)
+      assertNoAiError(respuesta)
       const objStr = extractFirstJson(respuesta, '{', '}')
       if (!objStr) throw new Error('IA no devolvió JSON válido.')
       const obj = JSON.parse(objStr)

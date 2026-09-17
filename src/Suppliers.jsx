@@ -5,7 +5,8 @@ import {
   Sparkles, Loader2, BarChart3, ClipboardCheck, ExternalLink, History
 } from 'lucide-react'
 import { supabase } from './supabaseClient'
-import { consultarIA } from './aiClient'
+import { consultarIA, assertNoAiError } from './aiClient'
+import { companyContextLine } from './lib/companyContext'
 import IsoInfoCard from './IsoInfoCard'
 import { CLAUSE_GUIDES } from './clauseGuides'
 import ExcelImporter from './ExcelImporter'
@@ -70,6 +71,8 @@ function extractFirstJson(text) {
 
 function parseAiArray(raw) {
   if (!raw) return []
+  // Sin esto, el JSON de error de la IA terminaba convertido en un proveedor
+  assertNoAiError(raw)
   const parsed = extractFirstJson(raw)
   if (Array.isArray(parsed)) return parsed
   if (parsed && Array.isArray(parsed.suppliers)) return parsed.suppliers
@@ -325,7 +328,7 @@ export default function Suppliers({ alReportar }) {
     try {
       const { data: profileRows } = await supabase.from('company_profile').select('*').limit(1)
       const profile = profileRows?.[0] || {}
-      const ctx = `Empresa: ${profile.company_name || 'N/D'} | Sector: ${profile.industry || 'N/D'} | Tamaño: ${profile.size || 'N/D'} | Productos: ${profile.main_products || 'N/D'}`
+      const ctx = companyContextLine(profile)
 
       const prompt = `Eres un consultor ISO 9001. Para esta empresa, sugiere 6 categorías típicas de PROVEEDORES que debería tener registradas, con un ejemplo de proveedor y los requisitos a comunicarles según ISO 8.4.3.
 

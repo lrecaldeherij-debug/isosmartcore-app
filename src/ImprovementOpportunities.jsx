@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { supabase } from './supabaseClient'
-import { consultarIA } from './aiClient'
+import { consultarIA, parseAiJson } from './aiClient'
 import {
   TrendingUp, Plus, Search, Filter, Eye, Pencil, Trash2, X,
   Sparkles, Loader2, ExternalLink, ListChecks, Columns,
@@ -76,25 +76,8 @@ const EMPTY_FORM = {
 }
 
 // ───────────────────── Helpers IA ──────────────────────
-function extractFirstJson(text) {
-  if (!text) return null
-  const i0 = text.indexOf('{'), i1 = text.indexOf('[')
-  const start = i0 === -1 ? i1 : (i1 === -1 ? i0 : Math.min(i0, i1))
-  if (start === -1) return null
-  let depth = 0, inStr = false, esc = false
-  const open = text[start], close = open === '[' ? ']' : '}'
-  for (let i = start; i < text.length; i++) {
-    const c = text[i]
-    if (esc) { esc = false; continue }
-    if (c === '\\') { esc = true; continue }
-    if (c === '"') { inStr = !inStr; continue }
-    if (inStr) continue
-    if (c === open) depth++
-    else if (c === close) { depth--; if (depth === 0) { try { return JSON.parse(text.slice(start, i + 1)) } catch { return null } } }
-  }
-  return null
-}
-
+// parseAiJson lanza si consultarIA devolvió un error (cuota, red, Gemini caído)
+const extractFirstJson = parseAiJson
 function parseAiArray(raw) {
   if (!raw) return []
   const parsed = extractFirstJson(raw)
@@ -185,7 +168,8 @@ export default function ImprovementOpportunities() {
     const [main, pr, ob, rv, nc] = await Promise.all([
       supabase.from('improvement_opportunities').select('*').order('created_at', { ascending: false }),
       supabase.from('processes').select('id, name, process_type').order('name'),
-      supabase.from('quality_objectives').select('id, objective, target_value, current_value, status').limit(100),
+      // target_value/current_value no existen: el selector de objetivos salía vacío
+      supabase.from('quality_objectives').select('id, name, objective, indicator, unit, target, current, status').limit(100),
       supabase.from('management_review').select('id, review_date, review_type, outputs_improvement_opportunities').limit(50),
       supabase.from('non_conformities').select('id, description, root_cause, status, source, created_at').limit(200)
     ])
@@ -511,7 +495,7 @@ Devuelve SOLO un JSON array, sin markdown. Cada oportunidad:
                 <LinkSelect label="Proceso impactado" value={form.process_id} onChange={v => setForm({ ...form, process_id: v })}
                   options={[{ id: '', label: '— ninguno —' }, ...processes.map(p => ({ id: p.id, label: `${p.name} (${p.process_type})` }))]} />
                 <LinkSelect label="Objetivo asociado" value={form.objective_id} onChange={v => setForm({ ...form, objective_id: v })}
-                  options={[{ id: '', label: '— ninguno —' }, ...objectives.map(o => ({ id: o.id, label: (o.objective || '').slice(0, 60) }))]} />
+                  options={[{ id: '', label: '— ninguno —' }, ...objectives.map(o => ({ id: o.id, label: (o.name || o.objective || 'Sin nombre').slice(0, 60) }))]} />
                 <LinkSelect label="Revisión Dirección origen" value={form.review_id} onChange={v => setForm({ ...form, review_id: v })}
                   options={[{ id: '', label: '— ninguno —' }, ...reviews.map(r => ({ id: r.id, label: `${r.review_type} — ${r.review_date}` }))]} />
               </div>
