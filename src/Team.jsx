@@ -295,7 +295,11 @@ function InvitePanel({ members, maxUsers, onInvited }) {
   const [pending, setPending] = useState([])
 
   const isUnlimited = maxUsers == null
-  const atLimit = !isUnlimited && members.length >= maxUsers
+  // Mismo criterio que invite-member: las invitaciones pendientes vigentes
+  // ocupan lugar, si no se podrían mandar más invitaciones que lugares libres.
+  const now = new Date().toISOString()
+  const pendingActive = pending.filter(p => !p.expires_at || p.expires_at > now).length
+  const atLimit = !isUnlimited && members.length + pendingActive >= maxUsers
 
   const fetchPending = async () => {
     if (!org?.id) return
@@ -394,7 +398,7 @@ function InvitePanel({ members, maxUsers, onInvited }) {
             icon={<Mail size={14} />}
             onClick={() => setOpen(true)}
             disabled={atLimit}
-            title={atLimit ? `Alcanzaste el límite del plan (${maxUsers} usuarios). Actualizá el plan para invitar más.` : ''}
+            title={atLimit ? `Alcanzaste el límite del plan (${maxUsers} usuarios, incluye invitaciones pendientes).` : ''}
           >
             Nueva invitación
           </Button>
@@ -413,7 +417,9 @@ function InvitePanel({ members, maxUsers, onInvited }) {
         }}>
           <Info size={16} style={{ flexShrink: 0, marginTop: '1px' }} />
           <span>
-            Alcanzaste el límite del plan ({maxUsers} usuarios). Para invitar más gente actualizá el plan desde <strong>Plan y facturación</strong>.
+            Alcanzaste el límite del plan ({maxUsers} usuario{maxUsers !== 1 ? 's' : ''}
+            {pendingActive > 0 && <>, contando {pendingActive} invitación{pendingActive !== 1 ? 'es' : ''} pendiente{pendingActive !== 1 ? 's' : ''}; podés cancelar una más abajo para liberar el lugar</>}).
+            Para invitar más gente actualizá el plan desde <strong>Plan y facturación</strong>.
           </span>
         </div>
       )}

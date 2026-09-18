@@ -9,6 +9,7 @@ import { Building2, Users, UserPlus, Trash2, Save, AlertCircle, CheckCircle2 } f
 import { toast } from './lib/toast'
 import { confirm } from './lib/confirm'
 import { useSuperAdmin } from './lib/useSuperAdmin'
+import { readFunctionError } from './lib/functionError'
 
 const ROLE_LABELS = {
   owner: 'Owner',
@@ -427,7 +428,8 @@ function InviteForm({ orgId, onInvited, showMsg }) {
     })
     setSending(false)
     if (error || data?.error) {
-      showMsg(error?.message || data.error, 'err')
+      // Con 4xx el mensaje real (p. ej. límite de usuarios) viene en error.context
+      showMsg(error ? await readFunctionError(error, 'Error invitando') : data.error, 'err')
     } else {
       showMsg(`Invitación enviada a ${email}`)
       setEmail(''); setFullName(''); setRole('viewer')

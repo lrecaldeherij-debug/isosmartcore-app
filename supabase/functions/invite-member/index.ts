@@ -38,6 +38,50 @@ const ROLE_LABELS: Record<string, string> = {
   viewer: "Lector",
 };
 
+// Límite de usuarios por plan: espejo de src/lib/plans.js (null = ilimitado).
+// Un plan que no está acá (p. ej. 'free') cuenta como Starter, igual que usePlan.
+const PLAN_MAX_USERS: Record<string, number | null> = {
+  starter: 1,
+  pro: 5,
+  enterprise: null,
+};
+
+// deno-lint-ignore no-explicit-any
+async function checkSeatLimit(admin: any, orgId: string, email: string):
+  Promise<{ ok: true } | { ok: false; max: number; members: number; pending: number }> {
+  // extra_users puede no existir si falta la migración 20260918130000
+  let { data: org, error } = await admin.from("organizations")
+    .select("plan_id, is_internal_account, extra_users").eq("id", orgId).single();
+  if (error) {
+    ({ data: org, error } = await admin.from("organizations")
+      .select("plan_id, is_internal_account").eq("id", orgId).single());
+  }
+  if (error || !org) throw new Error("No se pudo leer el plan de la organización");
+  if (org.is_internal_account) return { ok: true };
+
+  const planId = org.plan_id && org.plan_id in PLAN_MAX_USERS ? org.plan_id : "starter";
+  const base = PLAN_MAX_USERS[planId];
+  if (base === null) return { ok: true };
+  const max = base + Math.max(0, Number(org.extra_users) || 0);
+
+  const { count: members, error: mErr } = await admin.from("user_profiles")
+    .select("user_id", { count: "exact", head: true }).eq("org_id", orgId);
+  if (mErr) throw new Error("No se pudo contar los miembros");
+
+  // Invitaciones pendientes vigentes, sin contar un reenvío al mismo email
+  const { count: pending, error: pErr } = await admin.from("org_invitations")
+    .select("id", { count: "exact", head: true })
+    .eq("org_id", orgId).eq("status", "pending")
+    .gt("expires_at", new Date().toISOString())
+    .neq("email", email);
+  const pendingCount = pErr ? 0 : (pending ?? 0);
+
+  if ((members ?? 0) + pendingCount >= max) {
+    return { ok: false, max, members: members ?? 0, pending: pendingCount };
+  }
+  return { ok: true };
+}
+
 function escapeHtml(s: string) {
   return s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]!));
 }
@@ -127,6 +171,25 @@ Deno.serve(async (req: Request) => {
   }
 
   const admin = createClient(url, serviceRole);
+
+  // Límite de usuarios del plan (+ adicionales asignados por el admin).
+  // Se valida acá y no solo en la pantalla, para que no se pueda saltear.
+  let seat;
+  try {
+    seat = await checkSeatLimit(admin, profile.org_id, email);
+  } catch (e) {
+    console.error("[invite-member] seat limit", e);
+    return json({ error: (e as Error).message }, 500);
+  }
+  if (!seat.ok) {
+    const detail = seat.pending > 0
+      ? ` (${seat.members} miembro${seat.members !== 1 ? "s" : ""} + ${seat.pending} invitación${seat.pending !== 1 ? "es" : ""} pendiente${seat.pending !== 1 ? "s" : ""}). Podés cancelar una invitación pendiente para liberar el lugar`
+      : "";
+    return json({
+      error: `Alcanzaste el límite de ${seat.max} usuario${seat.max !== 1 ? "s" : ""} de tu plan${detail}. Para sumar más usuarios, actualizá el plan o escribinos a soporte.`,
+      code: "seat_limit",
+    }, 403);
+  }
 
   const { data: org } = await admin.from("organizations").select("name").eq("id", profile.org_id).single();
   const orgName = org?.name ?? "tu organización";
