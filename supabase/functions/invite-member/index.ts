@@ -139,6 +139,8 @@ Deno.serve(async (req: Request) => {
     return json({ error: "Faltan variables SUPABASE_* en la function" }, 500);
   }
   const appUrl = Deno.env.get("APP_URL") ?? "https://www.isosmartcore.com";
+  // El invitado nuevo no tiene contraseña: el link lo lleva a crearla. Sin esto
+  // entra una vez con la sesión del link y después no puede volver a ingresar.
 
   // Cliente con el JWT del invocador para chequear que es owner
   const authHeader = req.headers.get("Authorization") ?? "";
@@ -203,7 +205,7 @@ Deno.serve(async (req: Request) => {
     console.error("[invite-member] target status (¿falta migración?)", targetErr);
     const { data, error } = await admin.auth.admin.inviteUserByEmail(email, {
       data: { invited_org_id: profile.org_id, invited_role: role, full_name: fullName },
-      redirectTo: appUrl,
+      redirectTo: `${appUrl}/crear-contrasena`,
     });
     if (error) {
       const already = /already|registered|exists/i.test(error.message);
@@ -259,7 +261,7 @@ Deno.serve(async (req: Request) => {
       invited_role: role,
       full_name: fullName,
     },
-    redirectTo: appUrl,
+    redirectTo: `${appUrl}/crear-contrasena`,
   });
 
   if (error) {

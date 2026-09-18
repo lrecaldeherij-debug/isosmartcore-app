@@ -18,6 +18,9 @@ import { colors, families, tracking, weight } from './components/ui/tokens'
 // =============================================================================
 
 export default function ResetPassword() {
+  // /crear-contrasena: llega desde el link de invitación. La cuenta del
+  // invitado nace sin contraseña; acá la crea para poder volver a entrar.
+  const isInvite = window.location.pathname === '/crear-contrasena'
   const [password, setPassword] = useState('')
   const [passwordConfirm, setPasswordConfirm] = useState('')
   const [showPassword, setShowPassword] = useState(false)
@@ -31,7 +34,7 @@ export default function ResetPassword() {
     // Escuchar el evento PASSWORD_RECOVERY que dispara el SDK cuando detecta
     // el hash del recovery link.
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === 'PASSWORD_RECOVERY') {
+      if (event === 'PASSWORD_RECOVERY' || (isInvite && event === 'SIGNED_IN' && session)) {
         setReady(true)
       }
     })
@@ -53,7 +56,7 @@ export default function ResetPassword() {
       subscription.unsubscribe()
       clearTimeout(timer)
     }
-  }, [ready])
+  }, [ready, isInvite])
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -120,7 +123,7 @@ export default function ResetPassword() {
           letterSpacing: tracking.wider, color: colors.seal,
           textTransform: 'uppercase', fontWeight: weight.semibold, marginBottom: 12,
         }}>
-          # 00 · RESTABLECER ACCESO
+          {isInvite ? '# 00 · BIENVENIDA' : '# 00 · RESTABLECER ACCESO'}
         </div>
 
         <h1 style={{
@@ -128,8 +131,14 @@ export default function ResetPassword() {
           fontSize: 32, fontWeight: weight.semibold, lineHeight: 1.1,
           letterSpacing: tracking.tight, color: colors.ink,
         }}>
-          Nueva contraseña.
+          {isInvite ? 'Creá tu contraseña.' : 'Nueva contraseña.'}
         </h1>
+        {isInvite && ready && !done && (
+          <p style={{ margin: '-8px 0 24px', color: colors.inkMid, fontSize: 14, lineHeight: 1.5 }}>
+            Ya estás dentro de la organización que te invitó. Elegí una contraseña para
+            poder entrar las próximas veces con tu correo.
+          </p>
+        )}
 
         {/* Estado: link expirado o inválido */}
         {expired && !ready && !done && (
@@ -142,7 +151,9 @@ export default function ResetPassword() {
           }}>
             <strong>Link expirado o inválido.</strong>
             <div style={{ marginTop: 8 }}>
-              Los links de restablecimiento vencen en 1 hora. Volvé al login y solicitá uno nuevo.
+              {isInvite
+                ? 'El link de invitación ya se usó o venció. Entrá al login y usá "¿Olvidaste tu contraseña?" con tu correo, o pedí que te reenvíen la invitación.'
+                : 'Los links de restablecimiento vencen en 1 hora. Volvé al login y solicitá uno nuevo.'}
             </div>
             <a href="/app" style={{
               display: 'inline-block', marginTop: 12,
@@ -175,7 +186,7 @@ export default function ResetPassword() {
           }}>
             <CheckCircle size={20} style={{ flexShrink: 0, marginTop: 2 }} />
             <div>
-              <strong>Contraseña actualizada.</strong>
+              <strong>{isInvite ? 'Contraseña creada.' : 'Contraseña actualizada.'}</strong>
               <div style={{ marginTop: 4 }}>
                 Redirigiendo al expediente en 2 segundos…
               </div>
@@ -235,7 +246,7 @@ export default function ResetPassword() {
                 display: 'flex', alignItems: 'center', justifyContent: 'space-between',
               }}
             >
-              <span>{loading ? 'Guardando…' : 'Actualizar contraseña'}</span>
+              <span>{loading ? 'Guardando…' : isInvite ? 'Crear contraseña y entrar' : 'Actualizar contraseña'}</span>
               {!loading && <ArrowRight size={16} />}
             </button>
           </form>

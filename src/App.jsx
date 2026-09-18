@@ -189,7 +189,7 @@ function App() {
   const auditorMatch = pathname.match(/^\/auditor\/([A-Za-z0-9]+)\/?$/)
   const isPricingRoute = pathname === '/pricing' || pathname === '/precios'
   const legalMatch = pathname.match(/^\/legal\/(privacidad|terminos|cookies)\/?$/)
-  const isResetPasswordRoute = pathname === '/reset-password' || pathname === '/recuperar'
+  const isResetPasswordRoute = pathname === '/reset-password' || pathname === '/recuperar' || pathname === '/crear-contrasena'
   const isAdminRoute = pathname === '/admin' || pathname.startsWith('/admin/')
   // Landing es la home pública. /app y /login son alias que llevan al Login/Dashboard.
   const isHomeRoute = pathname === '/' || pathname === ''
