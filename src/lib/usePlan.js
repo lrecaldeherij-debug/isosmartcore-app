@@ -91,6 +91,10 @@ export function usePlan() {
 
     const next = nextPlan(planId)
 
+    // Usuarios adicionales que asigna el super_admin (combos, acuerdos puntuales)
+    const extraUsers = Math.max(0, Number(org.extra_users) || 0)
+    const maxUsers = plan.max_users == null ? null : plan.max_users + extraUsers
+
     return {
       // Datos del plan
       planId,
@@ -110,7 +114,8 @@ export function usePlan() {
       trialEndsAt: org.trial_ends_at,
 
       // Límites
-      maxUsers:     plan.max_users,
+      maxUsers,
+      extraUsers,
       maxProcesses: plan.max_processes,
       maxOrgs:      plan.max_orgs,
 
@@ -127,7 +132,7 @@ export function usePlan() {
       // Helpers
       canCreate(entity, currentCount) {
         const max = ({
-          users:     plan.max_users,
+          users:     maxUsers,
           processes: plan.max_processes,
           orgs:      plan.max_orgs,
         })[entity]

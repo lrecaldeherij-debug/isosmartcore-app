@@ -22,10 +22,14 @@ import { colors, families, tracking, weight, space } from './components/ui/token
 import { toast } from './lib/toast'
 import { humanizeDbError } from './lib/humanizeDbError'
 import { startImpersonation } from './lib/impersonate'
+import { PLANS } from './lib/plans'
 import {
   Shield, Search, Building2, Users, Calendar, DollarSign, AlertCircle,
   Eye, ArrowUpRight, Zap, TrendingUp, Clock, X, RefreshCw, ArrowLeft,
 } from 'lucide-react'
+
+// Mismo criterio que usePlan: plan desconocido (p. ej. 'free') cuenta como Starter
+const planBaseUsers = (planId) => (PLANS[planId] || PLANS.starter).max_users
 
 export default function AdminDashboard() {
   const isSuperAdmin = useSuperAdmin()
@@ -42,18 +46,24 @@ export default function AdminDashboard() {
 
   const loadData = async () => {
     setLoading(true)
-    const [orgsRes, metricsRes, inspRes] = await Promise.all([
+    const [orgsRes, metricsRes, inspRes, extraRes] = await Promise.all([
       supabase.rpc('list_all_organizations_admin'),
       supabase.rpc('admin_metrics'),
       supabase.rpc('admin_inspection_module_status'),
+      supabase.rpc('admin_org_extra_users'),
     ])
-    // Estado del módulo 17020 por org (si la migración no está aplicada, se omite)
+    // Estado del módulo 17020 y usuarios adicionales por org
+    // (si la migración correspondiente no está aplicada, se omite)
     const insp = new Map((inspRes.error ? [] : inspRes.data || []).map(r => [r.org_id, r]))
+    const extras = new Map((extraRes.error ? [] : extraRes.data || []).map(r => [r.org_id, r]))
     if (orgsRes.error) toast.error(humanizeDbError(orgsRes.error))
     else setOrgs((orgsRes.data || []).map(o => {
       const r = insp.get(o.id)
+      const x = extras.get(o.id)
       return {
         ...o,
+        extra_users: x?.extra_users ?? 0,
+        plan_max_users: planBaseUsers(o.plan_id),
         inspection_enabled: !!r?.enabled,
         inspection_requested_at: r?.requested_at || null,
         inspection_request_note: r?.request_note || null,
@@ -363,6 +373,14 @@ function OrgRow({ org, onOpen }) {
       </td>
       <td style={{ padding: '14px', textAlign: 'right', fontFamily: families.mono, color: colors.ink }}>
         {org.users_count ?? 0}
+        {(
+          <span style={{ color: colors.inkSoft }}>
+            {' / '}{org.plan_max_users == null ? '∞' : org.plan_max_users + (org.extra_users || 0)}
+          </span>
+        )}
+        {org.extra_users > 0 && (
+          <div style={{ fontSize: 10, color: colors.seal }}>+{org.extra_users} extra</div>
+        )}
       </td>
       <td style={{ padding: '14px', textAlign: 'right', fontFamily: families.mono, color: daysColor, fontWeight: weight.semibold }}>
         {org.days_until_expiry ?? '—'}
@@ -512,6 +530,10 @@ function OrgDetailModal({ org, onClose, onRefresh }) {
                 <ActionBtn onClick={() => setActivePanel('trial')}  label="Extender trial" />
                 <ActionBtn onClick={() => setActivePanel('combo')}  label={org.is_combo_client ? 'Editar combo' : 'Marcar como combo'} />
                 <ActionBtn
+                  onClick={() => setActivePanel('users')}
+                  label={org.extra_users > 0 ? `Usuarios adicionales (+${org.extra_users})` : 'Usuarios adicionales'}
+                />
+                <ActionBtn
                   onClick={() => setActivePanel('inspection')}
                   label={org.inspection_enabled ? 'Módulo 17020: deshabilitar'
                     : org.inspection_requested_at ? 'Módulo 17020: revisar solicitud' : 'Módulo 17020: habilitar'}
@@ -528,6 +550,7 @@ function OrgDetailModal({ org, onClose, onRefresh }) {
           {activePanel === 'combo'  && <ComboPanel       org={org} onDone={closeAndRefresh} onCancel={() => setActivePanel(null)} />}
           {activePanel === 'delete' && <DeletePanel      org={org} onDone={closeAndRefresh} onCancel={() => setActivePanel(null)} />}
           {activePanel === 'inspection' && <InspectionModulePanel org={org} onDone={closeAndRefresh} onCancel={() => setActivePanel(null)} />}
+          {activePanel === 'users' && <ExtraUsersPanel org={org} onDone={closeAndRefresh} onCancel={() => setActivePanel(null)} />}
         </div>
       </div>
     </div>
@@ -692,6 +715,55 @@ function ComboPanel({ org, onDone, onCancel }) {
       </div>
 
       <PanelActions onCancel={onCancel} onConfirm={submit} confirmLabel={saving ? 'Guardando…' : 'Guardar cambios'} saving={saving} />
+    </PanelWrap>
+  )
+}
+
+function ExtraUsersPanel({ org, onDone, onCancel }) {
+  const [extra, setExtra] = useState(org.extra_users || 0)
+  const [reason, setReason] = useState('')
+  const [saving, setSaving] = useState(false)
+  const base = org.plan_max_users
+  const n = Math.max(0, parseInt(extra, 10) || 0)
+
+  const submit = async () => {
+    setSaving(true)
+    const { error } = await supabase.rpc('admin_set_extra_users', {
+      p_org_id: org.id, p_extra_users: n, p_reason: reason || null,
+    })
+    setSaving(false)
+    if (error) {
+      return toast.error(/admin_set_extra_users|could not find the function/i.test(error.message)
+        ? 'Falta aplicar la migración 20260918130000 (usuarios adicionales).'
+        : humanizeDbError(error))
+    }
+    toast.success(`${org.name}: ${n} usuario${n !== 1 ? 's' : ''} adicional${n !== 1 ? 'es' : ''}`)
+    onDone()
+  }
+
+  return (
+    <PanelWrap title="Usuarios adicionales">
+      <p style={{ fontSize: 13, color: colors.inkMid, marginTop: 0, lineHeight: 1.5 }}>
+        Se suman al límite del plan sin cambiarlo (útil para combos y acuerdos puntuales).
+        {base === null && ' Este plan ya tiene usuarios ilimitados.'}
+      </p>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 3fr', gap: 12, marginBottom: 12 }}>
+        <div>
+          <label style={{ display: 'block', fontSize: 12, color: colors.inkMid, marginBottom: 6 }}>Adicionales</label>
+          <input type="number" min={0} max={100} value={extra} onChange={e => setExtra(e.target.value)} style={{ width: '100%', padding: 10, fontSize: 14, border: `1px solid ${colors.hairline}` }} />
+        </div>
+        <div>
+          <label style={{ display: 'block', fontSize: 12, color: colors.inkMid, marginBottom: 6 }}>Motivo (queda en auditoría)</label>
+          <input value={reason} onChange={e => setReason(e.target.value)} placeholder="Ej: Incluido en el combo de asesoría" style={{ width: '100%', padding: 10, fontSize: 14, border: `1px solid ${colors.hairline}` }} />
+        </div>
+      </div>
+      {base != null && (
+        <div style={{ fontSize: 13, color: colors.ink, marginBottom: 14 }}>
+          Límite resultante: <strong>{base} del plan + {n} = {base + n} usuarios</strong>
+          {' '}(hoy tiene {org.users_count ?? 0}).
+        </div>
+      )}
+      <PanelActions onCancel={onCancel} onConfirm={submit} confirmLabel={saving ? 'Guardando…' : 'Guardar'} saving={saving} />
     </PanelWrap>
   )
 }
