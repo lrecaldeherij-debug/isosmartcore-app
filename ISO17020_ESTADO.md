@@ -9,8 +9,12 @@ nomenclatura ya no existe). La brecha real está en el capítulo 7 (proceso de
 inspección) y en la parte del 6 que trata de autorizar y vigilar inspectores,
 que es justo lo que ISO 9001 no pide.
 
-El módulo se habilita **por organización**: Configuración → General → *Habilitar
-módulos de inspección*. Las empresas que solo usan ISO 9001 no ven nada nuevo.
+El módulo se habilita **por organización y solo lo habilita el super admin**
+(migración `20260918120000_iso17020_habilitacion_admin.sql`). El owner lo
+**solicita** desde Mi Organización → General; la solicitud aparece en el Panel
+de administración (filtro *17020*), donde se aprueba, rechaza o deshabilita y
+queda en `admin_audit_log`. Un trigger impide cambiar el campo por fuera de eso.
+Las empresas que solo usan ISO 9001 no ven nada nuevo.
 
 ## Fases
 

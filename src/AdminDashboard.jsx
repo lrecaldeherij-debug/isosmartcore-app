@@ -42,12 +42,24 @@ export default function AdminDashboard() {
 
   const loadData = async () => {
     setLoading(true)
-    const [orgsRes, metricsRes] = await Promise.all([
+    const [orgsRes, metricsRes, inspRes] = await Promise.all([
       supabase.rpc('list_all_organizations_admin'),
       supabase.rpc('admin_metrics'),
+      supabase.rpc('admin_inspection_module_status'),
     ])
+    // Estado del módulo 17020 por org (si la migración no está aplicada, se omite)
+    const insp = new Map((inspRes.error ? [] : inspRes.data || []).map(r => [r.org_id, r]))
     if (orgsRes.error) toast.error(humanizeDbError(orgsRes.error))
-    else setOrgs(orgsRes.data || [])
+    else setOrgs((orgsRes.data || []).map(o => {
+      const r = insp.get(o.id)
+      return {
+        ...o,
+        inspection_enabled: !!r?.enabled,
+        inspection_requested_at: r?.requested_at || null,
+        inspection_request_note: r?.request_note || null,
+        inspection_requested_by: r?.requested_by_email || null,
+      }
+    }))
     if (!metricsRes.error) setMetrics(metricsRes.data)
     setLoading(false)
   }
@@ -58,6 +70,7 @@ export default function AdminDashboard() {
     if (filter === 'trial')    list = list.filter(o => o.subscription_status === 'trialing')
     if (filter === 'combo')    list = list.filter(o => o.is_combo_client)
     if (filter === 'expiring') list = list.filter(o => o.days_until_expiry !== null && o.days_until_expiry <= 30 && o.days_until_expiry >= 0)
+    if (filter === 'insp')     list = list.filter(o => o.inspection_requested_at || o.inspection_enabled)
     if (search.trim()) {
       const q = search.toLowerCase()
       list = list.filter(o =>
@@ -68,6 +81,8 @@ export default function AdminDashboard() {
     }
     return list
   }, [orgs, filter, search])
+
+  const pendingInsp = orgs.filter(o => o.inspection_requested_at && !o.inspection_enabled).length
 
   if (!isSuperAdmin) {
     return <NoAccess />
@@ -169,6 +184,7 @@ export default function AdminDashboard() {
               { id: 'trial', label: 'Trial' },
               { id: 'combo', label: 'Combo' },
               { id: 'expiring', label: 'Por vencer' },
+              { id: 'insp', label: pendingInsp ? `17020 · ${pendingInsp} por aprobar` : '17020' },
             ].map(f => (
               <button
                 key={f.id}
@@ -221,15 +237,16 @@ export default function AdminDashboard() {
                 <Th align="right">Usuarios</Th>
                 <Th align="right">Días</Th>
                 <Th>Combo</Th>
+                <Th>17020</Th>
                 <Th align="right">Acciones</Th>
               </tr>
             </thead>
             <tbody>
               {loading && (
-                <tr><td colSpan={8} style={{ padding: 40, textAlign: 'center', color: colors.inkSoft }}>Cargando…</td></tr>
+                <tr><td colSpan={9} style={{ padding: 40, textAlign: 'center', color: colors.inkSoft }}>Cargando…</td></tr>
               )}
               {!loading && filtered.length === 0 && (
-                <tr><td colSpan={8} style={{ padding: 40, textAlign: 'center', color: colors.inkSoft }}>
+                <tr><td colSpan={9} style={{ padding: 40, textAlign: 'center', color: colors.inkSoft }}>
                   Sin organizaciones que coincidan.
                 </td></tr>
               )}
@@ -354,6 +371,13 @@ function OrgRow({ org, onOpen }) {
         {org.is_combo_client
           ? <span style={{ color: colors.seal, fontWeight: weight.semibold }}>SÍ · hasta {org.combo_end_date || '—'}</span>
           : <span style={{ color: colors.inkGhost }}>No</span>}
+      </td>
+      <td style={{ padding: '14px', fontSize: 12 }}>
+        {org.inspection_enabled
+          ? <span style={{ color: colors.approveText, fontWeight: weight.semibold }}>Habilitado</span>
+          : org.inspection_requested_at
+            ? <span style={{ padding: '2px 8px', background: colors.goldLight, color: colors.goldText, fontFamily: families.mono, fontSize: 11, fontWeight: weight.semibold }}>SOLICITADO</span>
+            : <span style={{ color: colors.inkGhost }}>—</span>}
       </td>
       <td style={{ padding: '14px', textAlign: 'right' }} onClick={e => e.stopPropagation()}>
         <button
@@ -487,6 +511,12 @@ function OrgDetailModal({ org, onClose, onRefresh }) {
                 <ActionBtn onClick={() => setActivePanel('plan')}   label="Cambiar plan" />
                 <ActionBtn onClick={() => setActivePanel('trial')}  label="Extender trial" />
                 <ActionBtn onClick={() => setActivePanel('combo')}  label={org.is_combo_client ? 'Editar combo' : 'Marcar como combo'} />
+                <ActionBtn
+                  onClick={() => setActivePanel('inspection')}
+                  label={org.inspection_enabled ? 'Módulo 17020: deshabilitar'
+                    : org.inspection_requested_at ? 'Módulo 17020: revisar solicitud' : 'Módulo 17020: habilitar'}
+                  primary={!!org.inspection_requested_at && !org.inspection_enabled}
+                />
                 <ActionBtn onClick={() => setActivePanel('delete')} label="Eliminar organización" danger />
               </div>
             </>
@@ -497,6 +527,7 @@ function OrgDetailModal({ org, onClose, onRefresh }) {
           {activePanel === 'trial'  && <ExtendTrialPanel org={org} onDone={closeAndRefresh} onCancel={() => setActivePanel(null)} />}
           {activePanel === 'combo'  && <ComboPanel       org={org} onDone={closeAndRefresh} onCancel={() => setActivePanel(null)} />}
           {activePanel === 'delete' && <DeletePanel      org={org} onDone={closeAndRefresh} onCancel={() => setActivePanel(null)} />}
+          {activePanel === 'inspection' && <InspectionModulePanel org={org} onDone={closeAndRefresh} onCancel={() => setActivePanel(null)} />}
         </div>
       </div>
     </div>
@@ -661,6 +692,74 @@ function ComboPanel({ org, onDone, onCancel }) {
       </div>
 
       <PanelActions onCancel={onCancel} onConfirm={submit} confirmLabel={saving ? 'Guardando…' : 'Guardar cambios'} saving={saving} />
+    </PanelWrap>
+  )
+}
+
+function InspectionModulePanel({ org, onDone, onCancel }) {
+  const [reason, setReason] = useState('')
+  const [saving, setSaving] = useState(false)
+  const enable = !org.inspection_enabled
+  const pending = !!org.inspection_requested_at && !org.inspection_enabled
+
+  const submit = async (value) => {
+    setSaving(true)
+    const { error } = await supabase.rpc('admin_set_inspection_module', {
+      p_org_id: org.id, p_enabled: value, p_reason: reason || null,
+    })
+    setSaving(false)
+    if (error) return toast.error(humanizeDbError(error))
+    toast.success(value
+      ? `Módulo 17020 habilitado para ${org.name}`
+      : pending ? `Solicitud de ${org.name} rechazada` : `Módulo 17020 deshabilitado para ${org.name}`)
+    onDone()
+  }
+
+  return (
+    <PanelWrap title="Módulo de inspección ISO/IEC 17020">
+      {pending && (
+        <div style={{
+          padding: 12, background: colors.goldLight, border: `1px solid ${colors.gold}`,
+          color: colors.goldText, fontSize: 13, marginBottom: 14, lineHeight: 1.5,
+        }}>
+          <strong>Solicitado el {new Date(org.inspection_requested_at).toLocaleDateString('es-EC')}</strong>
+          {org.inspection_requested_by && <> por {org.inspection_requested_by}</>}.
+          {org.inspection_request_note && (
+            <div style={{ marginTop: 8, padding: 8, background: colors.paperCool, color: colors.ink, whiteSpace: 'pre-wrap' }}>
+              {org.inspection_request_note}
+            </div>
+          )}
+        </div>
+      )}
+      <p style={{ fontSize: 13, color: colors.inkMid, marginTop: 0, lineHeight: 1.5 }}>
+        {enable
+          ? 'Al habilitarlo, la organización ve el grupo "Inspección (17020)" en el menú: alcance, métodos, ítems e inspectores autorizados.'
+          : 'Al deshabilitarlo, el menú desaparece para la organización. Los datos cargados no se borran.'}
+      </p>
+      <div style={{ marginBottom: 12 }}>
+        <label style={{ display: 'block', fontSize: 12, color: colors.inkMid, marginBottom: 6 }}>Motivo (opcional, queda en auditoría)</label>
+        <input value={reason} onChange={e => setReason(e.target.value)} placeholder="Ej: Contrató el módulo de inspección" style={{ width: '100%', padding: 10, fontSize: 14, border: `1px solid ${colors.hairline}` }} />
+      </div>
+      {pending && (
+        <div style={{ marginBottom: 8, textAlign: 'right' }}>
+          <button
+            onClick={() => submit(false)}
+            disabled={saving}
+            style={{
+              padding: '8px 14px', fontSize: 13, background: 'transparent',
+              border: `1px solid ${colors.alert}`, color: colors.alertText,
+              cursor: saving ? 'wait' : 'pointer', fontFamily: families.body,
+            }}
+          >Rechazar solicitud</button>
+        </div>
+      )}
+      <PanelActions
+        onCancel={onCancel}
+        onConfirm={() => submit(enable)}
+        confirmLabel={saving ? 'Guardando…' : enable ? 'Habilitar módulo' : 'Deshabilitar módulo'}
+        saving={saving}
+        danger={!enable}
+      />
     </PanelWrap>
   )
 }

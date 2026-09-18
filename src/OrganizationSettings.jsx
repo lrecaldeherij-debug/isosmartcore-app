@@ -8,6 +8,7 @@ import { useOrg } from './OrgContext'
 import { Building2, Users, UserPlus, Trash2, Save, AlertCircle, CheckCircle2 } from 'lucide-react'
 import { toast } from './lib/toast'
 import { confirm } from './lib/confirm'
+import { useSuperAdmin } from './lib/useSuperAdmin'
 
 const ROLE_LABELS = {
   owner: 'Owner',
@@ -36,6 +37,9 @@ export default function OrganizationSettings() {
   const [savingModule, setSavingModule] = useState(false)
   const [independenceType, setIndependenceType] = useState('no_A')
   const [safeguards, setSafeguards] = useState('')
+  const [requestNote, setRequestNote] = useState('')
+  const isSuperAdmin = useSuperAdmin()
+  const requestedAt = org?.inspection_module_requested_at
 
   useEffect(() => {
     if (org) {
@@ -66,17 +70,20 @@ export default function OrganizationSettings() {
     if (tab === 'members') loadMembers()
   }, [tab])
 
-  // Módulo ISO/IEC 17020: se habilita por organización desde acá
+  // Módulo ISO/IEC 17020: lo habilita solo el super_admin (trigger en la base).
+  // El cliente lo solicita y la solicitud aparece en el Panel de administración.
+  const migrationMissing = (error) =>
+    /inspection_module|could not find the function|does not exist/i.test(error.message)
+
   const toggleInspectionModule = async (value) => {
     setSavingModule(true)
-    const { error } = await supabase
-      .from('organizations')
-      .update({ inspection_module_enabled: value })
-      .eq('id', org.id)
+    const { error } = await supabase.rpc('admin_set_inspection_module', {
+      p_org_id: org.id, p_enabled: value, p_reason: 'Desde Mi Organización',
+    })
     setSavingModule(false)
     if (error) {
-      showMsg(/inspection_module_enabled/i.test(error.message)
-        ? 'Falta aplicar la migración del módulo de inspección (17020).'
+      showMsg(migrationMissing(error)
+        ? 'Falta aplicar la migración 20260918120000 (habilitación del módulo 17020).'
         : error.message, 'err')
       return
     }
@@ -84,6 +91,31 @@ export default function OrganizationSettings() {
     showMsg(value
       ? 'Módulos de inspección habilitados. Aparecen en el menú como "Inspección (17020)".'
       : 'Módulos de inspección ocultos. Los datos cargados no se borran.')
+    if (typeof refresh === 'function') refresh()
+  }
+
+  const requestInspectionModule = async () => {
+    setSavingModule(true)
+    const { error } = await supabase.rpc('request_inspection_module', { p_note: requestNote || null })
+    setSavingModule(false)
+    if (error) {
+      showMsg(migrationMissing(error)
+        ? 'La solicitud todavía no está disponible. Escribinos a soporte para habilitar el módulo.'
+        : error.message, 'err')
+      return
+    }
+    setRequestNote('')
+    showMsg('Solicitud enviada. Te avisamos cuando el módulo esté habilitado.')
+    if (typeof refresh === 'function') refresh()
+  }
+
+  const cancelInspectionRequest = async () => {
+    if (!await confirm('¿Retirar la solicitud del módulo de inspección?')) return
+    setSavingModule(true)
+    const { error } = await supabase.rpc('cancel_inspection_module_request')
+    setSavingModule(false)
+    if (error) { showMsg(error.message, 'err'); return }
+    showMsg('Solicitud retirada.')
     if (typeof refresh === 'function') refresh()
   }
 
@@ -198,19 +230,56 @@ export default function OrganizationSettings() {
 
           <h3 style={{ marginTop: 0 }}>Organismo de inspección (ISO/IEC 17020)</h3>
           <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginTop: '-0.25rem' }}>
-            Si tu empresa hace inspecciones y va a acreditarse bajo ISO/IEC 17020, esto agrega los
-            módulos técnicos (alcance, métodos e ítems) sobre el mismo SGC. Si solo usás ISO 9001,
-            dejalo apagado y no cambia nada.
+            Para empresas que hacen inspecciones y van a acreditarse bajo ISO/IEC 17020: agrega los
+            módulos técnicos (alcance, métodos, ítems e inspectores autorizados) sobre el mismo SGC.
           </p>
-          <label style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', cursor: can.admin ? 'pointer' : 'default' }}>
-            <input
-              type="checkbox"
-              checked={!!inspectionEnabled}
-              disabled={!can.admin || savingModule}
-              onChange={(e) => toggleInspectionModule(e.target.checked)}
-            />
-            <span>Habilitar módulos de inspección</span>
-          </label>
+
+          {isSuperAdmin ? (
+            <label style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', cursor: 'pointer' }}>
+              <input
+                type="checkbox"
+                checked={!!inspectionEnabled}
+                disabled={savingModule}
+                onChange={(e) => toggleInspectionModule(e.target.checked)}
+              />
+              <span>Habilitar módulos de inspección <em style={{ color: 'var(--text-tertiary)' }}>(solo administrador de IsoSmartCore)</em></span>
+            </label>
+          ) : inspectionEnabled ? (
+            <p style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--success-text)', margin: 0 }}>
+              <CheckCircle2 size={16} /> Módulo habilitado para tu organización.
+            </p>
+          ) : requestedAt ? (
+            <div style={{ background: 'var(--warning-bg, #fef3c7)', color: 'var(--warning-text, #92400e)', padding: '0.75rem 1rem', borderRadius: '6px', fontSize: '0.9rem' }}>
+              Solicitud enviada el {new Date(requestedAt).toLocaleDateString('es-EC')}. Está pendiente de
+              aprobación por el equipo de IsoSmartCore.
+              {can.admin && (
+                <button className="btn" disabled={savingModule} onClick={cancelInspectionRequest}
+                  style={{ marginLeft: '0.75rem', background: 'transparent', border: 'none', textDecoration: 'underline', color: 'inherit', padding: 0 }}>
+                  Retirar solicitud
+                </button>
+              )}
+            </div>
+          ) : can.admin ? (
+            <div>
+              <div className="form-group">
+                <label className="form-label">Contanos qué inspecciones hacen (opcional)</label>
+                <textarea
+                  className="form-textarea"
+                  rows={2}
+                  value={requestNote}
+                  onChange={(e) => setRequestNote(e.target.value)}
+                  placeholder="Ej: END en juntas soldadas (UT, PT, MT), queremos acreditarnos ante el SAE"
+                />
+              </div>
+              <button className="btn btn-primary" disabled={savingModule} onClick={requestInspectionModule}>
+                Solicitar habilitación
+              </button>
+            </div>
+          ) : (
+            <p style={{ color: 'var(--text-tertiary)', fontSize: '0.9rem', margin: 0 }}>
+              El owner de la organización puede solicitar este módulo.
+            </p>
+          )}
 
           {inspectionEnabled && (
             <div style={{ marginTop: '1.25rem' }}>
