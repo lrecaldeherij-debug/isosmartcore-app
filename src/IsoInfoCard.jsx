@@ -25,11 +25,11 @@ export default function IsoInfoCard({ clause, title, tips, iso17020 }) {
                 <Info size={20} />
             </div>
             <div>
-                <h4 style={{ margin: 0, color: '#1e293b', fontSize: '0.95rem' }}>Guía ISO 9001:2015 - Cláusula {clause}</h4>
-                <p style={{ margin: '2px 0 0 0', fontSize: '0.8rem', color: '#64748b' }}>
-                  {title}
-                  {show17020 && <> · <strong>también aplica ISO/IEC 17020 {iso17020.clause}</strong></>}
-                </p>
+                <h4 style={{ margin: 0, color: '#1e293b', fontSize: '0.95rem' }}>
+                  Guía ISO 9001:2015{show17020 ? ' / 17020' : ''} - Cláusula {clause}
+                  {show17020 && <> / {iso17020.clause}</>}
+                </h4>
+                <p style={{ margin: '2px 0 0 0', fontSize: '0.8rem', color: '#64748b' }}>{title}</p>
             </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.8rem', color: 'var(--primary-color)' }}>

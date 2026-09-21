@@ -446,7 +446,9 @@ function AppShell() {
 
           <div style={{ margin: '10px 0', borderTop: '1px solid var(--sidebar-border)' }}></div>
 
-          <div className="nav-group-title">Módulos ISO 9001</div>
+          <div className="nav-group-title">
+            Módulos ISO 9001{org?.inspection_module_enabled ? ' / 17020' : ''}
+          </div>
 
           <NavGroup title="Contexto (4)" sectionKey="contexto" icon={Map}>
             <NavItem id="contexto" label="Contexto FODA (4.1)" icon={Target} />
