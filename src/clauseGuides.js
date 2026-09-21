@@ -1,4 +1,8 @@
 // Catálogo central de guías ISO 9001:2015 por cláusula.
+//
+// Cada cláusula puede llevar además `iso17020`: qué pide la norma de organismos
+// de inspección sobre ese mismo tema. Solo se muestra a las organizaciones que
+// tienen el módulo 17020 habilitado (lo resuelve IsoInfoCard).
 // Cada módulo importa y usa: <IsoInfoCard {...CLAUSE_GUIDES['x.x']} />
 //
 // Si quieres ajustar un texto o agregar un tip, lo haces aquí una sola vez y
@@ -14,6 +18,15 @@ export const CLAUSE_GUIDES = {
       'Para cada factor, define una estrategia: cómo potenciarlo o cómo mitigarlo.',
       'Revísalo al menos una vez al año o cuando cambie el contexto del negocio.',
     ],
+    iso17020: {
+      clause: '4.1 / 8.5.1',
+      note: 'La 17020 mira un riesgo que la 9001 no nombra: la imparcialidad. Identificá qué puede sesgar un dictamen.',
+      tips: [
+        'Sumá al FODA las relaciones que amenazan la imparcialidad: inspeccionar a un cliente que también es tu contratista, o a una obra que tu empresa ejecutó.',
+        'Como Herij es tipo no A, el riesgo más fuerte es inspeccionar ítems que la propia empresa intervino: la salvaguarda está en el módulo de Inspección.',
+        'Cada amenaza a la imparcialidad necesita una salvaguarda concreta y alguien que la vigile.',
+      ],
+    },
   },
   '4.2': {
     clause: '4.2',
@@ -24,6 +37,14 @@ export const CLAUSE_GUIDES = {
       'Define claramente CÓMO vas a cumplir esos requisitos (Planificación) y quién se encarga.',
       'Usa nuestra IA para sugerir expectativas estándar, pero valídalas con tu realidad.',
     ],
+    iso17020: {
+      clause: '4.1.3 / 5.2',
+      note: 'Sumá las partes interesadas propias de un organismo de inspección.',
+      tips: [
+        'Agregá al organismo de acreditación, al dueño del activo inspeccionado y a quien recibe el informe, que no siempre es quien contrata.',
+        'Si el que paga la inspección es el que fabricó el ítem, declaralo: es una presión sobre la imparcialidad.',
+      ],
+    },
   },
   '4.3': {
     clause: '4.3',
@@ -34,6 +55,15 @@ export const CLAUSE_GUIDES = {
       'Si excluyes alguna cláusula (típicamente 8.3 - Diseño y Desarrollo), justifica por qué.',
       'El alcance debe estar disponible como información documentada accesible.',
     ],
+    iso17020: {
+      clause: '5.2.3',
+      note: 'El alcance del SGC no es el alcance de acreditación: son dos cosas distintas que conviven.',
+      tips: [
+        'El alcance del SGC dice qué cubre tu sistema de calidad; el alcance técnico dice qué actividades de inspección hacés, con qué rango y contra qué normas.',
+        'El alcance técnico se declara en Inspección → Alcance, actividad por actividad, con su tipo de independencia (A o no A).',
+        'Cuidá que el alcance del SGC incluya la actividad de inspección; si no, el evaluador va a ver una contradicción.',
+      ],
+    },
   },
   '4.4': {
     clause: '4.4',
@@ -44,6 +74,14 @@ export const CLAUSE_GUIDES = {
       'Establece cómo interactúan entre sí (un proceso de soporte alimenta uno operativo).',
       'Asigna un dueño claro a cada proceso, con autoridad para mantenerlo.',
     ],
+    iso17020: {
+      clause: '7.1 / 7.4',
+      note: 'El proceso de inspección tiene que estar en el mapa de procesos, con sus entradas y salidas reales.',
+      tips: [
+        'Agregá el proceso de inspección: entra la solicitud y el ítem, salen el registro de campo y el informe con dictamen.',
+        'Marcá qué procesos de soporte lo alimentan: calibración de equipos, competencia y autorización de inspectores.',
+      ],
+    },
   },
   '5.2': {
     clause: '5.2',
@@ -54,6 +92,14 @@ export const CLAUSE_GUIDES = {
       'Marca el marco de referencia para establecer los objetivos de calidad (6.2).',
       'Tiene que estar disponible, comunicada, entendida y aplicada dentro de la organización.',
     ],
+    iso17020: {
+      clause: '4.1.5 / 5.2',
+      note: 'La política tiene que comprometerse con la imparcialidad, no solo con la satisfacción del cliente.',
+      tips: [
+        'Declará que la dirección se compromete a mantener la imparcialidad y a que nadie sea presionado para cambiar un dictamen.',
+        'Agregá que la remuneración del personal de inspección no depende del resultado de la inspección ni de la cantidad de ítems aprobados.',
+      ],
+    },
   },
   '5.3': {
     clause: '5.3',
@@ -64,6 +110,15 @@ export const CLAUSE_GUIDES = {
       'Asigna un responsable del SGC con autoridad para reportar el desempeño a la Alta Dirección.',
       'Comunica los roles a toda la organización (organigrama visible y perfiles de cargo disponibles).',
     ],
+    iso17020: {
+      clause: '5.1 / 6.1.1',
+      note: 'Un organismo de inspección necesita responsable técnico, y con suplente.',
+      tips: [
+        'Definí el responsable técnico de cada actividad y quién lo reemplaza cuando no está: sin eso no se puede operar.',
+        'Separá las líneas de reporte: quien decide el dictamen no puede depender de quien vende el servicio.',
+        'Las autorizaciones por método se cargan en Inspección → Inspectores, no alcanza con el perfil de cargo.',
+      ],
+    },
   },
   '6.1': {
     clause: '6.1',
@@ -74,6 +129,14 @@ export const CLAUSE_GUIDES = {
       'No olvides las oportunidades: cambios favorables que puedes capitalizar.',
       'Las acciones deben ser proporcionales al impacto potencial sobre la conformidad.',
     ],
+    iso17020: {
+      clause: '4.1 / 8.5',
+      note: 'Sumá los riesgos propios del organismo de inspección.',
+      tips: [
+        'Imparcialidad, competencia del inspector, equipo descalibrado, dictamen mal emitido y presión comercial sobre el resultado.',
+        'El seguro de responsabilidad civil se dimensiona con este análisis de riesgos (5.2.4), no a ojo.',
+      ],
+    },
   },
   '6.2': {
     clause: '6.2',
@@ -84,6 +147,13 @@ export const CLAUSE_GUIDES = {
       'Define: qué se va a hacer, qué recursos requiere, quién es responsable, cuándo se evalúa.',
       'Revisalos en cada Revisión por la Dirección (9.3) y ajustalos si es necesario.',
     ],
+    iso17020: {
+      clause: '8.2',
+      note: 'Los objetivos deberían medir también el desempeño técnico de la inspección.',
+      tips: [
+        'Ejemplos medibles: informes emitidos sin observación del cliente, monitoreos en campo cumplidos, certificaciones vencidas en cero.',
+      ],
+    },
   },
   '6.3': {
     clause: '6.3',
@@ -124,6 +194,15 @@ export const CLAUSE_GUIDES = {
       'Si un equipo se desvía, evalúa el impacto sobre las mediciones ya hechas.',
       'Programa la próxima calibración antes de que venza la actual.',
     ],
+    iso17020: {
+      clause: '6.2.6 / 6.2.7',
+      note: 'Acá está uno de los hallazgos más comunes de una evaluación.',
+      tips: [
+        'Todo equipo que influye en el resultado necesita calibración trazable y vigente, y tiene que quedar claro cuál es.',
+        'Guardá los certificados y anotá el número de serie: el registro de inspección referencia ese equipo concreto.',
+        'Definí qué hacer cuando un equipo aparece fuera de tolerancia: hay que revisar los informes emitidos con él.',
+      ],
+    },
   },
   '7.2': {
     clause: '7.2',
@@ -134,6 +213,15 @@ export const CLAUSE_GUIDES = {
       'Mantén evidencia de la competencia adquirida (certificados, evaluaciones, registros).',
       'Evalúa la eficacia de la formación: ¿se aplicó en el puesto de trabajo?',
     ],
+    iso17020: {
+      clause: '6.1.2 / 6.1.4 / 6.1.5',
+      note: 'Para un inspector, "competente" tiene un significado más estricto.',
+      tips: [
+        'No alcanza la formación: hace falta certificación por método y nivel, examen de agudeza visual vigente y autorización formal.',
+        'Antes de autorizar hay un período mentorizado; después, monitoreo en campo periódico.',
+        'Todo eso se carga en Inspección → Inspectores, y la app no deja firmar a quien no está habilitado hoy.',
+      ],
+    },
   },
   '7.4': {
     clause: '7.4',
@@ -154,6 +242,14 @@ export const CLAUSE_GUIDES = {
       'Identifica cada documento con código y versión; mantén el histórico de cambios.',
       'Solo la versión "Vigente" debe estar disponible para uso operativo.',
     ],
+    iso17020: {
+      clause: '7.1 / 7.3 / 8.3',
+      note: 'Los métodos y los registros de inspección son información documentada, con reglas extra.',
+      tips: [
+        'El método de inspección se controla en Inspección → Métodos: si es propio o modificado, no puede estar vigente sin validación.',
+        'Los registros de inspección deben permitir reconstruir la inspección: qué equipo, qué condiciones y qué desviaciones hubo.',
+      ],
+    },
   },
   '8.2': {
     clause: '8.2',
@@ -164,6 +260,15 @@ export const CLAUSE_GUIDES = {
       'Documenta la aceptación del pedido y cualquier cambio acordado posteriormente.',
       'Asegurate de tener capacidad para cumplir antes de aceptar.',
     ],
+    iso17020: {
+      clause: '5.2.5 / 7.1.2',
+      note: 'La revisión del pedido decide si podés aceptar el trabajo.',
+      tips: [
+        'Antes de aceptar: ¿la actividad está en tu alcance declarado?, ¿hay método vigente?, ¿hay inspector autorizado disponible?',
+        'Dejá por escrito qué información tiene que entregar el cliente y en qué condiciones debe estar el ítem.',
+        'Si el cliente pide un criterio de aceptación distinto al habitual, acordalo y registralo antes de empezar.',
+      ],
+    },
   },
   '8.4': {
     clause: '8.4',
@@ -174,6 +279,14 @@ export const CLAUSE_GUIDES = {
       'Comunica al proveedor los requisitos: especificaciones, métodos de verificación, competencia requerida.',
       'Mantén registros de evaluación y desempeño para defender decisiones de continuidad.',
     ],
+    iso17020: {
+      clause: '6.3',
+      note: 'Subcontratar inspección tiene reglas propias.',
+      tips: [
+        'El organismo no puede subcontratar la decisión del dictamen; sí, excepcionalmente, parte de la ejecución.',
+        'El subcontratista debe ser competente y cumplir los mismos requisitos: guardá esa evidencia y el consentimiento del cliente.',
+      ],
+    },
   },
   '8.5': {
     clause: '8.5',
@@ -184,6 +297,14 @@ export const CLAUSE_GUIDES = {
       'Si la trazabilidad es un requisito, debe permitirte rastrear hacia atrás y adelante.',
       'Preservá las salidas durante la producción y la entrega.',
     ],
+    iso17020: {
+      clause: '7.3 / 7.4',
+      note: 'La "producción" del organismo es la inspección misma.',
+      tips: [
+        'El ítem bajo tu custodia tiene que estar identificado y protegido de deterioro mientras lo inspeccionás.',
+        'La inspección se registra en el módulo de Inspección, no en órdenes de producción.',
+      ],
+    },
   },
   '8.5.3': {
     clause: '8.5.3 / 8.5.6',
@@ -204,6 +325,14 @@ export const CLAUSE_GUIDES = {
       'Si liberás antes de tiempo por necesidad, requerí autorización de un responsable y registralo.',
       'Esto es el último filtro antes de que el cliente reciba el producto/servicio.',
     ],
+    iso17020: {
+      clause: '7.4 / 7.5',
+      note: 'La liberación es el informe con dictamen.',
+      tips: [
+        'El informe lo firma quien está autorizado a interpretar o firmar ese método, y la app lo verifica contra su autorización vigente.',
+        'Un informe emitido no se edita: se corrige con una enmienda que referencia y reemplaza a la anterior (7.6).',
+      ],
+    },
   },
   '9.2': {
     clause: '9.2',
@@ -214,6 +343,14 @@ export const CLAUSE_GUIDES = {
       'Comunica resultados a la dirección y abre acciones correctivas para los hallazgos.',
       'Mantén registros del programa, criterios, alcance y resultados de cada auditoría.',
     ],
+    iso17020: {
+      clause: '8.6',
+      note: 'La auditoría interna tiene que cubrir los requisitos técnicos, no solo el sistema.',
+      tips: [
+        'Agregá al programa: imparcialidad, competencia y autorización de inspectores, métodos, equipos e informes emitidos.',
+        'Quien audita la parte técnica necesita conocimiento del método que audita.',
+      ],
+    },
   },
   '9.3': {
     clause: '9.3',
@@ -224,6 +361,13 @@ export const CLAUSE_GUIDES = {
       'Las salidas deben incluir decisiones sobre mejora, cambios necesarios y recursos.',
       'Documentá la revisión: agenda, asistentes, decisiones, plazos, responsables.',
     ],
+    iso17020: {
+      clause: '8.7',
+      note: 'La agenda de la revisión por la dirección suma temas.',
+      tips: [
+        'Imparcialidad y sus amenazas, quejas y apelaciones, resultados del monitoreo de inspectores, y el estado del alcance de acreditación.',
+      ],
+    },
   },
   '10.2': {
     clause: '10.2',
@@ -234,6 +378,14 @@ export const CLAUSE_GUIDES = {
       'Implementa acciones correctivas para evitar que vuelva a ocurrir.',
       'Verifica la eficacia de la acción: ¿realmente eliminó la causa?',
     ],
+    iso17020: {
+      clause: '8.8 / 7.5',
+      note: 'Una no conformidad puede afectar informes ya entregados.',
+      tips: [
+        'Si el trabajo no conforme afecta informes emitidos, hay que evaluar el impacto y avisar a los clientes alcanzados.',
+        'Las quejas de clientes sobre un dictamen se tratan aparte, con alguien que no participó en la inspección.',
+      ],
+    },
   },
   '10.3': {
     clause: '10.3',

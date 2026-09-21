@@ -9,6 +9,7 @@ import {
   ListChecks, BrainCircuit, ExternalLink, Shuffle
 } from 'lucide-react'
 import IsoInfoCard from './IsoInfoCard'
+import { CLAUSE_GUIDES } from './clauseGuides'
 import ModuleSeedBanner from './ModuleSeedBanner'
 import DocumentImporter from './DocumentImporter'
 import ArrayPreviewTable from './ArrayPreviewTable'
@@ -464,16 +465,7 @@ Devuelve SOLO JSON, sin markdown:
         )}
       </div>
 
-      <IsoInfoCard
-        clause="4.1"
-        title="Comprensión de la organización y de su contexto"
-        tips={[
-          "Identifica factores internos (recursos, cultura) y externos (mercado, regulación).",
-          "Clasifica cada factor en positivo (F/O) o negativo (D/A).",
-          "Para cada factor, define una estrategia + nivel de impacto y probabilidad.",
-          "Esta información alimenta riesgos (6.1) y partes interesadas (4.2)."
-        ]}
-      />
+      <IsoInfoCard {...CLAUSE_GUIDES['4.1']} />
       <ModuleSeedBanner moduleKey="context" label="análisis FODA" visible={!loading && items.length === 0} onSeeded={fetchAll} />
 
       {/* Dashboard */}

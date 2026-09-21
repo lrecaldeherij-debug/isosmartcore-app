@@ -9,6 +9,7 @@ import {
   ScrollText, MapPin, Network, Ban
 } from 'lucide-react'
 import IsoInfoCard from './IsoInfoCard'
+import { CLAUSE_GUIDES } from './clauseGuides'
 import ModuleSeedBanner from './ModuleSeedBanner'
 import { toast } from './lib/toast'
 import { confirm, promptText } from './lib/confirm'
@@ -319,16 +320,7 @@ Devuelve SOLO JSON, sin markdown:
         )}
       </div>
 
-      <IsoInfoCard
-        clause="4.3"
-        title="Determinación del alcance del SGC"
-        tips={[
-          "Define qué productos/servicios cubre el SGC y qué ubicaciones físicas aplica.",
-          "Considera el contexto (4.1) y los requisitos de las partes interesadas (4.2).",
-          "Si excluyes alguna cláusula (típicamente 8.3), justifica por qué — usa la IA para validar.",
-          "El alcance debe estar disponible como información documentada accesible."
-        ]}
-      />
+      <IsoInfoCard {...CLAUSE_GUIDES['4.3']} />
       <ModuleSeedBanner moduleKey="scope" label="alcance del SGC" visible={!loading && !scope && !editing} onSeeded={fetchAll} />
 
       {/* Banners estado */}

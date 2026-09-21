@@ -141,6 +141,12 @@ export function OrgProvider({ session, children }) {
   )
 }
 
+// Igual que useOrg pero sin romper si el componente se usa fuera del provider
+// (páginas públicas). Devuelve null en ese caso.
+export function useOrgOptional() {
+  return useContext(OrgContext)
+}
+
 export function useOrg() {
   const ctx = useContext(OrgContext)
   if (!ctx) throw new Error('useOrg debe usarse dentro de <OrgProvider>')
