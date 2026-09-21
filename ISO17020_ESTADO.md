@@ -22,7 +22,7 @@ Las empresas que solo usan ISO 9001 no ven nada nuevo.
 |---|------|-----------|--------|
 | 1 | Base técnica: alcance, métodos e ítems | 5.2.3 · 7.2 · 7.3 | **Hecha** (2026-09-17) |
 | 2 | Inspectores autorizados | 6.1.2 b, d · 6.1.4–6.1.9 | **Hecha** (2026-09-17) |
-| 3 | Registro e informe de inspección con dictamen | 6.2.4 · 7.4 · 7.6 | Pendiente |
+| 3 | Registro e informe de inspección con dictamen | 6.2.4 · 7.4 · 7.6 | **Hecha** (2026-09-21) |
 | 4 | Imparcialidad, apelaciones y quejas | 4.1 · 4.2 · 5.1 · Anexo A · 7.7 · 7.8 | Pendiente |
 | 5 | Validez de resultados y datos | 6.2.9–6.2.10 · 7.2.6 · 7.5 · 8.4.3 · 8.5.3 | Pendiente |
 
@@ -123,6 +123,39 @@ necesidad de formación detectada y **efecto sobre la autorización**.
 El estado que se muestra no es el que alguien escribió a mano: sale de la vista
 `inspector_authorization_status`, que cruza autorización, certificación, visión
 y último monitoreo, y responde si el inspector está habilitado **hoy**.
+
+## Fase 3 — qué quedó construido
+
+Migración `20260921120000_iso17020_fase3_registro_informe.sql`, pestañas
+**Inspecciones** e **Informes** dentro de `Inspection.jsx` (`InspectionRecords.jsx`).
+
+**Registro de inspección (7.4.1).** Número único por organización, ítem, método,
+cliente y contrato, quién ejecutó y quién lo supervisa si está en mentoría,
+equipos con número de serie y sus certificados de calibración, consumibles y
+lotes, condición de superficie, condiciones ambientales, cobertura, muestreo
+aplicado, criterio de aceptación, desviaciones respecto del método,
+limitaciones y dónde quedan los datos crudos. Las indicaciones encontradas se
+cargan aparte, cada una con su evaluación contra el criterio.
+
+**Informe con dictamen (7.4.2).** Número único con revisión, conclusión
+(Conforme, Conforme con observaciones, No conforme, No concluyente), criterio
+contra el que se dictamina, regla de decisión, resumen, recomendaciones,
+exclusiones, firma y entrega.
+
+> **Cuatro reglas duras, en la base de datos:**
+> - Quien **intervino el ítem no puede inspeccionarlo** (Anexo A.2 b). El
+>   selector lo deshabilita y el trigger lo rechaza.
+> - No se ejecuta con un **método que no está vigente**, ni con un **inspector
+>   sin autorización habilitada** para ese método, salvo que se registre quién
+>   lo supervisa durante la mentoría (6.1.4).
+> - No se ejecuta sobre un **ítem que no fue verificado como listo** (7.3).
+> - **Firma solo quien está autorizado** a interpretar o firmar ese método y
+>   está habilitado hoy (6.2.4). Sin criterio declarado no se emite.
+
+**Enmiendas (7.6).** Un informe emitido no se edita: el trigger lo impide. La
+corrección se emite como revisión nueva que referencia a la anterior y declara
+qué corrige; al emitirla, la anterior pasa a *Reemplazada*, así nunca circulan
+dos informes vigentes con el mismo número. Anular exige motivo.
 
 ## Decisiones que siguen abiertas
 

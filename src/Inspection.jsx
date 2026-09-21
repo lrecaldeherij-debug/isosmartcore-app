@@ -8,6 +8,8 @@
 //      propio o modificado, con los apartados de 7.2.5 y su validación (7.2.6).
 //   3. Ítems (7.3)      — lo que se inspecciona, con identificación única y
 //      verificación de que está listo antes de tocarlo.
+//   4. Inspecciones (7.4.1) — el registro de campo de cada inspección.
+//   5. Informes (7.4 / 7.6) — el dictamen firmado por persona autorizada.
 //
 // Regla dura que la norma exige y acá se aplica (también en la base de datos):
 // un método modificado o propio NO puede quedar vigente sin estar validado.
@@ -17,6 +19,7 @@ import { useEffect, useMemo, useState } from 'react'
 import {
   Search, Plus, Pencil, Trash2, ShieldCheck, FlaskConical, Boxes, Ruler,
   AlertTriangle, CheckCircle2, Sparkles, Lock, ClipboardCheck, UserX, Wrench,
+  ClipboardList, FileText,
 } from 'lucide-react'
 import { supabase } from './supabaseClient'
 import { useOrg } from './OrgContext'
@@ -29,6 +32,7 @@ import {
   Button, Modal, Field, Row, Input, Select, Textarea, Badge, Kpi,
   EmptyState, Spinner, Grid, PageHeader, colors, radius, font,
 } from './components/ui'
+import { InspectionsTab, ReportsTab } from './InspectionRecords'
 
 // ─── Catálogos ───────────────────────────────────────────────────────────────
 
@@ -102,6 +106,9 @@ export default function Inspection() {
   const { org, role } = useOrg()
   const canWrite = can(role, 'inspection_methods', 'write')
   const canDelete = can(role, 'inspection_methods', 'delete')
+  // El registro de campo lo puede cargar el operativo; el informe no.
+  const canWriteRecords = can(role, 'inspections', 'write')
+  const canWriteReports = can(role, 'inspection_reports', 'write')
 
   const [tab, setTab] = useState('scopes')
   const [scopes, setScopes] = useState([])
@@ -109,12 +116,17 @@ export default function Inspection() {
   const [items, setItems] = useState([])
   const [personnel, setPersonnel] = useState([])
   const [restrictions, setRestrictions] = useState([])
+  const [inspections, setInspections] = useState([])
+  const [reports, setReports] = useState([])
+  const [authStatus, setAuthStatus] = useState([])
+  // Inspección desde la que se pidió "Emitir informe" (salta a la pestaña Informes)
+  const [reportFor, setReportFor] = useState(null)
   const [profile, setProfile] = useState(null)
   const [loading, setLoading] = useState(true)
 
   const load = async () => {
     setLoading(true)
-    const [sc, me, it, cp, per, res] = await Promise.all([
+    const [sc, me, it, cp, per, res, ins, rep, auth] = await Promise.all([
       supabase.from('inspection_scopes').select('*').eq('org_id', org.id).order('activity'),
       supabase.from('inspection_methods').select('*').eq('org_id', org.id).order('name'),
       supabase.from('inspection_items').select('*').eq('org_id', org.id).order('tag'),
@@ -122,6 +134,10 @@ export default function Inspection() {
       supabase.from('personnel').select('id, full_name, job_title').eq('org_id', org.id).order('full_name'),
       // Quién quedó inhabilitado para inspeccionar cada ítem (Anexo A.2 b)
       supabase.from('item_inspection_restrictions').select('*').eq('org_id', org.id),
+      supabase.from('inspections').select('*').eq('org_id', org.id).order('created_at', { ascending: false }),
+      supabase.from('inspection_reports').select('*').eq('org_id', org.id).order('created_at', { ascending: false }),
+      // Quién está habilitado hoy para ejecutar o firmar cada método (fase 2)
+      supabase.from('inspector_authorization_status').select('*').eq('org_id', org.id),
     ])
     const err = sc.error || me.error || it.error
     if (err) {
@@ -134,6 +150,9 @@ export default function Inspection() {
     setItems(it.data || [])
     setPersonnel(per.data || [])
     setRestrictions(res.data || [])
+    setInspections(ins.data || [])
+    setReports(rep.data || [])
+    setAuthStatus(auth.data || [])
     setProfile(cp.data || null)
     setLoading(false)
   }
@@ -146,6 +165,8 @@ export default function Inspection() {
     { id: 'scopes', label: 'Alcance', clause: '5.2.3', icon: Ruler, n: scopes.length },
     { id: 'methods', label: 'Métodos', clause: '7.2', icon: FlaskConical, n: methods.length },
     { id: 'items', label: 'Ítems', clause: '7.3', icon: Boxes, n: items.length },
+    { id: 'inspections', label: 'Inspecciones', clause: '7.4', icon: ClipboardList, n: inspections.length },
+    { id: 'reports', label: 'Informes', clause: '7.4/7.6', icon: FileText, n: reports.length },
   ]
 
   return (
@@ -188,6 +209,18 @@ export default function Inspection() {
         <ItemsTab items={items} scopes={scopes} canWrite={canWrite} canDelete={canDelete}
           orgId={org.id} personnel={personnel} restrictions={restrictions}
           isNoA={(org.inspection_independence_type || 'no_A') === 'no_A'} onChanged={load} />
+      )}
+      {tab === 'inspections' && (
+        <InspectionsTab inspections={inspections} items={items} methods={methods} scopes={scopes}
+          personnel={personnel} restrictions={restrictions} authStatus={authStatus}
+          canWrite={canWriteRecords} canDelete={canDelete} orgId={org.id} onChanged={load}
+          onCreateReport={(ins) => { setReportFor(ins); setTab('reports') }} />
+      )}
+      {tab === 'reports' && (
+        <ReportsTab reports={reports} inspections={inspections} items={items}
+          personnel={personnel} authStatus={authStatus}
+          canWrite={canWriteReports} canDelete={canDelete} orgId={org.id} onChanged={load}
+          pendingInspection={reportFor} onPendingHandled={() => setReportFor(null)} />
       )}
     </div>
   )

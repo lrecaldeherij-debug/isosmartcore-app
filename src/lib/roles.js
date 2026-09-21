@@ -51,6 +51,10 @@ export const PERMISSIONS = {
   inspection_scopes:       { read: READ_ALL, write: FULL_WRITE, delete: new Set(['owner']) },
   inspection_methods:      { read: READ_ALL, write: FULL_WRITE, delete: new Set(['owner', 'quality_manager']) },
   inspection_items:        { read: READ_ALL, write: OPERATIONAL_WRITE, delete: new Set(['owner', 'quality_manager']) },
+  // El registro de campo lo carga quien inspecciona; el informe lo emite y
+  // firma el responsable tecnico (la base valida ademas la autorizacion).
+  inspections:             { read: READ_ALL, write: OPERATIONAL_WRITE, delete: new Set(['owner', 'quality_manager']) },
+  inspection_reports:      { read: READ_ALL, write: FULL_WRITE, delete: new Set(['owner', 'quality_manager']) },
   training_records:        { read: READ_ALL, write: FULL_WRITE, delete: new Set(['owner', 'quality_manager']) },
   personnel:               { read: READ_ALL, write: FULL_WRITE, delete: new Set(['owner', 'quality_manager']) },
   suppliers:               { read: READ_ALL, write: FULL_WRITE, delete: new Set(['owner', 'quality_manager']) },
