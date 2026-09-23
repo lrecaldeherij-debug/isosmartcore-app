@@ -55,6 +55,9 @@ export const PERMISSIONS = {
   // firma el responsable tecnico (la base valida ademas la autorizacion).
   inspections:             { read: READ_ALL, write: OPERATIONAL_WRITE, delete: new Set(['owner', 'quality_manager']) },
   inspection_reports:      { read: READ_ALL, write: FULL_WRITE, delete: new Set(['owner', 'quality_manager']) },
+  // Imparcialidad y quejas: las maneja la direccion / calidad, no el operativo
+  impartiality_risks:      { read: READ_ALL, write: FULL_WRITE, delete: new Set(['owner', 'quality_manager']) },
+  inspection_complaints:   { read: READ_ALL, write: FULL_WRITE, delete: new Set(['owner']) },
   training_records:        { read: READ_ALL, write: FULL_WRITE, delete: new Set(['owner', 'quality_manager']) },
   personnel:               { read: READ_ALL, write: FULL_WRITE, delete: new Set(['owner', 'quality_manager']) },
   suppliers:               { read: READ_ALL, write: FULL_WRITE, delete: new Set(['owner', 'quality_manager']) },

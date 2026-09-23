@@ -23,7 +23,7 @@ Las empresas que solo usan ISO 9001 no ven nada nuevo.
 | 1 | Base técnica: alcance, métodos e ítems | 5.2.3 · 7.2 · 7.3 | **Hecha** (2026-09-17) |
 | 2 | Inspectores autorizados | 6.1.2 b, d · 6.1.4–6.1.9 | **Hecha** (2026-09-17) |
 | 3 | Registro e informe de inspección con dictamen | 6.2.4 · 7.4 · 7.6 | **Hecha** (2026-09-21) |
-| 4 | Imparcialidad, apelaciones y quejas | 4.1 · 4.2 · 5.1 · Anexo A · 7.7 · 7.8 | Pendiente |
+| 4 | Imparcialidad, apelaciones y quejas | 4.1 · 4.2 · 5.1 · Anexo A · 7.5 | **Hecha** (2026-09-23) |
 | 5 | Validez de resultados y datos | 6.2.9–6.2.10 · 7.2.6 · 7.5 · 8.4.3 · 8.5.3 | Pendiente |
 
 El orden es de dependencia, no de importancia: un informe no se firma sin un
@@ -156,6 +156,39 @@ exclusiones, firma y entrega.
 corrección se emite como revisión nueva que referencia a la anterior y declara
 qué corrige; al emitirla, la anterior pasa a *Reemplazada*, así nunca circulan
 dos informes vigentes con el mismo número. Anular exige motivo.
+
+## Fase 4 — qué quedó construido
+
+Migración `20260923120000_iso17020_fase4_imparcialidad_quejas.sql`, módulo
+`Impartiality.jsx` (menú: *Imparcialidad y quejas*).
+
+**Riesgos a la imparcialidad (4.1.3–4.1.6).** Amenazas por origen (propiedad,
+gestión, personal, finanzas, actividades relacionadas, familiaridad,
+intimidación…), con nivel P × I en la misma escala que la matriz del SGC,
+salvaguarda aplicada, responsable, evidencia y fecha de próxima revisión. Para
+una organización sin datos, ofrece las seis amenazas típicas de un organismo
+que además fabrica o repara.
+
+**Compromiso del personal (4.1.7 / 4.2).** Declaración firmada de imparcialidad,
+confidencialidad y ausencia de presión comercial, con los conflictos que la
+persona declara. Muestra quiénes todavía no firmaron.
+
+**Quejas y apelaciones.** Recepción con acuse de recibo, admisibilidad,
+investigación, causa raíz, decisión, resultado, notificación y cierre. La
+apelación va siempre contra un informe concreto.
+
+> **Cuatro reglas duras, en la base de datos:**
+> - Un riesgo **alto o crítico no se da por tratado** sin describir la
+>   salvaguarda; aceptarlo exige justificación escrita.
+> - Un **conflicto declarado** obliga a decir cómo se maneja.
+> - **Quien ejecutó o firmó la inspección cuestionada no puede investigar ni
+>   decidir** sobre esa queja o apelación. El selector los deshabilita y el
+>   trigger los rechaza.
+> - No se cierra sin decisión, sin quién la tomó, sin resultado y sin la fecha
+>   en que se comunicó al reclamante.
+
+La vista `complaint_independence_conflicts` responde, por queja, qué personas
+quedan excluidas y por qué.
 
 ## Decisiones que siguen abiertas
 

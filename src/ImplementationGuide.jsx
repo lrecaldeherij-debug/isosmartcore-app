@@ -121,6 +121,14 @@ const ISO17020_CLAUSES = [
     ],
   },
   {
+    id: '4.1 / 7.5', title: 'Imparcialidad, quejas y apelaciones', icon: Scale, vista: 'imparcialidad',
+    description: 'Amenazas a la imparcialidad con salvaguarda, compromiso firmado del personal y reclamos con revisión independiente.',
+    checks: [
+      { label: 'Amenazas a la imparcialidad identificadas', table: 'impartiality_risks', min: 3, goTo: 'imparcialidad' },
+      { label: 'Compromisos de imparcialidad firmados', table: 'impartiality_commitments', min: 1, goTo: 'imparcialidad' },
+    ],
+  },
+  {
     id: '7.4 / 7.6', title: 'Inspecciones e informes', icon: ClipboardList, vista: 'inspeccion',
     description: 'El registro de campo de cada inspección y el informe con dictamen firmado.',
     checks: [
@@ -134,7 +142,7 @@ const ISO17020_CLAUSES = [
 // Qué requisito de la 17020 ya queda cubierto con lo que la empresa hace por
 // ISO 9001, y con qué módulo. Esto es lo que se le muestra al evaluador.
 const CROSSWALK = [
-  ['4.1 Imparcialidad', 'Riesgos y oportunidades (6.1) + Política', 'Falta la declaración de imparcialidad y el análisis de riesgos a la imparcialidad', 'riesgos'],
+  ['4.1 Imparcialidad', 'Riesgos y oportunidades (6.1) + Política', 'Las amenazas a la imparcialidad y el compromiso del personal van en su propio módulo', 'imparcialidad'],
   ['5.1 Organización', 'Organigrama y perfiles de cargo (5.3)', 'Agregar la figura del responsable técnico y su suplente', 'roles'],
   ['6.1 Personal', 'Personal y formación (7.2)', 'Lo específico ya está: certificación por método, autorización y monitoreo', 'inspectores'],
   ['6.2 Instalaciones y equipos', 'Infraestructura y calibración (7.1)', 'Vincular cada equipo de medición con su certificado de calibración', 'calibracion'],
@@ -144,6 +152,7 @@ const CROSSWALK = [
   ['8.3 Documentación', 'Documentos del SGC', 'Sirve tal cual, no hay que duplicarlo', 'documentos'],
   ['8.5 Acciones ante riesgos', 'Matriz de riesgos', 'Sumar los riesgos propios de inspección (imparcialidad, competencia)', 'riesgos'],
   ['8.6 Mejora', 'Oportunidades de mejora y no conformidades', 'Sirve tal cual', 'no_conformidades'],
+  ['7.5 Quejas y apelaciones', 'Quejas de cliente (9.1.2)', 'La decisión la toma quien no participó en la inspección cuestionada', 'imparcialidad'],
   ['8.7 Acciones correctivas', 'No conformidades y acciones', 'Sirve tal cual', 'no_conformidades'],
   ['8.8 Auditorías internas', 'Auditorías internas (9.2)', 'El programa debe cubrir además los requisitos técnicos de la 17020', 'auditorias'],
   ['8.9 Revisión por la dirección', 'Revisión por la dirección (9.3)', 'Agregar imparcialidad, apelaciones, quejas y monitoreo de inspectores a la agenda', 'revision_direccion'],
@@ -151,9 +160,8 @@ const CROSSWALK = [
 
 // Lo que todavía no está en el sistema y lo que se resuelve fuera de él
 const PENDIENTES_SISTEMA = [
-  'Quejas y apelaciones con revisión independiente (7.5 / 7.6 de la edición 2026)',
-  'Registro de riesgos a la imparcialidad y su tratamiento (4.1)',
   'Validez de resultados: reinspecciones, comparaciones y control de datos (7.5)',
+  'Expediente de validación del propio sistema por versión (7.5.1)',
 ]
 const PENDIENTES_FUERA = [
   'Seguro de responsabilidad civil dimensionado según el análisis de riesgos (5.2.4)',

@@ -383,7 +383,7 @@ export const CLAUSE_GUIDES = {
       note: 'Una no conformidad puede afectar informes ya entregados.',
       tips: [
         'Si el trabajo no conforme afecta informes emitidos, hay que evaluar el impacto y avisar a los clientes alcanzados.',
-        'Las quejas de clientes sobre un dictamen se tratan aparte, con alguien que no participó en la inspección.',
+        'Las quejas y apelaciones sobre un dictamen se tratan en Imparcialidad y quejas: las decide alguien que no participó en la inspección.',
       ],
     },
   },
