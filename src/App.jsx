@@ -37,6 +37,7 @@ const QmsChanges = lazy(() => import('./QmsChanges'))                  // 6.3
 const Inspection = lazy(() => import('./Inspection'))                  // ISO/IEC 17020 fase 1
 const Inspectors = lazy(() => import('./Inspectors'))                  // ISO/IEC 17020 fase 2
 const Impartiality = lazy(() => import('./Impartiality'))              // ISO/IEC 17020 fase 4
+const ResultValidity = lazy(() => import('./ResultValidity'))          // ISO/IEC 17020 fase 5
 const Personnel = lazy(() => import('./Personnel'))
 const Training = lazy(() => import('./Training'))
 const Documents = lazy(() => import('./Documents'))
@@ -77,7 +78,7 @@ import {
   FileText, 
   RefreshCcw, 
   Award, 
-  UserCheck, Scale, 
+  UserCheck, Scale, Microscope, 
   GitMerge, 
   ShieldAlert, 
   TrendingUp, 
@@ -497,6 +498,7 @@ function AppShell() {
               <NavItem id="inspeccion" label="Base técnica (5.2.3/7.2/7.3)" icon={Ruler} />
               <NavItem id="inspectores" label="Inspectores autorizados (6.1)" icon={UserCheck} />
               <NavItem id="imparcialidad" label="Imparcialidad y quejas (4.1)" icon={Scale} />
+              <NavItem id="validez" label="Validez de resultados (7.5)" icon={Microscope} />
             </NavGroup>
           )}
 
@@ -568,6 +570,7 @@ function AppShell() {
         {vistaActual === 'inspeccion' && <Inspection />}
         {vistaActual === 'inspectores' && <Inspectors />}
         {vistaActual === 'imparcialidad' && <Impartiality />}
+        {vistaActual === 'validez' && <ResultValidity />}
         {vistaActual === 'plan_estrategico' && <StrategicActionPlan />}
         {vistaActual === 'personal' && <Personnel />}
         {vistaActual === 'formacion' && <Training />}

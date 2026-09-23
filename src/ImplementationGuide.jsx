@@ -12,7 +12,7 @@ import {
   CheckCircle2, Circle, ArrowRight, Sparkles, AlertCircle,
   Target, Users, FileText, RefreshCcw, Award, UserCheck,
   ShieldAlert, Briefcase, Search, AlertTriangle, Map, Download,
-  Ruler, FlaskConical, Boxes, ClipboardList, Scale
+  Ruler, FlaskConical, Boxes, ClipboardList, Scale, Microscope
 } from 'lucide-react'
 import { exportRisksMatrix } from './exports/exportRisksMatrix'
 import { exportStakeholdersMatrix } from './exports/exportStakeholdersMatrix'
@@ -121,6 +121,14 @@ const ISO17020_CLAUSES = [
     ],
   },
   {
+    id: '7.5 / 7.2.6', title: 'Validez de los resultados', icon: Microscope, vista: 'validez',
+    description: 'Controles que demuestran que los resultados siguen siendo válidos, y el expediente de validación de cada método propio.',
+    checks: [
+      { label: 'Controles de resultados registrados', table: 'result_quality_controls', min: 1, goTo: 'validez' },
+      { label: 'Validación del sistema por versión', table: 'system_validation_records', min: 1, goTo: 'validez' },
+    ],
+  },
+  {
     id: '4.1 / 7.5', title: 'Imparcialidad, quejas y apelaciones', icon: Scale, vista: 'imparcialidad',
     description: 'Amenazas a la imparcialidad con salvaguarda, compromiso firmado del personal y reclamos con revisión independiente.',
     checks: [
@@ -142,6 +150,7 @@ const ISO17020_CLAUSES = [
 // Qué requisito de la 17020 ya queda cubierto con lo que la empresa hace por
 // ISO 9001, y con qué módulo. Esto es lo que se le muestra al evaluador.
 const CROSSWALK = [
+  ['7.5 Validez de resultados', 'Análisis de datos (9.1.3)', 'Reinspecciones, comparaciones entre inspectores y verificación intermedia de equipos', 'validez'],
   ['4.1 Imparcialidad', 'Riesgos y oportunidades (6.1) + Política', 'Las amenazas a la imparcialidad y el compromiso del personal van en su propio módulo', 'imparcialidad'],
   ['5.1 Organización', 'Organigrama y perfiles de cargo (5.3)', 'Agregar la figura del responsable técnico y su suplente', 'roles'],
   ['6.1 Personal', 'Personal y formación (7.2)', 'Lo específico ya está: certificación por método, autorización y monitoreo', 'inspectores'],
@@ -159,9 +168,10 @@ const CROSSWALK = [
 ]
 
 // Lo que todavía no está en el sistema y lo que se resuelve fuera de él
+// Las cinco fases del 17020 están construidas; lo que sigue es usarlo
 const PENDIENTES_SISTEMA = [
-  'Validez de resultados: reinspecciones, comparaciones y control de datos (7.5)',
-  'Expediente de validación del propio sistema por versión (7.5.1)',
+  'Nada pendiente en el sistema: las cinco fases del 17020 están construidas',
+  'Lo que falta es cargar los datos reales y sostener los registros en el tiempo',
 ]
 const PENDIENTES_FUERA = [
   'Seguro de responsabilidad civil dimensionado según el análisis de riesgos (5.2.4)',

@@ -24,7 +24,7 @@ Las empresas que solo usan ISO 9001 no ven nada nuevo.
 | 2 | Inspectores autorizados | 6.1.2 b, d · 6.1.4–6.1.9 | **Hecha** (2026-09-17) |
 | 3 | Registro e informe de inspección con dictamen | 6.2.4 · 7.4 · 7.6 | **Hecha** (2026-09-21) |
 | 4 | Imparcialidad, apelaciones y quejas | 4.1 · 4.2 · 5.1 · Anexo A · 7.5 | **Hecha** (2026-09-23) |
-| 5 | Validez de resultados y datos | 6.2.9–6.2.10 · 7.2.6 · 7.5 · 8.4.3 · 8.5.3 | Pendiente |
+| 5 | Validez de resultados y datos | 6.2.9–6.2.10 · 7.2.6 · 7.5 | **Hecha** (2026-09-23) |
 
 El orden es de dependencia, no de importancia: un informe no se firma sin un
 inspector autorizado, y un inspector se autoriza para un método que tiene que
@@ -190,13 +190,42 @@ apelación va siempre contra un informe concreto.
 La vista `complaint_independence_conflicts` responde, por queja, qué personas
 quedan excluidas y por qué.
 
+## Fase 5 — qué quedó construido
+
+Migración `20260923130000_iso17020_fase5_validez_resultados.sql`, módulo
+`ResultValidity.jsx` (menú: *Validez de resultados*).
+
+**Control de la validez (7.5).** Reinspecciones internas, comparaciones entre
+inspectores, ensayos de aptitud, comparaciones interlaboratorio, probetas de
+referencia, verificación intermedia de equipos y revisión técnica de informes.
+Cada control registra valor de referencia, valor obtenido, desvío y el criterio
+contra el que se lo juzga.
+
+**Validación del método (7.2.6).** Expediente por método: por qué se valida,
+con qué probetas, contra qué criterio, qué resultados dio y qué capacidad de
+detección quedó demostrada. Al guardarlo, el método queda marcado como validado
+o no validado sin tener que acordarse de actualizarlo a mano; y un método
+declarado **no válido que estaba vigente vuelve a borrador**.
+
+**Validación del sistema (7.5.1).** IsoSmartCore versión por versión: qué
+cambió, qué se probó, comportamiento esperado y observado, quién autorizó el
+uso, y si se probaron respaldo y permisos. Resuelve la decisión que quedaba
+abierta: no nos apoyamos en la exención del software comercial.
+
+> **La regla que evita el hallazgo caro:** un control con resultado
+> *Cuestionable* o *No satisfactorio* **no se cierra sin evaluar el impacto
+> sobre los informes ya emitidos**. Un inspector que falla una comparación o un
+> equipo fuera de tolerancia ponen en duda todo lo firmado desde el último
+> control bueno; el trigger exige decir qué informes quedaron alcanzados y qué
+> se hizo con ellos.
+
+La vista `method_quality_control_status` responde, por método: última
+validación, último control, cuántos hubo en 12 meses y si está al día.
+
 ## Decisiones que siguen abiertas
 
-1. **Validación de IsoSmartCore (7.5.1).** El sistema que registra y reporta
-   inspecciones debe estar validado y cada cambio autorizado antes de
-   implementarse. La norma exime al software comercial de uso general, pero
-   conviene no contar con esa exención: hay que armar un expediente de
-   validación por versión. Es parte de la fase 5.
+Ninguna del lado del sistema: las cinco fases están construidas. Lo que sigue
+es cargar los datos reales de Herij y sostener los registros.
 
 ## Fuera del software, en paralelo
 
